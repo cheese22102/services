@@ -9,81 +9,85 @@ class ForgotPasswordPage extends StatefulWidget {
 }
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
-  final TextEditingController _emailController = TextEditingController();
+  final _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  void _sendPasswordResetEmail() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        await FirebaseAuth.instance.sendPasswordResetEmail(
-          email: _emailController.text.trim(),
-        );
-        _showMessage("Un e-mail de réinitialisation du mot de passe a été envoyé.");
-      } on FirebaseAuthException catch (e) {
-        String errorMessage = "Erreur lors de l'envoi de l'email.";
-        if (e.code == 'user-not-found') {
-          errorMessage = "Utilisateur non trouvé.";
-        } else if (e.code == 'invalid-email') {
-          errorMessage = "L'email n'est pas valide.";
-        }
-        _showMessage(errorMessage);
+  Future<void> _sendResetEmail() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim(),
+      );
+      
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email de réinitialisation envoyé!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      String message = 'Erreur inconnue';
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'Aucun compte associé à cet email';
+          break;
+        case 'invalid-email':
+          message = 'Format d\'email invalide';
+          break;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message),
+      ));
+    } finally {
+      setState(() => _isLoading = false);
     }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Mot de passe oublié"),
-      ),
+      appBar: AppBar(title: const Text('Réinitialisation mot de passe')),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Entrez votre adresse e-mail pour recevoir un lien de réinitialisation du mot de passe.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Icon(Icons.lock_reset, size: 100, color: Colors.blue),
+              const SizedBox(height: 20),
+              const Text(
+                'Entrez votre adresse email pour recevoir un lien de réinitialisation',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 30),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Adresse Email',
+                  prefixIcon: Icon(Icons.email),
                 ),
-                const SizedBox(height: 20),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: const InputDecoration(
-                          labelText: "Adresse e-mail",
-                          prefixIcon: Icon(Icons.email),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Veuillez entrer une adresse e-mail';
-                          }
-                          if (!RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$").hasMatch(value)) {
-                            return 'Adresse e-mail invalide';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: _sendPasswordResetEmail,
-                        child: const Text("Envoyer le lien de réinitialisation"),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Champ obligatoire';
+                  if (!value.contains('@')) return 'Email invalide';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _sendResetEmail,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Envoyer le lien'),
+              ),
+            ],
           ),
         ),
       ),

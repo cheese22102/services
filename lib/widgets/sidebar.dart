@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../profile_edit_page.dart'; // Assurez-vous que ce fichier existe
+import '../login_signup/profile_edit_page.dart'; // Assurez-vous que ce fichier existe
 import '../login_signup/login_page.dart'; // Assurez-vous que ce fichier existe
 import '../widgets/dark_mode_switch.dart'; // Importez correctement votre widget DarkModeSwitch
 
@@ -65,8 +65,8 @@ class _SidebarState extends State<Sidebar> {
           Map<String, dynamic> userData = snapshot.data!;
 
           // Utilisation d'opérateurs null-aware pour gérer les valeurs nulles
-          String firstName = userData['firstName'] ?? "Prénom inconnu";
-          String lastName = userData['lastName'] ?? "Nom inconnu";
+          String firstName = userData['firstname'] ?? "Prénom inconnu";
+          String lastName = userData['lastname'] ?? "Nom inconnu";
           String email = userData['email'] ?? "Email inconnu";
 
           String fullName = "$firstName $lastName"; // Combinaison du prénom et du nom

@@ -5,6 +5,7 @@ class CustomTextField extends StatefulWidget {
   final String hint;
   final IconData icon;
   final bool obscure;
+  final String? Function(String?)? validator;
 
   const CustomTextField({
     super.key,
@@ -12,6 +13,7 @@ class CustomTextField extends StatefulWidget {
     required this.hint,
     required this.icon,
     required this.obscure,
+    this.validator,
   });
 
   @override
@@ -33,23 +35,24 @@ class _CustomTextFieldState extends State<CustomTextField> {
       margin: const EdgeInsets.symmetric(vertical: 10),
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor, // S'adapte au mode clair/sombre
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(30),
       ),
       child: TextFormField(
         controller: widget.controller,
         obscureText: widget.obscure ? !_passwordVisible : false,
-        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color), // Texte adaptatif
+        validator: widget.validator,
+        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color),
         decoration: InputDecoration(
-          icon: Icon(widget.icon, color: Theme.of(context).iconTheme.color), // Icône adaptative
+          icon: Icon(widget.icon, color: Theme.of(context).iconTheme.color),
           hintText: widget.hint,
-          hintStyle: TextStyle(color: Theme.of(context).hintColor), // Placeholder en mode sombre
+          hintStyle: TextStyle(color: Theme.of(context).hintColor),
           border: InputBorder.none,
           suffixIcon: widget.obscure
               ? IconButton(
                   icon: Icon(
                     _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                    color: Theme.of(context).iconTheme.color, // S'adapte au mode sombre
+                    color: Theme.of(context).iconTheme.color,
                   ),
                   onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
                 )

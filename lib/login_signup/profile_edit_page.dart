@@ -11,8 +11,8 @@ class ProfileEditPage extends StatefulWidget {
 
 class _ProfileEditPageState extends State<ProfileEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nomController = TextEditingController();
-  final TextEditingController _prenomController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
 
   @override
   void initState() {
@@ -23,11 +23,15 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _loadUserData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+          
       Map<String, dynamic>? data = userDoc.data() as Map<String, dynamic>?;
       if (data != null) {
-        _nomController.text = data['nom'] ?? '';
-        _prenomController.text = data['prenom'] ?? '';
+        _lastNameController.text = data['lastName'] ?? ''; // Correction ici
+        _firstNameController.text = data['firstName'] ?? ''; // Correction ici
       }
     }
   }
@@ -36,16 +40,19 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (_formKey.currentState!.validate()) {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'nom': _nomController.text.trim(),
-          'prenom': _prenomController.text.trim(),
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'lastName': _lastNameController.text.trim(), // Correction ici
+          'firstName': _firstNameController.text.trim(), // Correction ici
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Profil mis à jour avec succès")),
         );
 
-        Navigator.pop(context); // Retour à la page précédente
+        Navigator.pop(context);
       }
     }
   }
@@ -63,12 +70,12 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           child: Column(
             children: [
               TextFormField(
-                controller: _nomController,
-                decoration: const InputDecoration(labelText: "Nom"),
+                controller: _lastNameController,
+                decoration: const InputDecoration(labelText: "Nom de famille"),
                 validator: (value) => value!.isEmpty ? "Champ requis" : null,
               ),
               TextFormField(
-                controller: _prenomController,
+                controller: _firstNameController,
                 decoration: const InputDecoration(labelText: "Prénom"),
                 validator: (value) => value!.isEmpty ? "Champ requis" : null,
               ),

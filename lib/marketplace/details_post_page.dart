@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'image_plein_ecran.dart';
 import 'modifier_post_page.dart';
+import '../chat/chat_screen.dart';
 
 class PostDetailsPage extends StatefulWidget {
   final QueryDocumentSnapshot post;
@@ -28,8 +29,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
       if (userDoc.exists) {
         var userData = userDoc.data();
         if (userData != null &&
-            userData['firstName'] != null &&
-            userData['lastName'] != null) {
+            userData['firstname'] != null &&
+            userData['lastname'] != null) {
           return "${userData['firstName']} ${userData['lastName']}";
         }
       }
@@ -184,16 +185,26 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       ],
                     )
                   else
-                    ElevatedButton(
-                      onPressed: () {
-                        // Implement send message functionality here.
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: Colors.green,
-                      ),
-                      child: const Text("Send Message"),
-                    ),
+                   ElevatedButton(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          senderId: currentUserId,  // Current logged-in user
+          receiverId: postUserId,  // The person who posted the item
+          postId: widget.post.id, // Pass the post ID
+
+        ),
+      ),
+    );
+  },
+  style: ElevatedButton.styleFrom(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    backgroundColor: Colors.green,
+  ),
+  child: const Text("Send Message"),
+),
                 ],
               ),
             ),

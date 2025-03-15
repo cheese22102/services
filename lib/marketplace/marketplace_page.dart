@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'ajout_marketplace.dart'; // Importation de la page d'ajout de post
 import 'details_post_page.dart'; // Import the PostDetailsPage
+import '../chat/chat_list_screen.dart'; // Add this import
+
 
 class MarketplacePage extends StatelessWidget {
   const MarketplacePage({super.key});
@@ -125,15 +127,42 @@ class MarketplacePage extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddPostPage()),
-          );
-        },
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add),
+            floatingActionButton: Padding(
+        padding: const EdgeInsets.only(right: 16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
+              heroTag: 'chatButton', // Unique hero tag
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatListScreen(),
+                  ),
+                );
+              },
+              backgroundColor: Colors.blue,
+              child: const Icon(Icons.chat),
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
+              heroTag: 'addButton', // Unique hero tag
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddPostPage(),
+                  ),
+                );
+              },
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.add),
+            ),
+          ],
+        ),
       ),
     );
   }

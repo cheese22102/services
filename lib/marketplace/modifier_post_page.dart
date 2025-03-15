@@ -215,11 +215,11 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _updatePost,
-                child: const Text("Save Changes"),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   minimumSize: const Size(double.infinity, 50),
                 ),
+                child: const Text("Save Changes"),
               ),
             ],
           ),

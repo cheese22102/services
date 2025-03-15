@@ -4,24 +4,23 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_url_gen/cloudinary.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/theme_provider.dart';
 import 'login_signup/login_page.dart';
 import 'login_signup/signup2_page.dart';
 import 'client_home_page.dart';
 import 'prestataire_home_page.dart';
+import 'notifications_service.dart';
+import 'tutorial_screen.dart';
 
-// Create a Cloudinary instance using your Cloudinary credentials.
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-
-  // Configure Cloudinary to use secure URLs.
+  await NotificationService.initialize();
   cloudinary.config.urlConfig.secure = true;
 
-  // Optionally, you can call a Cloudinary uploader function here if needed.
-  // For now, we just configure Cloudinary and run the app.
   runApp(const MyApp());
 }
 
@@ -36,25 +35,59 @@ class MyApp extends StatelessWidget {
         builder: (context, themeProvider, child) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              brightness: Brightness.light,
-              primaryColor: Colors.green,
-              scaffoldBackgroundColor: Colors.white,
-            ),
-            darkTheme: ThemeData(
-              brightness: Brightness.dark,
-              primaryColor: Colors.grey[800],
-              scaffoldBackgroundColor: Colors.grey[900],
-            ),
-            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            theme: _buildLightTheme(),
+            darkTheme: _buildDarkTheme(),
+            themeMode: themeProvider.themeMode,
             home: const AuthWrapper(),
-            routes: {
-              '/signup2': (context) => const Signup2Page(),
-              '/clientHome': (context) => const ClientHomePage(),
-              '/prestataireHome': (context) => const PrestataireHomePage(),
+            onGenerateRoute: (settings) {
+              switch (settings.name) {
+                case '/signup2':
+                  return _fadeRoute(const Signup2Page());
+                case '/clientHome':
+                  return _fadeRoute(const ClientHomePage());
+                case '/prestataireHome':
+                  return _fadeRoute(const PrestataireHomePage());
+                case '/tutorial':
+                  return _fadeRoute(const TutorialScreen());
+                default:
+                  return _fadeRoute(const AuthWrapper());
+              }
             },
           );
         },
+      ),
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: Colors.green,
+      scaffoldBackgroundColor: Colors.white,
+      colorScheme: ColorScheme.fromSwatch().copyWith(
+        secondary: Colors.greenAccent,
+      ),
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      primaryColor: Colors.grey[800],
+      scaffoldBackgroundColor: Colors.grey[900],
+      colorScheme: ColorScheme.fromSwatch(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.grey,
+      ),
+    );
+  }
+
+  PageRouteBuilder _fadeRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) => FadeTransition(
+        opacity: animation,
+        child: child,
       ),
     );
   }
@@ -63,46 +96,74 @@ class MyApp extends StatelessWidget {
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
+  Future<bool> _checkFirstLaunch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final firstLaunch = prefs.getBool('firstLaunch') ?? true;
+    if (firstLaunch) await prefs.setBool('firstLaunch', false);
+    return firstLaunch;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return FutureBuilder<bool>(
+      future: _checkFirstLaunch(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return _buildLoadingScreen();
         }
 
-        User? user = snapshot.data;
-        if (user == null) {
-          return const LoginPage();
+        if (snapshot.data == true) {
+          return const TutorialScreen();
         }
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, userSnapshot) {
             if (userSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
+              return _buildLoadingScreen();
             }
 
-            if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-              return const Signup2Page();
-            }
+            final user = userSnapshot.data;
+            if (user == null) return const LoginPage();
 
-            String role = userSnapshot.data!.get('role');
-            if (role == 'client') {
-              return const ClientHomePage();
-            } else if (role == 'prestataire') {
-              return const PrestataireHomePage();
-            } else {
-              return const Signup2Page();
-            }
+            NotificationService.saveDeviceToken(user.uid);
+
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get(),
+             builder: (context, docSnapshot) {
+  if (docSnapshot.connectionState == ConnectionState.waiting) {
+    return _buildLoadingScreen();
+  }
+
+  final data = docSnapshot.data?.data() as Map<String, dynamic>?;
+  final role = data?['role'] ?? 'client'; // Valeur par défaut
+  final profileCompleted = data?['profileCompleted'] ?? false; // Gestion de l'absence du champ
+
+  if (!docSnapshot.hasData || !docSnapshot.data!.exists) {
+    return const Signup2Page();
+  }
+
+  if (!profileCompleted) return const Signup2Page();
+
+  return role == 'client'
+      ? const ClientHomePage()
+      : const PrestataireHomePage();
+},
+            );
           },
         );
       },
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
     );
   }
 }

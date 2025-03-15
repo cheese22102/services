@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'login_page.dart';
 import 'verification_page.dart';
-import 'signup2_page.dart'; // Importer la page de complétion de profil
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/social_icon.dart';
@@ -21,8 +20,9 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  bool _isLoading = false;
 
-  // Fonction pour afficher un message d'erreur
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -39,192 +39,200 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // Fonction pour gérer l'inscription avec email et mot de passe
-  Future<void> _signup() async {
+  Future<void> _signupWithEmail() async {
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
         _showErrorDialog("Les mots de passe ne correspondent pas.");
         return;
       }
+      
+      setState(() => _isLoading = true);
+
       try {
-        // Créer un utilisateur avec email et mot de passe
-        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        final UserCredential userCredential = 
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
 
-        User? user = userCredential.user;
-        if (user != null) {
-          // Envoyer un e-mail de vérification
-          await user.sendEmailVerification();
-
-          // Ajouter l'utilisateur à la collection Firestore avec un rôle "pending"
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'email': user.email,
-            'role': 'pending', // Le rôle doit être défini plus tard
-          });
-
-          // Afficher un message pour informer l'utilisateur que l'e-mail de vérification a été envoyé
-          _showErrorDialog("Un e-mail de vérification a été envoyé. Veuillez vérifier votre boîte de réception.");
-
-          // Rediriger vers la page de vérification de l'e-mail
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const VerificationPage()),
-          );
+        if (userCredential.user != null) {
+          await _handleNewUser(userCredential.user!);
         }
       } on FirebaseAuthException catch (e) {
-        String errorMessage = "Échec de l'inscription.";
-        if (e.code == 'email-already-in-use') {
-          errorMessage = "Cet e-mail est déjà utilisé.";
-        } else if (e.code == 'weak-password') {
-          errorMessage = "Le mot de passe est trop faible.";
-        } else if (e.code == 'invalid-email') {
-          errorMessage = "Format d'email invalide.";
-        }
-        _showErrorDialog(errorMessage);
+        _handleSignupError(e);
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
     }
   }
 
-  // Fonction pour gérer la connexion avec Google
+  Future<void> _handleNewUser(User user) async {
+    await user.sendEmailVerification();
+    
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'email': user.email,
+      'createdAt': FieldValue.serverTimestamp(),
+      'role': 'pending',
+    });
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const VerificationPage()),
+    );
+  }
+
   Future<void> _signInWithGoogle() async {
     try {
-      // Connexion avec Google
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // L'utilisateur a annulé la connexion
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return;
 
-      // Obtenir l'authentification de Google
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = 
+          await googleUser.authentication;
+      
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Se connecter avec les informations de Google
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      User? user = userCredential.user;
-
-      if (user != null) {
-        // Vérifier si l'utilisateur est un nouvel utilisateur
-        bool isNewUser = userCredential.additionalUserInfo!.isNewUser;
-
-        if (isNewUser) {
-          // Si l'utilisateur est nouveau, le rediriger vers la page de complétion de profil
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'email': user.email,
-            'role': 'pending',
-          });
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const Signup2Page()),
-          );
-        } else {
-          // Si l'utilisateur existe déjà, afficher un message d'erreur
-          _showErrorDialog("Vous avez déjà un compte avec ce Google account.");
-        }
+      final UserCredential userCredential = 
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      
+      if (userCredential.user != null) {
+        await _handleGoogleUser(userCredential);
       }
     } on FirebaseAuthException catch (e) {
-      _showErrorDialog("Erreur : ${e.message}");
+      _showErrorDialog("Erreur Google : ${e.message}");
     }
   }
 
-  @override
+  Future<void> _handleGoogleUser(UserCredential userCredential) async {
+    final user = userCredential.user!;
+    final isNewUser = userCredential.additionalUserInfo!.isNewUser;
+
+    if (isNewUser) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'email': user.email,
+        'role': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      Navigator.pushReplacementNamed(context, '/signup2');
+    } else {
+      _showErrorDialog("Un compte existe déjà avec cet email Google");
+    }
+  }
+
+  void _handleSignupError(FirebaseAuthException e) {
+    String message = "Échec de l'inscription";
+    switch (e.code) {
+      case 'email-already-in-use':
+        message = "Cet email est déjà utilisé";
+        break;
+      case 'weak-password':
+        message = "Le mot de passe est trop faible";
+        break;
+      case 'invalid-email':
+        message = "Format d'email invalide";
+        break;
+    }
+    _showErrorDialog(message);
+  }
+
+ @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text("Inscription"),
+      appBar: AppBar(title: const Text("Inscription")),
+      body: Stack(
+        children: [
+          _buildBackground(),
+          _buildSignupForm(),
+          if (_isLoading) _buildLoadingOverlay(),
+        ],
       ),
-      body: Center(
-        child: SingleChildScrollView(
+    );
+  }
+
+  Widget _buildBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Theme.of(context).primaryColor.withOpacity(0.2),
+            Theme.of(context).scaffoldBackgroundColor,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignupForm() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
           child: Column(
             children: [
-              Image.asset("assets/images/register.png", height: 220),
-              Container(
-                padding: const EdgeInsets.all(30),
-                width: double.infinity,
-                constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height - 400,
+              Image.asset("assets/images/register.png", height: 200),
+              const SizedBox(height: 30),
+              CustomTextField(
+                controller: _emailController,
+                hint: "Adresse email",
+                icon: Icons.email,
+                obscure: false,
+              ),
+              const SizedBox(height: 20),
+              CustomTextField(
+                controller: _passwordController,
+                hint: "Mot de passe",
+                icon: Icons.lock,
+                obscure: true,
+              ),
+              const SizedBox(height: 20),
+              CustomTextField(
+                controller: _confirmPasswordController,
+                hint: "Confirmer le mot de passe",
+                icon: Icons.lock_outline,
+                obscure: true,
+              ),
+              const SizedBox(height: 30),
+              CustomButton(
+                text: "S'inscrire",
+                onPressed: _signupWithEmail,
+                icon: Icons.person_add, // Ajoutez cette ligne
+
+              ),
+              const SizedBox(height: 20),
+              const Text("Ou continuer avec"),
+              const SizedBox(height: 15),
+              GestureDetector(
+                onTap: _signInWithGoogle,
+                child: const SocialIcon(imagePath: "assets/images/google.jpg"),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
                 ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(45)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 10),
-                    Text(
-                      "Créez un nouveau compte",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge!.color,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          CustomTextField(
-                            controller: _emailController,
-                            hint: "Adresse e-mail",
-                            icon: Icons.email,
-                            obscure: false,
-                          ),
-                          CustomTextField(
-                            controller: _passwordController,
-                            hint: "Mot de passe",
-                            icon: Icons.lock,
-                            obscure: true,
-                          ),
-                          CustomTextField(
-                            controller: _confirmPasswordController,
-                            hint: "Confirmer le mot de passe",
-                            icon: Icons.lock,
-                            obscure: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    CustomButton(text: "S'inscrire", onPressed: _signup),
-                    const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _signInWithGoogle,
-                      child: SocialIcon(imagePath: "assets/images/google.jpg"),
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "Vous avez déjà un compte ?",
-                          style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginPage()),
-                          ),
-                          child: Text(
-                            "Connectez-vous ici",
-                            style: TextStyle(
-                              color: Theme.of(context).textTheme.bodyMedium!.color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  "Déjà un compte ? Connectez-vous",
+                  style: TextStyle(color: Theme.of(context).primaryColor),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.5),
+      child: const Center(
+        child: CircularProgressIndicator(color: Colors.white),
       ),
     );
   }
