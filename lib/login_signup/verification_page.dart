@@ -43,7 +43,7 @@ class _VerificationPageState extends State<VerificationPage> {
       .get();
 
   if (doc.exists) {
-    final data = doc.data() as Map<String, dynamic>?;
+    final data = doc.data();
     final role = data?['role'] ?? 'client';
     final profileCompleted = data?['profileCompleted'] ?? false;
 

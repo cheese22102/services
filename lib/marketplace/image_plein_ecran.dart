@@ -14,7 +14,7 @@ class FullScreenImagePage extends StatelessWidget {
         onTap: () => Navigator.pop(context),
         child: Center(
           child: Hero(
-            tag: tag,
+            tag: tag, // Utilisation du tag unique
             child: Image.network(
               imageUrl,
               fit: BoxFit.contain,

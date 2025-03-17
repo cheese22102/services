@@ -150,9 +150,9 @@ class ChatListScreen extends StatelessWidget {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       if (!doc.exists) return 'Unknown User';
-      return '${doc['firstName']} ${doc['lastName']}'.trim().isEmpty 
+      return '${doc['firstname']} ${doc['lastname']}'.trim().isEmpty 
           ? 'Unknown User' 
-          : '${doc['firstName']} ${doc['lastName']}';
+          : '${doc['firstname']} ${doc['lastname']}';
     } catch (e) {
       return 'Error loading user';
     }

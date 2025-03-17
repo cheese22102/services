@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'image_plein_ecran.dart';
+import 'image_plein_ecran.dart';  // Assurez-vous que ce fichier est importé correctement
 import 'modifier_post_page.dart';
 import '../chat/chat_screen.dart';
 
@@ -31,7 +31,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         if (userData != null &&
             userData['firstname'] != null &&
             userData['lastname'] != null) {
-          return "${userData['firstName']} ${userData['lastName']}";
+          return "${userData['firstname']} ${userData['lastname']}";
         }
       }
       return "Unknown User";
@@ -78,14 +78,16 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                   // Titre du post
                   Text(
                     postData['title'],
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   // Description
                   Text(
                     postData['description'] ?? "No description provided.",
-                    style: const TextStyle(fontSize: 16),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
                   // Prix
@@ -95,6 +97,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         fontSize: 18,
                         color: Colors.green,
                         fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  // Affichage de l'état du produit
+                  Text(
+                    "Etat du produit: ${postData['etat'] ?? 'Unknown'}",  // L'état du produit
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 16),
                   // Informations sur le posteur
@@ -109,108 +118,107 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ElevatedButton(
-                          onPressed: () async {
-                            final updatedData = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ModifyPostPage(post: widget.post),
-                              ),
-                            );
-                            if (updatedData != null) {
-                              setState(() {
-                                postData = updatedData;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text("Post updated successfully")),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: Colors.blueAccent,
-                          ),
-                          child: const Text("Modify Post"),
-                        ),
-                        const SizedBox(height: 10),
-                        ElevatedButton(
-                          onPressed: () async {
-                            bool? confirmDelete = await showDialog<bool>(
-                              context: context,
-                              builder: (BuildContext context) {
-                                return AlertDialog(
-                                  title: const Text("Confirm Deletion"),
-                                  content: const Text(
-                                      "Are you sure you want to delete this post? This action cannot be undone."),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      child: const Text("Cancel"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      child: const Text("Delete",
-                                          style:
-                                              TextStyle(color: Colors.red)),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                            if (confirmDelete == true) {
-                              await FirebaseFirestore.instance
-                                  .collection('marketplace')
-                                  .doc(widget.post.id)
-                                  .delete();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text("Post deleted")),
-                              );
-                              Navigator.pop(context);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: Colors.redAccent,
-                          ),
-                          child: const Text("Delete Post"),
-                        ),
+                        // Espace réservé pour la modification et suppression sous forme d'icônes
                       ],
                     )
                   else
-                   ElevatedButton(
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(
-          senderId: currentUserId,  // Current logged-in user
-          receiverId: postUserId,  // The person who posted the item
-          postId: widget.post.id, // Pass the post ID
-
-        ),
-      ),
-    );
-  },
-  style: ElevatedButton.styleFrom(
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    backgroundColor: Colors.green,
-  ),
-  child: const Text("Send Message"),
-),
+                    ElevatedButton(
+                      onPressed: () async {
+                        String receiverName = await _getUserName(postUserId);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatScreen(
+                              senderId: currentUserId,  // Current logged-in user
+                              receiverId: postUserId,  // The person who posted the item
+                              postId: widget.post.id, // Pass the post ID
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: Colors.green,
+                      ),
+                      child: const Text("Send Message"),
+                    ),
                 ],
               ),
             ),
           );
         },
       ),
+      // Icones pour modification et suppression en bas à droite
+      floatingActionButton: currentUserId == postUserId
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton(
+                    onPressed: () async {
+                      final updatedData = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ModifyPostPage(post: widget.post),
+                        ),
+                      );
+                      if (updatedData != null) {
+                        setState(() {
+                          postData = updatedData;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Post updated successfully")),
+                        );
+                      }
+                    },
+                    backgroundColor: Colors.blueAccent,
+                    child: const Icon(Icons.edit),
+                  ),
+                  const SizedBox(height: 10),
+                  FloatingActionButton(
+                    onPressed: () async {
+                      bool? confirmDelete = await showDialog<bool>(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: const Text("Confirm Deletion"),
+                            content: const Text(
+                                "Are you sure you want to delete this post? This action cannot be undone."),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text("Cancel"),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text("Delete",
+                                    style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                      if (confirmDelete == true) {
+                        await FirebaseFirestore.instance
+                            .collection('marketplace')
+                            .doc(widget.post.id)
+                            .delete();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Post deleted")),
+                        );
+                        Navigator.pop(context);
+                      }
+                    },
+                    backgroundColor: Colors.redAccent,
+                    child: const Icon(Icons.delete),
+                  ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 }
@@ -219,8 +227,7 @@ class ImageCarousel extends StatefulWidget {
   final List<String> imageUrls;
   final String postId;
 
-  const ImageCarousel(
-      {super.key, required this.imageUrls, required this.postId});
+  const ImageCarousel({super.key, required this.imageUrls, required this.postId});
 
   @override
   State<ImageCarousel> createState() => _ImageCarouselState();

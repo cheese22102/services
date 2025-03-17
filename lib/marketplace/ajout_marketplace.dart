@@ -1,10 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class AddPostPage extends StatefulWidget {
   const AddPostPage({super.key});
@@ -18,12 +19,15 @@ class _AddPostPageState extends State<AddPostPage> {
   String _title = '';
   String _description = '';
   String _price = '';
+  String? _etatProduit; // "Neuf" ou "Occasion"
   List<File> _images = [];
   final _picker = ImagePicker();
+  bool _isUploading = false;
 
   final String cloudName = "dfk7mskxv";
   final String uploadPreset = "plateforme_service";
 
+  // Méthode pour sélectionner plusieurs images
   Future<void> _pickImages() async {
     final pickedFiles = await _picker.pickMultiImage();
     if (pickedFiles.isNotEmpty) {
@@ -33,13 +37,20 @@ class _AddPostPageState extends State<AddPostPage> {
     }
   }
 
+  // Méthode pour supprimer une image de la liste
+  void _removeImage(int index) {
+    setState(() {
+      _images.removeAt(index);
+    });
+  }
+
+  // Upload d'une image sur Cloudinary
   Future<String?> _uploadImageToCloudinary(File imageFile) async {
     final url = "https://api.cloudinary.com/v1_1/$cloudName/image/upload";
     try {
       var request = http.MultipartRequest('POST', Uri.parse(url));
       request.fields['upload_preset'] = uploadPreset;
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
-
       var response = await request.send();
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
@@ -53,17 +64,14 @@ class _AddPostPageState extends State<AddPostPage> {
     }
   }
 
+  // Soumission du post
   Future<void> _submitPost() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() &&
+        _etatProduit != null &&
+        _images.isNotEmpty &&
+        !_isUploading) {
       _formKey.currentState!.save();
-
-      if (_images.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Veuillez ajouter au moins une image.")),
-        );
-        return;
-      }
-
+      setState(() => _isUploading = true);
       try {
         List<String> imageUrls = [];
         for (var image in _images) {
@@ -72,10 +80,10 @@ class _AddPostPageState extends State<AddPostPage> {
             imageUrls.add(url);
           }
         }
-
         if (imageUrls.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Erreur lors du téléchargement des images.")),
+            const SnackBar(
+                content: Text("Erreur lors du téléchargement des images.")),
           );
           return;
         }
@@ -91,9 +99,11 @@ class _AddPostPageState extends State<AddPostPage> {
         Map<String, dynamic> postData = {
           'title': _title,
           'description': _description,
-          'price': _price,
+'price': double.tryParse(_price) ?? 0.0,
+          'etat': _etatProduit,
           'userId': user.uid,
           'images': imageUrls,
+          'timestamp': FieldValue.serverTimestamp(),
         };
 
         await FirebaseFirestore.instance.collection('marketplace').add(postData);
@@ -107,7 +117,13 @@ class _AddPostPageState extends State<AddPostPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erreur: ${e.toString()}")),
         );
+      } finally {
+        setState(() => _isUploading = false);
       }
+    } else if (_etatProduit == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Veuillez sélectionner l'état du produit.")),
+      );
     }
   }
 
@@ -118,36 +134,22 @@ class _AddPostPageState extends State<AddPostPage> {
         title: const Text('Ajouter un Post'),
         backgroundColor: Colors.green,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 100), // espace pour les boutons fixes
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Affichage des images en carrousel horizontal
-                      if (_images.isNotEmpty)
-                        SizedBox(
-                          height: 120,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: _images.map((image) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(image, width: 120, height: 120, fit: BoxFit.cover),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
+                      // Card des informations du post
                       Card(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                         elevation: 4,
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
@@ -158,7 +160,9 @@ class _AddPostPageState extends State<AddPostPage> {
                                   labelText: 'Titre',
                                   border: OutlineInputBorder(),
                                 ),
-                                validator: (value) => value!.isEmpty ? 'Le titre est requis' : null,
+                                validator: (value) => value!.isEmpty
+                                    ? 'Le titre est requis'
+                                    : null,
                                 onSaved: (value) => _title = value!,
                               ),
                               const SizedBox(height: 16),
@@ -168,48 +172,167 @@ class _AddPostPageState extends State<AddPostPage> {
                                   border: OutlineInputBorder(),
                                 ),
                                 maxLines: 4,
-                                validator: (value) => value!.isEmpty ? 'La description est requise' : null,
+                                validator: (value) => value!.isEmpty
+                                    ? 'La description est requise'
+                                    : null,
                                 onSaved: (value) => _description = value!,
                               ),
                               const SizedBox(height: 16),
                               TextFormField(
                                 decoration: const InputDecoration(
-                                  labelText: 'Prix',
+                                  labelText: 'Prix (TND)',
                                   border: OutlineInputBorder(),
                                 ),
                                 keyboardType: TextInputType.number,
-                                validator: (value) => value!.isEmpty ? 'Le prix est requis' : null,
+                                validator: (value) => value!.isEmpty
+                                    ? 'Le prix est requis'
+                                    : null,
                                 onSaved: (value) => _price = value!,
-                              ),
-                              const SizedBox(height: 32),
-                              ElevatedButton(
-                                onPressed: _submitPost,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text('Publier le Post'),
                               ),
                             ],
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Sélection de l'état du produit avec icônes et descriptions
+                      const Text("État du produit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      // Remplacement du Row par un Wrap pour éviter l'overflow
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 24,
+                        runSpacing: 8,
+                        children: [
+                          _buildEtatOption("Neuf", Icons.new_releases, Colors.green),
+                          _buildEtatOption("Occasion", Icons.handshake, Colors.orange),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Section Images du produit
+                      const Text("Images du produit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      _images.isEmpty
+                          ? const Center(child: Text("Aucune image ajoutée", style: TextStyle(color: Colors.red)))
+                          : Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: List.generate(_images.length, (index) {
+                                return Stack(
+                                  alignment: Alignment.topRight,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.file(
+                                        _images[index],
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    // Bouton de suppression
+                                    GestureDetector(
+                                      onTap: () => _removeImage(index),
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.red,
+                                        ),
+                                        padding: const EdgeInsets.all(4),
+                                        child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }),
+                            ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+
+          // Boutons fixes en bas
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImages,
+                      icon: const Icon(Icons.image),
+                      label: const Text("Ajouter des images"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: (_images.isNotEmpty && !_isUploading)
+                          ? _submitPost
+                          : null,
+                      icon: const Icon(Icons.upload),
+                      label: const Text("Publier le Post"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _pickImages,
-        backgroundColor: Colors.green,
-        label: const Text("Ajouter des images"),
-        icon: const Icon(Icons.image),
+    );
+  }
+
+  Widget _buildEtatOption(String etat, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _etatProduit = etat;
+        });
+      },
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 48,
+            color: _etatProduit == etat ? color : Colors.grey,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            etat,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: _etatProduit == etat ? color : Colors.grey,
+            ),
+          ),
+          // Description sous l'icône
+          Text(
+            etat == "Neuf"
+                ? "Produit neuf, jamais utilisé"
+                : "Produit d'occasion, peut présenter des signes d'utilisation",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

@@ -10,16 +10,18 @@ import 'login_signup/login_page.dart';
 import 'login_signup/signup2_page.dart';
 import 'client_home_page.dart';
 import 'prestataire_home_page.dart';
-import 'notifications_service.dart';
 import 'tutorial_screen.dart';
+import 'notifications_service.dart'; // Importation du service de notifications
 
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  await NotificationService.initialize();
   cloudinary.config.urlConfig.secure = true;
+
+  // Initialiser le service de notifications
+  await NotificationsService.initialize();
 
   runApp(const MyApp());
 }
@@ -31,31 +33,29 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: _buildLightTheme(),
-            darkTheme: _buildDarkTheme(),
-            themeMode: themeProvider.themeMode,
-            home: const AuthWrapper(),
-            onGenerateRoute: (settings) {
-              switch (settings.name) {
-                case '/signup2':
-                  return _fadeRoute(const Signup2Page());
-                case '/clientHome':
-                  return _fadeRoute(const ClientHomePage());
-                case '/prestataireHome':
-                  return _fadeRoute(const PrestataireHomePage());
-                case '/tutorial':
-                  return _fadeRoute(const TutorialScreen());
-                default:
-                  return _fadeRoute(const AuthWrapper());
-              }
-            },
-          );
-        },
-      ),
+      child: Consumer<ThemeProvider>(builder: (context, themeProvider, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: _buildLightTheme(),
+          darkTheme: _buildDarkTheme(),
+          themeMode: themeProvider.themeMode,
+          home: const AuthWrapper(),
+          onGenerateRoute: (settings) {
+            switch (settings.name) {
+              case '/signup2':
+                return _fadeRoute(const Signup2Page());
+              case '/clientHome':
+                return _fadeRoute(const ClientHomePage());
+              case '/prestataireHome':
+                return _fadeRoute(const PrestataireHomePage());
+              case '/tutorial':
+                return _fadeRoute(const TutorialScreen());
+              default:
+                return _fadeRoute(const AuthWrapper());
+            }
+          },
+        );
+      }),
     );
   }
 
@@ -116,7 +116,7 @@ class AuthWrapper extends StatelessWidget {
           return const TutorialScreen();
         }
 
-        return StreamBuilder<User?>(
+        return StreamBuilder<User?>( 
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, userSnapshot) {
             if (userSnapshot.connectionState == ConnectionState.waiting) {
@@ -126,32 +126,30 @@ class AuthWrapper extends StatelessWidget {
             final user = userSnapshot.data;
             if (user == null) return const LoginPage();
 
-            NotificationService.saveDeviceToken(user.uid);
-
-            return FutureBuilder<DocumentSnapshot>(
+            return FutureBuilder<DocumentSnapshot>( 
               future: FirebaseFirestore.instance
                   .collection('users')
                   .doc(user.uid)
                   .get(),
-             builder: (context, docSnapshot) {
-  if (docSnapshot.connectionState == ConnectionState.waiting) {
-    return _buildLoadingScreen();
-  }
+              builder: (context, docSnapshot) {
+                if (docSnapshot.connectionState == ConnectionState.waiting) {
+                  return _buildLoadingScreen();
+                }
 
-  final data = docSnapshot.data?.data() as Map<String, dynamic>?;
-  final role = data?['role'] ?? 'client'; // Valeur par défaut
-  final profileCompleted = data?['profileCompleted'] ?? false; // Gestion de l'absence du champ
+                final data = docSnapshot.data?.data() as Map<String, dynamic>?;
+                final role = data?['role'] ?? 'client'; 
+                final profileCompleted = data?['profileCompleted'] ?? false;
 
-  if (!docSnapshot.hasData || !docSnapshot.data!.exists) {
-    return const Signup2Page();
-  }
+                if (!docSnapshot.hasData || !docSnapshot.data!.exists) {
+                  return const Signup2Page();
+                }
 
-  if (!profileCompleted) return const Signup2Page();
+                if (!profileCompleted) return const Signup2Page();
 
-  return role == 'client'
-      ? const ClientHomePage()
-      : const PrestataireHomePage();
-},
+                return role == 'client'
+                    ? const ClientHomePage()
+                    : const PrestataireHomePage();
+              },
             );
           },
         );

@@ -18,7 +18,7 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
   final _formKey = GlobalKey<FormState>();
   late String _title;
   late String _description;
-  late String _price;
+  late double  _price;
   late List<String> _imageUrls;
   final ImagePicker _picker = ImagePicker();
 
@@ -151,16 +151,25 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
                 onSaved: (value) => _description = value!,
               ),
               const SizedBox(height: 16),
-              // Price field
+               // Price field
               TextFormField(
-                initialValue: _price,
+                initialValue: _price.toString(), // <-- Converti en String pour l'affichage
                 decoration: const InputDecoration(
                   labelText: 'Price',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.number,
-                validator: (value) => value == null || value.isEmpty ? 'Price is required' : null,
-                onSaved: (value) => _price = value!,
+                keyboardType: TextInputType.numberWithOptions(decimal: true), // <-- Permet les décimaux
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Price is required';
+                  }
+                  final price = double.tryParse(value);
+                  if (price == null || price <= 0) {
+                    return 'Please enter a valid price';
+                  }
+                  return null;
+                },
+                onSaved: (value) => _price = double.parse(value!), // <-- Converti en double
               ),
               const SizedBox(height: 16),
               const Text(

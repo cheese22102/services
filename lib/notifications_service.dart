@@ -1,98 +1,174 @@
-// lib/notifications_service.dart
-
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:googleapis_auth/auth_io.dart';
+import 'package:http/http.dart' as http;
 
-class NotificationService {
-  static final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+class NotificationsService {
+  static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  static final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  /// Initialize Firebase Messaging and local notifications.
-  static Future<void> initialize() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
+  // Canal de notification pour les messages (sans son personnalisé)
+  static const AndroidNotificationChannel _messageChannel = AndroidNotificationChannel(
+    'message_channel', 
+    'New Message Notifications', 
+    description: 'This channel is used for notifications about new messages.',
+    importance: Importance.max,
+    playSound: true,
+    // Suppression de l'attribut "sound" pour utiliser le son par défaut
+  );
 
-    // Request permissions (for iOS; Android is auto-granted)
-    NotificationSettings settings = await messaging.requestPermission(
+  static Future<void> initialize() async {
+    await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
-    print('User granted permission: ${settings.authorizationStatus}');
 
-    // Set up local notification initialization (Android)
-    const AndroidInitializationSettings androidSettings =
+    const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
 
-    final InitializationSettings initializationSettings =
-        InitializationSettings(android: androidSettings);
+    await _flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        print('Notification clicked: ${response.payload}');
+      },
+    );
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_messageChannel);
 
-    // Listen for foreground messages
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
-        showLocalNotification(
-          message.notification!.title,
-          message.notification!.body,
-        );
+        _showNotification(message);
       }
     });
-  }
 
-  /// Displays a local notification.
-  static Future<void> showLocalNotification(String? title, String? body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'default_channel', 'Default Channel',
-      channelDescription: 'This channel is used for default notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-    );
-    await flutterLocalNotificationsPlugin.show(0, title, body, platformDetails);
-  }
-
-  /// Save the device token in Firestore for later push notifications.
-  static Future<void> saveDeviceToken(String userId) async {
-    final FirebaseMessaging messaging = FirebaseMessaging.instance;
-    String? token = await messaging.getToken();
+    String? token = await _firebaseMessaging.getToken();
     if (token != null) {
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'deviceToken': token,
-      });
-      print("Device token saved: $token");
+      _saveFCMToken(token);
+    }
+
+    _firebaseMessaging.onTokenRefresh.listen(_saveFCMToken);
+  }
+
+  static Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+    print("Background message: ${message.messageId}");
+  }
+
+  static Future<void> _showNotification(RemoteMessage message) async {
+    const notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'message_channel',
+        'New Message Notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        // Suppression du paramètre "sound" pour utiliser le son par défaut
+      ),
+    );
+
+    await _flutterLocalNotificationsPlugin.show(
+      message.hashCode,
+      message.notification?.title,
+      message.notification?.body,
+      notificationDetails,
+      payload: message.data['chatroomId'],
+    );
+  }
+
+  static Future<void> _saveFCMToken(String token) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'fcmToken': token});
     }
   }
 
-  /// Send a push notification using the FCM HTTP API.
-  static Future<void> sendPushNotification(String token, String title, String body) async {
-    const String serverKey = 'YOUR_FIREBASE_SERVER_KEY'; // Replace with your actual server key
-    const String fcmUrl = 'https://fcm.googleapis.com/fcm/send';
-
+  static Future<void> sendMessageNotification({
+    required String receiverId,
+    required String messageText,
+    required String senderName,
+    required String chatroomId,
+  }) async {
     try {
-      final response = await http.post(
-        Uri.parse(fcmUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=$serverKey',
-        },
-        body: jsonEncode({
-          'to': token,
-          'notification': {
-            'title': title,
-            'body': body,
-            'sound': 'default',
-          },
-          'priority': 'high',
-        }),
+      final receiverDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(receiverId)
+          .get();
+
+      final receiverToken = receiverDoc.data()?['fcmToken'] as String?;
+      if (receiverToken == null) return;
+
+      // Configuration du compte de service pour OAuth 2.0
+      final accountCredentials = ServiceAccountCredentials.fromJson({
+        "type": "service_account",
+        "project_id": "plateformeservices-72c64",
+        "private_key_id": "6ed9e51a43a201b5c14d8229bc26659d821ad6d1",
+        "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCWkGDXEaMFC1pz\n... (reste de votre clé privée) ...\n-----END PRIVATE KEY-----\n",
+        "client_email": "plateformeservices-72c64@appspot.gserviceaccount.com",
+        "client_id": "108837948097491127157",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/plateformeservices-72c64%40appspot.gserviceaccount.com"
+      });
+
+      // Création du client d'authentification avec la scope pour Firebase Messaging
+      final authClient = await clientViaServiceAccount(
+        accountCredentials,
+        ['https://www.googleapis.com/auth/firebase.messaging']
       );
-      print("Push notification response: ${response.body}");
+
+      // URL de l'API FCM v1 (remplacez YOUR_PROJECT_ID par l'ID de votre projet)
+      final url = Uri.parse('https://fcm.googleapis.com/v1/projects/plateformeservices-72c64/messages:send');
+
+      // Construction du payload
+      final body = jsonEncode({
+        'message': {
+          'token': receiverToken,
+          'notification': {
+            'title': 'New Message from $senderName',
+            'body': messageText,
+          },
+          'android': {
+            'notification': {
+              'channelId': 'message_channel',
+              'sound': 'default'
+            }
+          },
+          'data': {
+            'type': 'new_message',
+            'chatroomId': chatroomId,
+            'senderId': FirebaseAuth.instance.currentUser!.uid,
+          }
+        }
+      });
+
+      // Envoi de la requête via le client d'authentification
+      final response = await authClient.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode != 200) {
+        print('Erreur FCM: ${response.statusCode} ${response.body}');
+      } else {
+        print('Notification envoyée avec succès!');
+      }
     } catch (e) {
-      print("Error sending push notification: $e");
+      print('Erreur d\'envoi de notification: $e');
     }
   }
 }
