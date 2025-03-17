@@ -30,8 +30,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           
       Map<String, dynamic>? data = userDoc.data() as Map<String, dynamic>?;
       if (data != null) {
-        _lastNameController.text = data['lastName'] ?? ''; // Correction ici
-        _firstNameController.text = data['firstName'] ?? ''; // Correction ici
+        _lastNameController.text = data['lastname'] ?? ''; // Correction ici
+        _firstNameController.text = data['firstname'] ?? ''; // Correction ici
       }
     }
   }
@@ -44,8 +44,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             .collection('users')
             .doc(user.uid)
             .update({
-          'lastName': _lastNameController.text.trim(), // Correction ici
-          'firstName': _firstNameController.text.trim(), // Correction ici
+          'lastname': _lastNameController.text.trim(), // Correction ici
+          'firstname': _firstNameController.text.trim(), // Correction ici
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
