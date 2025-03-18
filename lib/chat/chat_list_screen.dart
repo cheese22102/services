@@ -41,7 +41,7 @@ class ChatListScreen extends StatelessWidget {
           if (chats.isEmpty) {
             return Center(
               child: Text(
-                'No conversations yet.\nStart a new chat!', 
+                'No conversations yet.\nStart a new chat!',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 18, color: Colors.grey),
               ),
@@ -62,10 +62,10 @@ class ChatListScreen extends StatelessWidget {
                   _getPostTitle(chat['postId']),
                   _getPostStatus(chat['postId']),
                 ]).then((results) => {
-                  'userName': results[0],
-                  'postTitle': results[1],
-                  'postActive': results[2],
-                }),
+                      'userName': results[0],
+                      'postTitle': results[1],
+                      'postActive': results[2],
+                    }),
                 builder: (context, snapshot) {
                   final userName = snapshot.data?['userName'] ?? 'Loading...';
                   final postTitle = snapshot.data?['postTitle'] ?? 'Loading post...';
@@ -87,8 +87,10 @@ class ChatListScreen extends StatelessWidget {
                       title: Row(
                         children: [
                           Expanded(
-                            child: Text(userName, 
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                            child: Text(
+                              userName,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
                           if (!postActive)
                             const Icon(Icons.archive, size: 16, color: Colors.grey)
@@ -103,8 +105,8 @@ class ChatListScreen extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: lastMessage == 'No messages yet' 
-                                  ? Colors.grey 
+                              color: lastMessage == 'No messages yet'
+                                  ? Colors.grey
                                   : Colors.black87,
                             ),
                           ),
@@ -150,9 +152,8 @@ class ChatListScreen extends StatelessWidget {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       if (!doc.exists) return 'Unknown User';
-      return '${doc['firstname']} ${doc['lastname']}'.trim().isEmpty 
-          ? 'Unknown User' 
-          : '${doc['firstname']} ${doc['lastname']}';
+      final fullName = '${doc['firstname']} ${doc['lastname']}'.trim();
+      return fullName.isEmpty ? 'Unknown User' : fullName;
     } catch (e) {
       return 'Error loading user';
     }

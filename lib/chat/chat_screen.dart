@@ -55,6 +55,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   String _generateChatroomId() {
+    // Ensure consistent ordering by sorting the user IDs.
     final userIds = [widget.senderId, widget.receiverId]..sort();
     return '${userIds[0]}_${userIds[1]}_${widget.postId}';
   }
@@ -86,23 +87,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _initializeChatroom() async {
     try {
       final userIds = [widget.senderId, widget.receiverId]..sort();
-      final postDoc =
-          await _firestore.collection('marketplace').doc(widget.postId).get();
-      if (!postDoc.exists) {
-        setState(() {
-          _isPostDeleted = true;
-          _isChatArchived = true;
-          _isLoading = false;
+      final chatRef = _firestore.collection('chats').doc(_chatroomId);
+      final chatDoc = await chatRef.get();
+      if (!chatDoc.exists) {
+        // Only create the chatroom if it doesn't exist yet
+        await chatRef.set({
+          'participants': userIds,
+          'postId': widget.postId,
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'reactions': {},
         });
-        return;
       }
-      await _firestore.collection('chats').doc(_chatroomId).set({
-        'participants': userIds,
-        'postId': widget.postId,
-        'lastMessage': '',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'reactions': {},
-      }, SetOptions(merge: true));
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
@@ -120,11 +116,9 @@ class _ChatScreenState extends State<ChatScreen> {
         .snapshots()
         .listen((snapshot) {
       if (mounted) {
-        final partnerDoc =
-            snapshot.docs.firstWhereOrNull((doc) => doc.id == _partnerId);
+        final partnerDoc = snapshot.docs.firstWhereOrNull((doc) => doc.id == _partnerId);
         setState(() {
-          _isTyping =
-              (partnerDoc != null && partnerDoc.data()['isTyping'] == true);
+          _isTyping = (partnerDoc != null && partnerDoc.data()['isTyping'] == true);
         });
       }
     });
@@ -144,9 +138,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_messageController.text.isEmpty ||
-        _isChatArchived ||
-        _chatroomId == null) return;
+    if (_messageController.text.isEmpty || _isChatArchived || _chatroomId == null) return;
     try {
       await _updateTypingStatus(false);
       final messageText = _messageController.text.trim();
@@ -166,8 +158,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'lastMessage': messageText,
         'lastMessageTime': timestamp,
       });
-      final senderDoc =
-          await _firestore.collection('users').doc(senderId).get();
+      final senderDoc = await _firestore.collection('users').doc(senderId).get();
       final senderName = senderDoc.data()?['firstname'] ?? 'Un utilisateur';
       await NotificationsService.sendMessageNotification(
         receiverId: _partnerId,
@@ -234,21 +225,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_errorMessage != null)
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_errorMessage != null) {
       return Scaffold(
-          appBar: AppBar(title: const Text('Error')),
-          body: Center(child: Text(_errorMessage!)));
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(child: Text(_errorMessage!)),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: FutureBuilder<DocumentSnapshot>(
-          future:
-              _firestore.collection('marketplace').doc(widget.postId).get(),
+          future: _firestore.collection('marketplace').doc(widget.postId).get(),
           builder: (context, snapshot) {
-            final postTitle = snapshot.hasData
-                ? snapshot.data!['title'] ?? 'Produit'
-                : 'Loading...';
+            final postTitle = snapshot.hasData ? snapshot.data!['title'] ?? 'Produit' : 'Loading...';
             return Text(
               'Chat about: $postTitle',
               style: const TextStyle(color: Colors.white),
@@ -267,10 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${_partnerName ?? 'Partner'} is typing...',
-                  style: const TextStyle(
-                    fontStyle: FontStyle.italic,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
               ),
             ),
@@ -284,18 +270,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _messageController,
                     enabled: !_isChatArchived,
                     decoration: InputDecoration(
-                      hintText: _isChatArchived
-                          ? 'This conversation is archived'
-                          : 'Type a message...',
+                      hintText: _isChatArchived ? 'This conversation is archived' : 'Type a message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor:
-                          _isChatArchived ? Colors.grey[100] : Colors.grey[200],
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 20),
+                      fillColor: _isChatArchived ? Colors.grey[100] : Colors.grey[200],
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.emoji_emotions_outlined),
                         onPressed: () {},
@@ -313,8 +295,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor:
-                      _isChatArchived ? Colors.grey : Colors.deepPurple,
+                  backgroundColor: _isChatArchived ? Colors.grey : Colors.deepPurple,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white),
                     onPressed: _isChatArchived ? null : _sendMessage,
