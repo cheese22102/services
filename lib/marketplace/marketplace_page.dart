@@ -8,6 +8,8 @@ import '../chat/chat_list_screen.dart'; // Page de messagerie
 import '/client_home_page.dart'; // Page d'accueil client
 import 'package:plateforme_services/widgets/sidebar.dart'; // Votre sidebar
 import '../widgets/zoom_product.dart'; // Le widget ZoomProduct
+import 'mes_produits_page.dart';
+import 'favoris_page.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -292,64 +294,79 @@ class _MarketplacePageState extends State<MarketplacePage> {
       ),
       // Footer fixe avec 3 icônes
       bottomNavigationBar: Container(
-        height: 55,
-        margin: const EdgeInsets.all(8),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Bouton Accueil
-            IconButton(
-              icon: const Icon(Icons.home, size: 28, color: Colors.blue),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ClientHomePage()),
-                );
-              },
-            ),
-            // Séparateur vertical
-            Container(
-              height: 35,
-              width: 1,
-              color: Colors.grey.shade300,
-            ),
-            // Bouton Ajouter un Post
-            IconButton(
-              icon: const Icon(Icons.add_circle, size: 36, color: Colors.green),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AddPostPage()),
-                );
-              },
-            ),
-            // Séparateur vertical
-            Container(
-              height: 35,
-              width: 1,
-              color: Colors.grey.shade300,
-            ),
-            // Bouton Messagerie
-            IconButton(
-              icon: const Icon(Icons.chat, size: 28, color: Colors.blueAccent),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ChatListScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+  height: 55,
+  margin: const EdgeInsets.all(8),
+  padding: const EdgeInsets.symmetric(horizontal: 12),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    boxShadow: [
+      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5),
+    ],
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      // Bouton Accueil
+      IconButton(
+        icon: const Icon(Icons.home, size: 28, color: Colors.blue),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ClientHomePage()),
+          );
+        },
       ),
+      
+      // Bouton Favoris (NOUVEAU)
+      IconButton(
+        icon: const Icon(Icons.favorite, size: 28, color: Colors.redAccent),
+        onPressed: () {
+          // Remplace par la page Favoris
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const FavorisPage()),
+          );
+        },
+      ),
+
+      // Bouton Ajouter un Post
+      IconButton(
+        icon: const Icon(Icons.add_circle, size: 36, color: Colors.green),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddPostPage()),
+          );
+        },
+      ),
+
+      // Bouton Mes Posts (NOUVEAU)
+      IconButton(
+        icon: const Icon(Icons.list, size: 28, color: Colors.orange),
+        onPressed: () {
+          // Remplace par la page Mes Posts
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MesProduitsPage()),
+          );
+        },
+      ),
+
+      // Bouton Messagerie
+      IconButton(
+        icon: const Icon(Icons.chat, size: 28, color: Colors.blueAccent),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ChatListScreen()),
+          );
+        },
+      ),
+    ],
+  ),
+),
+
     );
   }
 }

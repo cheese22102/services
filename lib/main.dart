@@ -11,7 +11,7 @@ import 'login_signup/signup2_page.dart';
 import 'client_home_page.dart';
 import 'prestataire_home_page.dart';
 import 'tutorial_screen.dart';
-import 'notifications_service.dart'; // Importation du service de notifications
+import 'chat/notifications_service.dart'; // Importation du service de notifications
 
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
 
@@ -165,4 +165,3 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 }
-//bonjour

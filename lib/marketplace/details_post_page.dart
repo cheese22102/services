@@ -1,13 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'image_plein_ecran.dart';  // Assurez-vous que ce fichier est importé correctement
+import 'image_plein_ecran.dart'; // Ensure this file is in your project
 import 'modifier_post_page.dart';
 import '../chat/chat_screen.dart';
 
 class PostDetailsPage extends StatefulWidget {
-  final QueryDocumentSnapshot post;
-  const PostDetailsPage({super.key, required this.post});
+  final DocumentSnapshot post; // Use DocumentSnapshot
+  const PostDetailsPage({Key? key, required this.post}) : super(key: key);
 
   @override
   State<PostDetailsPage> createState() => _PostDetailsPageState();
@@ -19,7 +19,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
   @override
   void initState() {
     super.initState();
-    postData = widget.post.data() as Map<String, dynamic>;
+    // Get the post data; if null, use an empty map.
+    postData = widget.post.data() as Map<String, dynamic>? ?? {};
   }
 
   Future<String> _getUserName(String userId) async {
@@ -40,6 +41,24 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     }
   }
 
+  Future<void> _toggleFavorite() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final favoritesRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favoris')
+        .doc(widget.post.id);
+
+    final doc = await favoritesRef.get();
+    if (doc.exists) {
+      await favoritesRef.delete();
+    } else {
+      await favoritesRef.set({'timestamp': FieldValue.serverTimestamp()});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     String postUserId = postData['userId'];
@@ -47,11 +66,31 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Post Details'),
+        title: const Text('Détails du produit'),
         backgroundColor: Colors.green,
+        actions: [
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUserId)
+                .collection('favoris')
+                .doc(widget.post.id)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final isFavorite = snapshot.data?.exists ?? false;
+              return IconButton(
+                icon: Icon(
+                  isFavorite ? Icons.star : Icons.star_border,
+                  color: isFavorite ? Colors.amber : Colors.white,
+                ),
+                onPressed: _toggleFavorite,
+              );
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<String>(
-        future: _getUserName(postUserId),
+        future: _getUserName(postData['userId']),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -67,30 +106,32 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Carrousel d'images
+                  // Image Carousel
                   if (postData['images'] != null &&
-                      postData['images'].isNotEmpty)
+                      (postData['images'] as List).isNotEmpty)
                     ImageCarousel(
                       imageUrls: List<String>.from(postData['images']),
                       postId: widget.post.id,
                     ),
                   const SizedBox(height: 16),
-                  // Titre du post
+                  // Post title
                   Text(
-                    postData['title'],
-                    style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                    postData['title'] ?? 'No Title',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                        ),
+                        ) ??
+                        const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   // Description
                   Text(
                     postData['description'] ?? "No description provided.",
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 16),
-                  // Prix
+                  // Price
                   Text(
                     "Price: ${postData['price']} €",
                     style: const TextStyle(
@@ -99,39 +140,30 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  // Affichage de l'état du produit
+                  // Product state
                   Text(
-                    "Etat du produit: ${postData['etat'] ?? 'Unknown'}",  // L'état du produit
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
+                    "Etat du produit: ${postData['etat'] ?? 'Unknown'}",
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 16),
-                  // Informations sur le posteur
+                  // Posted by
                   Text(
                     "Posted by: $userName",
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 20),
-                  // Boutons d'action selon l'utilisateur courant
-                  if (currentUserId == postUserId)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Espace réservé pour la modification et suppression sous forme d'icônes
-                      ],
-                    )
-                  else
+                  // If current user is not the owner, show Send Message button
+                  if (currentUserId != postUserId)
                     ElevatedButton(
                       onPressed: () async {
-                        String receiverName = await _getUserName(postUserId);
+                        String receiverName = await _getUserName(postData['userId']);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
-                              senderId: currentUserId,  // Current logged-in user
-                              receiverId: postUserId,  // The person who posted the item
-                              postId: widget.post.id, // Pass the post ID
+                              senderId: currentUserId,
+                              receiverId: postData['userId'],
+                              postId: widget.post.id,
                             ),
                           ),
                         );
@@ -148,7 +180,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
           );
         },
       ),
-      // Icones pour modification et suppression en bas à droite
+      // Floating buttons for edit and delete (only for the owner)
       floatingActionButton: currentUserId == postUserId
           ? Padding(
               padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
@@ -157,6 +189,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                 children: [
                   FloatingActionButton(
                     onPressed: () async {
+                      // Pass the DocumentSnapshot directly to ModifyPostPage
                       final updatedData = await Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -183,19 +216,15 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         builder: (BuildContext context) {
                           return AlertDialog(
                             title: const Text("Confirm Deletion"),
-                            content: const Text(
-                                "Are you sure you want to delete this post? This action cannot be undone."),
+                            content: const Text("Are you sure you want to delete this post? This action cannot be undone."),
                             actions: [
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(false),
+                                onPressed: () => Navigator.of(context).pop(false),
                                 child: const Text("Cancel"),
                               ),
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(true),
-                                child: const Text("Delete",
-                                    style: TextStyle(color: Colors.red)),
+                                onPressed: () => Navigator.of(context).pop(true),
+                                child: const Text("Delete", style: TextStyle(color: Colors.red)),
                               ),
                             ],
                           );
@@ -227,7 +256,7 @@ class ImageCarousel extends StatefulWidget {
   final List<String> imageUrls;
   final String postId;
 
-  const ImageCarousel({super.key, required this.imageUrls, required this.postId});
+  const ImageCarousel({Key? key, required this.imageUrls, required this.postId}) : super(key: key);
 
   @override
   State<ImageCarousel> createState() => _ImageCarouselState();

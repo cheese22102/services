@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:collection/collection.dart'; // Pour firstWhereOrNull
-import 'package:plateforme_services/notifications_service.dart';
+import 'package:collection/collection.dart'; // For firstWhereOrNull
+import 'package:plateforme_services/chat/notifications_service.dart';
 import 'message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -44,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Determine partner ID: if current user is the sender then partner is receiver, otherwise vice versa.
     _partnerId = (_currentUser.uid == widget.senderId)
         ? widget.receiverId
         : widget.senderId;
@@ -261,8 +262,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(child: _buildChatMessages()),
           if (_isTyping)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

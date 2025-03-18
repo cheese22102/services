@@ -6,9 +6,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ModifyPostPage extends StatefulWidget {
-  final QueryDocumentSnapshot post;
+final DocumentSnapshot post;
 
-  const ModifyPostPage({super.key, required this.post});
+const ModifyPostPage({super.key, required this.post});
 
   @override
   State<ModifyPostPage> createState() => _ModifyPostPageState();
