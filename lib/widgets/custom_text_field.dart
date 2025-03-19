@@ -6,6 +6,7 @@ class CustomTextField extends StatefulWidget {
   final IconData icon;
   final bool obscure;
   final String? Function(String?)? validator;
+  final Function(String)? onChanged; // Add this line for the onChanged callback
 
   const CustomTextField({
     super.key,
@@ -14,6 +15,7 @@ class CustomTextField extends StatefulWidget {
     required this.icon,
     required this.obscure,
     this.validator,
+    this.onChanged, // Add this to the constructor
   });
 
   @override
@@ -42,6 +44,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
         controller: widget.controller,
         obscureText: widget.obscure ? !_passwordVisible : false,
         validator: widget.validator,
+        onChanged: widget.onChanged, // Add this line to pass the onChanged callback
         style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color),
         decoration: InputDecoration(
           icon: Icon(widget.icon, color: Theme.of(context).iconTheme.color),
