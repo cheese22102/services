@@ -126,7 +126,7 @@ class _SidebarState extends State<Sidebar> {
       padding: const EdgeInsets.only(left: 16.0), // Indentation for sub-items
       child: Column(
         children: [
-          _buildSubItem(Icons.chat, 'Mes conversations', const ChatListScreen()),
+          _buildSubItem(Icons.chat, 'Mes conversations',  ConversationsListPage()),
           _buildSubItem(Icons.list_alt, 'Mes posts', const MesProduitsPage()),
           _buildSubItem(Icons.star, 'Favoris', const FavorisPage()),
         ],

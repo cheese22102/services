@@ -160,10 +160,10 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ChatScreen(
-                              senderId: currentUserId,
-                              receiverId: postData['userId'],
+                            builder: (context) => ChatScreenPage(
+                              otherUserId: postData['userId'],
                               postId: widget.post.id,
+                              otherUserName: postData['title'],
                             ),
                           ),
                         );
