@@ -64,206 +64,211 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     String postUserId = postData['userId'];
     String currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Détails du produit'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUserId)
-                .collection('favoris')
-                .doc(widget.post.id)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final isFavorite = snapshot.data?.exists ?? false;
-              return IconButton(
-                icon: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite ? Theme.of(context).colorScheme.secondary : Colors.white,
-                ),
-                onPressed: _toggleFavorite,
-              );
-            },
-          ),
-        ],
-      ),
-      body: FutureBuilder<String>(
-        future: _getUserName(postData['userId']),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const Center(child: Text("Error loading user information"));
-          }
-          String userName = snapshot.data ?? "Unknown User";
-
-          return SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Image Carousel
-                  if (postData['images'] != null &&
-                      (postData['images'] as List).isNotEmpty)
-                    ImageCarousel(
-                      imageUrls: List<String>.from(postData['images']),
-                      postId: widget.post.id,
-                    ),
-                  const SizedBox(height: 16),
-                  // Post title
-                  Text(
-                    postData['title'] ?? 'No Title',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ) ??
-                        const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  // Description
-                  Text(
-                    postData['description'] ?? "No description provided.",
-                    style: Theme.of(context).textTheme.bodyMedium ??
-                        const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  // Price
-                  Text(
-                    "Price: ${postData['price']} €",
-                    style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  // Product state
-                  Text(
-                    "Etat du produit: ${postData['etat'] ?? 'Unknown'}",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 16),
-                  // Posted by
-                  Text(
-                    "Posted by: $userName",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 20),
-                  // If current user is not the owner, show Send Message button
-                  if (currentUserId != postUserId)
-                    ElevatedButton(
-                      onPressed: () async {
-                        String receiverName = await _getUserName(postData['userId']);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChatScreenPage(
-                              otherUserId: postData['userId'],
-                              postId: widget.post.id,
-                              otherUserName: postData['title'],
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: Colors.green,
-                      ),
-                      child: const Text("Send Message"),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-      // Floating buttons for edit and delete (only for the owner)
-      floatingActionButton: currentUserId == postUserId
-          ? Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton(
-                    heroTag: "edit",
-                    onPressed: () async {
-                      final updatedData = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ModifyPostPage(post: widget.post),
-                        ),
-                      );
-                      if (updatedData != null) {
-                        setState(() => postData = updatedData);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Publication mise à jour")),
-                        );
-                      }
-                    },
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: const Icon(Icons.edit),
-                  ),
-                  const SizedBox(height: 16),
-                  FloatingActionButton(
-                    heroTag: "delete",
-                    onPressed: () => _showDeleteConfirmation(context),
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    child: const Icon(Icons.delete),
-                  ),
-                ],
-              ),
-            )
-          : null,
-    );
-  }
-
-  Future<void> _showDeleteConfirmation(BuildContext context) async {
-    final bool? confirmDelete = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Confirmer la suppression"),
-          content: const Text(
-            "Êtes-vous sûr de vouloir supprimer cette publication ? Cette action est irréversible.",
-          ),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacementNamed(context, '/marketplace');
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Détails du produit'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          elevation: 0,
+          centerTitle: true,
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                "Annuler",
-                style: TextStyle(color: Theme.of(context).colorScheme.primary),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(
-                "Supprimer",
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUserId)
+                  .collection('favoris')
+                  .doc(widget.post.id)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final isFavorite = snapshot.data?.exists ?? false;
+                return IconButton(
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite ? Theme.of(context).colorScheme.secondary : Colors.white,
+                  ),
+                  onPressed: _toggleFavorite,
+                );
+              },
             ),
           ],
-        );
-      },
-    );
+        ),
+        body: FutureBuilder<String>(
+          future: _getUserName(postData['userId']),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return const Center(child: Text("Error loading user information"));
+            }
+            String userName = snapshot.data ?? "Unknown User";
 
-    if (confirmDelete == true) {
-      await FirebaseFirestore.instance
-          .collection('marketplace')
-          .doc(widget.post.id)
-          .delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Publication supprimée")),
-        );
-        Navigator.pop(context);
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Image Carousel
+                    if (postData['images'] != null &&
+                        (postData['images'] as List).isNotEmpty)
+                      ImageCarousel(
+                        imageUrls: List<String>.from(postData['images']),
+                        postId: widget.post.id,
+                      ),
+                    const SizedBox(height: 16),
+                    // Post title
+                    Text(
+                      postData['title'] ?? 'No Title',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ) ??
+                          const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    // Description
+                    Text(
+                      postData['description'] ?? "No description provided.",
+                      style: Theme.of(context).textTheme.bodyMedium ??
+                          const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 16),
+                    // Price
+                    Text(
+                      "Price: ${postData['price']} €",
+                      style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    // Product state
+                    Text(
+                      "Etat du produit: ${postData['etat'] ?? 'Unknown'}",
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 16),
+                    // Posted by
+                    Text(
+                      "Posted by: $userName",
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 20),
+                    // If current user is not the owner, show Send Message button
+                    if (currentUserId != postUserId)
+                      ElevatedButton(
+                        onPressed: () async {
+                          String receiverName = await _getUserName(postData['userId']);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreenPage(
+                                otherUserId: postData['userId'],
+                                postId: widget.post.id,
+                                otherUserName: postData['title'],
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: Colors.green,
+                        ),
+                        child: const Text("Send Message"),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        // Floating buttons for edit and delete (only for the owner)
+        floatingActionButton: currentUserId == postUserId
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FloatingActionButton(
+                      heroTag: "edit",
+                      onPressed: () async {
+                        final updatedData = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ModifyPostPage(post: widget.post),
+                          ),
+                        );
+                        if (updatedData != null) {
+                          setState(() => postData = updatedData);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Publication mise à jour")),
+                          );
+                        }
+                      },
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: const Icon(Icons.edit),
+                    ),
+                    const SizedBox(height: 16),
+                    FloatingActionButton(
+                      heroTag: "delete",
+                      onPressed: () => _showDeleteConfirmation(context),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                      child: const Icon(Icons.delete),
+                    ),
+                  ],
+                ),
+              )
+            : null,
+      ));
+    }
+
+    Future<void> _showDeleteConfirmation(BuildContext context) async {
+      final bool? confirmDelete = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Confirmer la suppression"),
+            content: const Text(
+              "Êtes-vous sûr de vouloir supprimer cette publication ? Cette action est irréversible.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(
+                  "Annuler",
+                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  "Supprimer",
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmDelete == true) {
+        await FirebaseFirestore.instance
+            .collection('marketplace')
+            .doc(widget.post.id)
+            .delete();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Publication supprimée")),
+          );
+          Navigator.pop(context);
+        }
       }
     }
-  }
 }
 
 class ImageCarousel extends StatefulWidget {
@@ -295,6 +300,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
   @override
   Widget build(BuildContext context) {
     final double carouselHeight = MediaQuery.of(context).size.height * 0.5;
+    
     return Column(
       children: [
         Container(
@@ -374,4 +380,5 @@ class _ImageCarouselState extends State<ImageCarousel> {
       ],
     );
   }
-}
+  }
+  

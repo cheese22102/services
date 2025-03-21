@@ -281,7 +281,11 @@ class _AddPostPageState extends State<AddPostPage> {
 
       // Retourner à la page précédente après un court délai
       Future.delayed(const Duration(seconds: 1), () {
-        Navigator.pop(context);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/marketplace',
+          (route) => false,
+        );
       });
     } catch (e) {
       // Fermer le dialogue de progression en cas d'erreur
@@ -303,111 +307,120 @@ class _AddPostPageState extends State<AddPostPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ajouter un Post'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                  Theme.of(context).colorScheme.background,
-                ],
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/marketplace',
+          (route) => false,
+        );
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Ajouter un Post'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                    Theme.of(context).colorScheme.background,
+                  ],
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 100),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Information Card
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)
-                        ),
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Informations du produit",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 100),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product Information Card
+                        Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)
+                          ),
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "Informations du produit",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 20),
-                              TextFormField(
-                                controller: _titleController,
-                                decoration: InputDecoration(
-                                  labelText: 'Titre',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                const SizedBox(height: 20),
+                                TextFormField(
+                                  controller: _titleController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Titre',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    prefixIcon: Icon(Icons.title, 
+                                      color: Theme.of(context).colorScheme.primary
+                                    ),
+                                    errorText: _titleError,
+                                    filled: true,
+                                    fillColor: Theme.of(context).colorScheme.surface,
                                   ),
-                                  prefixIcon: Icon(Icons.title, 
-                                    color: Theme.of(context).colorScheme.primary
-                                  ),
-                                  errorText: _titleError,
-                                  filled: true,
-                                  fillColor: Theme.of(context).colorScheme.surface,
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _descriptionController,
-                                decoration: InputDecoration(
-                                  labelText: 'Description',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _descriptionController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Description',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    prefixIcon: Icon(Icons.description,
+                                      color: Theme.of(context).colorScheme.primary
+                                    ),
+                                    errorText: _descriptionError,
+                                    filled: true,
+                                    fillColor: Theme.of(context).colorScheme.surface,
                                   ),
-                                  prefixIcon: Icon(Icons.description,
-                                    color: Theme.of(context).colorScheme.primary
-                                  ),
-                                  errorText: _descriptionError,
-                                  filled: true,
-                                  fillColor: Theme.of(context).colorScheme.surface,
+                                  maxLines: 4,
                                 ),
-                                maxLines: 4,
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _priceController,
-                                decoration: InputDecoration(
-                                  labelText: 'Prix (TND)',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _priceController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Prix (TND)',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    prefixIcon: Icon(Icons.attach_money,
+                                      color: Theme.of(context).colorScheme.primary
+                                    ),
+                                    suffixText: 'TND',
+                                    errorText: _priceError,
+                                    filled: true,
+                                    fillColor: Theme.of(context).colorScheme.surface,
                                   ),
-                                  prefixIcon: Icon(Icons.attach_money,
-                                    color: Theme.of(context).colorScheme.primary
-                                  ),
-                                  suffixText: 'TND',
-                                  errorText: _priceError,
-                                  filled: true,
-                                  fillColor: Theme.of(context).colorScheme.surface,
+                                  keyboardType: TextInputType.number,
                                 ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-
+                      
                       // Product State Section
                       Card(
                         shape: RoundedRectangleBorder(
@@ -448,7 +461,7 @@ class _AddPostPageState extends State<AddPostPage> {
                           ),
                         ),
                       ),
-
+                      
                       // Section images
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -652,7 +665,7 @@ class _AddPostPageState extends State<AddPostPage> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildEtatOption(String etat, IconData icon, Color color) {

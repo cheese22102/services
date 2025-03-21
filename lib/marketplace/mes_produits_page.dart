@@ -25,7 +25,12 @@ class _MesProduitsPageState extends State<MesProduitsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacementNamed(context, '/marketplace');
+        return false;
+      },
+      child: Scaffold(
       drawer: const Sidebar(),
       backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
@@ -200,6 +205,6 @@ class _MesProduitsPageState extends State<MesProduitsPage> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
