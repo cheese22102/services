@@ -434,6 +434,7 @@ class _MarketplacePageState extends State<MarketplacePage> with SingleTickerProv
         ],
       ),
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
       // Bouton Mes Posts (NOUVEAU)
       IconButton(
@@ -461,6 +462,8 @@ class _MarketplacePageState extends State<MarketplacePage> with SingleTickerProv
   ),
 ),
 
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
     );

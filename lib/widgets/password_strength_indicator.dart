@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class PasswordStrengthIndicator extends StatelessWidget {
   final String password;
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   
   const PasswordStrengthIndicator({super.key, required this.password});
 
@@ -29,6 +30,11 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
   const PasswordStrengthIndicator({super.key, required this.password});
 
+=======
+
+  const PasswordStrengthIndicator({super.key, required this.password});
+
+>>>>>>> Stashed changes
   double _calculateStrength() {
     int score = 0;
     
@@ -63,6 +69,9 @@ class PasswordStrengthIndicator extends StatelessWidget {
     if (strength <= 0.4) return Colors.orange;
     if (strength <= 0.6) return Colors.yellow;
     if (strength <= 0.8) return Colors.lightGreen;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     return Colors.green;
   }
@@ -75,6 +84,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
     return Row(
       children: [
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         LinearProgressIndicator(
           value: _strength,
@@ -116,6 +126,35 @@ class PasswordStrengthIndicator extends StatelessWidget {
             ],
           ),
         ),
+=======
+        Expanded(
+          flex: 7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: _calculateStrength(),
+                  backgroundColor: Colors.grey[300],
+                  color: _getStrengthColor(),
+                  minHeight: 8,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _getStrengthText(),
+                style: TextStyle(
+                  color: _getStrengthColor(),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+>>>>>>> Stashed changes
         const SizedBox(width: 8),
         Expanded(
           flex: 5,
@@ -127,6 +166,9 @@ class PasswordStrengthIndicator extends StatelessWidget {
             ),
             overflow: TextOverflow.ellipsis,
             maxLines: 2,
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           ),
         ),

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import 'package:intl/intl.dart';
 import 'notifications_service.dart';
 =======
+=======
+>>>>>>> Stashed changes
 import 'package:collection/collection.dart';
 import 'package:plateforme_services/chat/notifications_service.dart';
 import 'package:intl/intl.dart';
@@ -34,6 +37,9 @@ class _ChatScreenState extends State<ChatScreen> {
   // Add back the partnerId variable
   late String _partnerId;
   String? _partnerName;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   final TextEditingController _messageController = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -56,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     _initializeChat();
   }
 
@@ -67,6 +74,8 @@ class _ChatScreenState extends State<ChatScreen> {
       Navigator.of(context).pop();
       return;
 =======
+=======
+>>>>>>> Stashed changes
     _partnerId = (_currentUser.uid == widget.senderId)
         ? widget.receiverId
         : widget.senderId;
@@ -731,5 +740,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 }

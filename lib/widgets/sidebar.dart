@@ -206,6 +206,7 @@ class _SidebarState extends State<Sidebar> {
     );
   }
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
   Widget _buildMarketplaceSection() {
     return Column(
@@ -294,6 +295,8 @@ class _UserHeader extends StatelessWidget {
       ],
     );
   }
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 }
