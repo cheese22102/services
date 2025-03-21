@@ -8,6 +8,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 import 'package:plateforme_services/chat/chat_screen.dart';
 import 'package:plateforme_services/main.dart';
+import 'chat_screen.dart';
 
 class NotificationsService {
   static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
@@ -53,18 +54,27 @@ class NotificationsService {
               final currentUserId = FirebaseAuth.instance.currentUser!.uid;
               final otherUserId = parts[0] == currentUserId ? parts[1] : parts[0];
               
-              // Navigate to chat screen
-              // Note: This requires a navigation context, which might be challenging
-              // You may need to use a navigation key or other approach
-              navigatorKey.currentState?.push(
-                MaterialPageRoute(
-                  builder: (context) => ChatScreen(
-                    senderId: currentUserId,
-                    receiverId: otherUserId,
-                    postId: postId,
+              // Fetch user name before navigation
+              FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(otherUserId)
+                  .get()
+                  .then((doc) {
+                final userData = doc.data();
+                final userName = userData != null 
+                    ? '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim()
+                    : 'User';
+                    
+                navigatorKey.currentState?.push(
+                  MaterialPageRoute(
+                    builder: (context) => ChatScreenPage(
+                      otherUserId: otherUserId,
+                      postId: postId,
+                      otherUserName: userName.isEmpty ? 'User' : userName,
+                    ),
                   ),
-                ),
-              );
+                );
+              });
             }
           }
         }

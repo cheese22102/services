@@ -10,64 +10,26 @@ import 'package:plateforme_services/marketplace/mes_produits_page.dart';
 import 'package:plateforme_services/chat/chat_list_screen.dart';
 import '../screens/notifications_page.dart';
 
-// UserHeader widget
-class _UserHeader extends StatelessWidget {
-  final Map<String, dynamic>? data;
-
-  const _UserHeader({Key? key, required this.data}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final firstName = data?['firstname'] ?? "Prénom inconnu";
-    final lastName = data?['lastname'] ?? "Nom inconnu";
-    final email = data?['email'] ?? "Email inconnu";
-    final avatarUrl = data?['avatarUrl'];
-    final fullName = "$firstName $lastName";
-
-    return UserAccountsDrawerHeader(
-      decoration: const BoxDecoration(
-        color: Color.fromARGB(255, 117, 117, 118),
-      ),
-      accountName: Text(
-        fullName,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-      accountEmail: Text(email),
-      currentAccountPicture: CircleAvatar(
-        backgroundColor: Colors.white,
-        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-        child: avatarUrl == null
-            ? const Icon(Icons.person, size: 50, color: Colors.green)
-            : null,
-      ),
-      otherAccountsPictures: [
-        Padding(
-          padding: const EdgeInsets.only(right: 16.0),
-          child: Builder(
-            builder: (context) => const DarkModeSwitch(),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Main Sidebar widget
 class Sidebar extends StatefulWidget {
-  const Sidebar({Key? key}) : super(key: key);
+  const Sidebar({super.key});
 
   @override
   State<Sidebar> createState() => _SidebarState();
 }
 
 class _SidebarState extends State<Sidebar> {
+  bool _isMarketplaceExpanded = false; // To manage the expansion of the Marketplace section
+
+  // Future to load user data (we use currentUser! because we assume a signed in user)
   final Future<DocumentSnapshot> _userDataFuture = FirebaseFirestore.instance
       .collection('users')
       .doc(FirebaseAuth.instance.currentUser!.uid)
       .get();
 
+  // Function to log out
   Future<void> _logout() async {
     try {
+      // Close the drawer if open
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -86,41 +48,12 @@ class _SidebarState extends State<Sidebar> {
     }
   }
 
-  Widget _buildSubItem(IconData icon, String title, Widget page) {
-    return ListTile(
-      leading: Icon(icon, size: 20, color: Colors.grey[700]),
-      title: Text(title, style: TextStyle(color: Colors.grey[800])),
-      contentPadding: const EdgeInsets.only(left: 32.0),
-      dense: true,
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-      },
-    );
-  }
-
-  Widget _buildMarketplaceSection() {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        dividerColor: Colors.transparent,
-      ),
-      child: ExpansionTile(
-        leading: const Icon(Icons.shopping_cart, color: Colors.deepPurple),
-        title: const Text('Marketplace'),
-        children: [
-          _buildSubItem(Icons.chat, 'Mes conversations', const ChatListScreen()),
-          _buildSubItem(Icons.list_alt, 'Mes posts', const MesProduitsPage()),
-          _buildSubItem(Icons.star, 'Favoris', const FavorisPage()),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Drawer(
       child: Column(
         children: [
+          // Fixed header with user data
           FutureBuilder<DocumentSnapshot>(
             future: _userDataFuture,
             builder: (context, snapshot) {
@@ -131,73 +64,71 @@ class _SidebarState extends State<Sidebar> {
               return _UserHeader(data: data);
             },
           ),
+          // Scrollable content
           Expanded(
-            child: Container(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    StreamBuilder<int>(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.person),
+                    title: const Text("Modifier le profil"),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ProfileEditPage()),
+                      );
+                    },
+                  ),
+                  // Add Notifications Button here
+                  ListTile(
+                    leading: const Icon(Icons.notifications),
+                    title: const Text("Notifications"),
+                    trailing: StreamBuilder<int>(
                       stream: NotificationsPage.getUnreadNotificationsCount(),
                       builder: (context, snapshot) {
-                        final unreadCount = snapshot.data ?? 0;
-                        return ListTile(
-                          leading: const Icon(Icons.notifications, color: Colors.deepPurple),
-                          title: const Text("Notifications"),
-                          trailing: unreadCount > 0 
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 20,
-                                  minHeight: 20,
-                                ),
-                                child: Text(
-                                  unreadCount.toString(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            : null,
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const NotificationsPage()),
-                            );
-                          },
-                        );
+                        if (snapshot.hasData && snapshot.data! > 0) {
+                          return Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 20,
+                              minHeight: 20,
+                            ),
+                            child: Text(
+                              '${snapshot.data}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
                       },
                     ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.person, color: Colors.deepPurple),
-                      title: const Text("Modifier le profil"),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ProfileEditPage()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                    _buildMarketplaceSection(),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.exit_to_app, color: Colors.red),
-                      title: const Text("Se déconnecter"),
-                      onTap: _logout,
-                    ),
-                  ],
-                ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(thickness: 1.2),
+                  _buildMarketplaceSection(),
+                  const Divider(thickness: 1.2),
+                  ListTile(
+                    leading: const Icon(Icons.exit_to_app),
+                    title: const Text("Se déconnecter"),
+                    onTap: _logout,
+                  ),
+                ],
               ),
             ),
           ),
@@ -205,7 +136,6 @@ class _SidebarState extends State<Sidebar> {
       ),
     );
   }
-<<<<<<< Updated upstream
 
   Widget _buildMarketplaceSection() {
     return Column(
@@ -218,43 +148,40 @@ class _SidebarState extends State<Sidebar> {
             turns: _isMarketplaceExpanded ? 0.5 : 0,
             child: const Icon(Icons.arrow_drop_down),
           ),
-          onTap: () => setState(() => _isMarketplaceExpanded = !_isMarketplaceExpanded),
+          onTap: () {
+            setState(() {
+              _isMarketplaceExpanded = !_isMarketplaceExpanded;
+            });
+          },
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: _isMarketplaceExpanded
-              ? _buildMarketplaceSubItems()
-              : const SizedBox.shrink(),
-        ),
+        if (_isMarketplaceExpanded) ...[
+          _buildMarketplaceItem(
+            'Mes favoris',
+            Icons.favorite,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FavorisPage()),
+            ),
+          ),
+          _buildMarketplaceItem(
+            'Mes produits',
+            Icons.inventory,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const MesProduitsPage()),
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildMarketplaceSubItems() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16.0), // Indentation for sub-items
-      child: Column(
-        children: [
-          _buildSubItem(Icons.chat, 'Mes conversations',  ConversationsListPage()),
-          _buildSubItem(Icons.list_alt, 'Mes posts', const MesProduitsPage()),
-          _buildSubItem(Icons.star, 'Favoris', const FavorisPage()),
-        ],
-      ),
-    );
-  }
-
-  ListTile _buildSubItem(IconData icon, String title, Widget page) {
+  Widget _buildMarketplaceItem(String title, IconData icon, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, size: 20),
+      leading: Icon(icon),
       title: Text(title),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12.0),
-      visualDensity: const VisualDensity(vertical: -2),
-      onTap: () {
-        Navigator.pop(context); // Close the drawer
-        Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-      },
+      contentPadding: const EdgeInsets.only(left: 32.0),
+      onTap: onTap,
     );
   }
 }
@@ -269,6 +196,7 @@ class _UserHeader extends StatelessWidget {
     final firstName = data?['firstname'] ?? "Prénom inconnu";
     final lastName = data?['lastname'] ?? "Nom inconnu";
     final email = data?['email'] ?? "Email inconnu";
+    final avatarUrl = data?['avatarUrl'];  // Changed from photoURL to avatarUrl
     final fullName = "$firstName $lastName";
 
     return UserAccountsDrawerHeader(
@@ -282,7 +210,25 @@ class _UserHeader extends StatelessWidget {
       accountEmail: Text(email),
       currentAccountPicture: CircleAvatar(
         backgroundColor: Colors.white,
-        child: Icon(Icons.person, size: 50, color: Colors.green),
+        child: avatarUrl != null && avatarUrl.isNotEmpty
+            ? ClipOval(
+                child: Image.network(
+                  avatarUrl,
+                  width: 90,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.person,
+                    size: 50,
+                    color: Colors.green,
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.person,
+                size: 50,
+                color: Colors.green,
+              ),
       ),
       otherAccountsPictures: [
         Padding(
@@ -294,6 +240,4 @@ class _UserHeader extends StatelessWidget {
       ],
     );
   }
-=======
->>>>>>> Stashed changes
 }

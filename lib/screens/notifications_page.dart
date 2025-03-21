@@ -26,21 +26,88 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
+  // Add these two methods
+  Future<void> _markAllAsRead() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    final notifications = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('read', isEqualTo: false)
+        .get();
+
+    for (var doc in notifications.docs) {
+      batch.update(doc.reference, {'read': true});
+    }
+
+    await batch.commit();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Toutes les notifications ont été marquées comme lues')),
+    );
+  }
+
+  Future<void> _deleteAllNotifications() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    final notifications = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .get();
+
+    for (var doc in notifications.docs) {
+      batch.delete(doc.reference);
+    }
+
+    await batch.commit();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Toutes les notifications ont été supprimées')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
+          // Mark all as read button
+          IconButton(
+            icon: const Icon(Icons.mark_email_read),
+            onPressed: _markAllAsRead,
+          ),
+          // Delete all button
           IconButton(
             icon: const Icon(Icons.delete_sweep),
             onPressed: () {
-              _deleteOldNotifications();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Anciennes notifications supprimées')),
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Supprimer toutes les notifications'),
+                  content: const Text('Êtes-vous sûr de vouloir supprimer toutes les notifications ?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Annuler'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _deleteAllNotifications();
+                      },
+                      child: const Text('Supprimer'),
+                    ),
+                  ],
+                ),
               );
             },
-            tooltip: 'Supprimer les anciennes notifications',
           ),
         ],
       ),
@@ -194,17 +261,29 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     ? (parts[0] == currentUserId ? parts[1] : parts[0])
                     : senderId;
                 
-                // Navigate to chat screen
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatScreen(
-                      senderId: currentUserId,
-                      receiverId: receiverId,
-                      postId: postId,
+                // Get user name before navigation
+                final userDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(receiverId)
+                    .get();
+                
+                final userData = userDoc.data();
+                final userName = userData != null 
+                    ? '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim()
+                    : 'User';
+
+                if (mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatScreenPage(
+                        otherUserId: receiverId,
+                        postId: postId,
+                        otherUserName: userName.isEmpty ? 'User' : userName,
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               }
             }
           }

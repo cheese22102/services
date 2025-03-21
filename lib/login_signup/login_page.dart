@@ -10,15 +10,12 @@ import '../widgets/custom_dialog.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
 import '../main.dart';
-<<<<<<< Updated upstream
-=======
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../login_signup/signup2_page.dart';
 import '../client_home_page.dart';
 import '../prestataire_home_page.dart';
 
->>>>>>> Stashed changes
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,7 +24,7 @@ class LoginPage extends StatefulWidget {
   _LoginPageState createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   late AnimationController _controller;
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();

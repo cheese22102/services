@@ -46,7 +46,7 @@ class ThemeProvider extends ChangeNotifier {
         primary: const Color(0xFF1A5F7A), // Deep blue-teal
         secondary: const Color(0xFFFF8C42), // Warm orange
         surface: Colors.white,
-        background: const Color(0xFFF8F9FA), // Light gray background
+        background: const Color(0xFFF8F9FA),
       ),
     ).copyWith(
       appBarTheme: AppBarTheme(

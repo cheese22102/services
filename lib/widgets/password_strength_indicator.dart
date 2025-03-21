@@ -2,30 +2,6 @@ import 'package:flutter/material.dart';
 
 class PasswordStrengthIndicator extends StatelessWidget {
   final String password;
-<<<<<<< Updated upstream
-  
-  const PasswordStrengthIndicator({super.key, required this.password});
-
-  double get _strength {
-    if (password.isEmpty) return 0;
-    double strength = 0;
-    if (password.length >= 8) strength += 0.3;
-    if (password.contains(RegExp(r'[A-Z]'))) strength += 0.3;
-    if (password.contains(RegExp(r'[0-9]'))) strength += 0.2;
-    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength += 0.2;
-    return strength.clamp(0, 1);
-  }
-
-  String get _text {
-    if (_strength < 0.3) return 'Faible';
-    if (_strength < 0.6) return 'Moyen';
-    return 'Fort';
-  }
-
-  Color get _color {
-    if (_strength < 0.3) return Colors.red;
-    if (_strength < 0.6) return Colors.orange;
-=======
 
   const PasswordStrengthIndicator({super.key, required this.password});
 
@@ -44,7 +20,6 @@ class PasswordStrengthIndicator extends StatelessWidget {
     if (RegExp(r'[0-9]').hasMatch(password)) score += 2; // Numbers
     if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score += 2; // Special chars
     
-    // Calculate final strength (max score is 10)
     return (score / 10).clamp(0.0, 1.0);
   }
 
@@ -63,8 +38,21 @@ class PasswordStrengthIndicator extends StatelessWidget {
     if (strength <= 0.4) return Colors.orange;
     if (strength <= 0.6) return Colors.yellow;
     if (strength <= 0.8) return Colors.lightGreen;
->>>>>>> Stashed changes
     return Colors.green;
+  }
+
+  String _getPasswordRequirements() {
+    List<String> missing = [];
+    
+    if (!RegExp(r'[A-Z]').hasMatch(password)) missing.add('majuscule');
+    if (!RegExp(r'[a-z]').hasMatch(password)) missing.add('minuscule');
+    if (!RegExp(r'[0-9]').hasMatch(password)) missing.add('chiffre');
+    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) 
+      missing.add('caractère spécial');
+    if (password.length < 8) missing.add('8 caractères');
+    
+    if (missing.isEmpty) return 'Excellent!';
+    return 'Manque: ${missing.join(', ')}';
   }
 
   @override
@@ -75,20 +63,6 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
     return Row(
       children: [
-<<<<<<< Updated upstream
-        LinearProgressIndicator(
-          value: _strength,
-          backgroundColor: Colors.grey[200],
-          color: _color,
-          minHeight: 8,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Force du mot de passe: $_text',
-          style: TextStyle(
-            color: _color,
-            fontSize: 12,
-=======
         Expanded(
           flex: 7,
           child: Column(
@@ -127,24 +101,9 @@ class PasswordStrengthIndicator extends StatelessWidget {
             ),
             overflow: TextOverflow.ellipsis,
             maxLines: 2,
->>>>>>> Stashed changes
           ),
         ),
       ],
     );
-  }
-
-  String _getPasswordRequirements() {
-    List<String> missing = [];
-    
-    if (!RegExp(r'[A-Z]').hasMatch(password)) missing.add('majuscule');
-    if (!RegExp(r'[a-z]').hasMatch(password)) missing.add('minuscule');
-    if (!RegExp(r'[0-9]').hasMatch(password)) missing.add('chiffre');
-    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) 
-      missing.add('caractère spécial');
-    if (password.length < 8) missing.add('8 caractères');
-    
-    if (missing.isEmpty) return 'Excellent!';
-    return 'Manque: ${missing.join(', ')}';
   }
 }
