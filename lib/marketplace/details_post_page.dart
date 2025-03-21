@@ -67,7 +67,9 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails du produit'),
-        backgroundColor: Colors.green,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        elevation: 0,
+        centerTitle: true,
         actions: [
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
@@ -80,8 +82,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
               final isFavorite = snapshot.data?.exists ?? false;
               return IconButton(
                 icon: Icon(
-                  isFavorite ? Icons.star : Icons.star_border,
-                  color: isFavorite ? Colors.amber : Colors.white,
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: isFavorite ? Theme.of(context).colorScheme.secondary : Colors.white,
                 ),
                 onPressed: _toggleFavorite,
               );
@@ -183,13 +185,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
       // Floating buttons for edit and delete (only for the owner)
       floatingActionButton: currentUserId == postUserId
           ? Padding(
-              padding: const EdgeInsets.only(bottom: 16.0, right: 16.0),
+              padding: const EdgeInsets.only(bottom: 16.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FloatingActionButton(
+                    heroTag: "edit",
                     onPressed: () async {
-                      // Pass the DocumentSnapshot directly to ModifyPostPage
                       final updatedData = await Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -197,51 +199,20 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         ),
                       );
                       if (updatedData != null) {
-                        setState(() {
-                          postData = updatedData;
-                        });
+                        setState(() => postData = updatedData);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Post updated successfully")),
+                          const SnackBar(content: Text("Publication mise à jour")),
                         );
                       }
                     },
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     child: const Icon(Icons.edit),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   FloatingActionButton(
-                    onPressed: () async {
-                      bool? confirmDelete = await showDialog<bool>(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: const Text("Confirm Deletion"),
-                            content: const Text("Are you sure you want to delete this post? This action cannot be undone."),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(false),
-                                child: const Text("Cancel"),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(true),
-                                child: const Text("Delete", style: TextStyle(color: Colors.red)),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                      if (confirmDelete == true) {
-                        await FirebaseFirestore.instance
-                            .collection('marketplace')
-                            .doc(widget.post.id)
-                            .delete();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Post deleted")),
-                        );
-                        Navigator.pop(context);
-                      }
-                    },
-                    backgroundColor: Colors.redAccent,
+                    heroTag: "delete",
+                    onPressed: () => _showDeleteConfirmation(context),
+                    backgroundColor: Theme.of(context).colorScheme.error,
                     child: const Icon(Icons.delete),
                   ),
                 ],
@@ -249,6 +220,49 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
             )
           : null,
     );
+  }
+
+  Future<void> _showDeleteConfirmation(BuildContext context) async {
+    final bool? confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirmer la suppression"),
+          content: const Text(
+            "Êtes-vous sûr de vouloir supprimer cette publication ? Cette action est irréversible.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                "Annuler",
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                "Supprimer",
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmDelete == true) {
+      await FirebaseFirestore.instance
+          .collection('marketplace')
+          .doc(widget.post.id)
+          .delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Publication supprimée")),
+        );
+        Navigator.pop(context);
+      }
+    }
   }
 }
 

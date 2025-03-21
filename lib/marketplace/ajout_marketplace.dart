@@ -16,24 +16,69 @@ class AddPostPage extends StatefulWidget {
 
 class _AddPostPageState extends State<AddPostPage> {
   final _formKey = GlobalKey<FormState>();
-  String _title = '';
-  String _description = '';
-  String _price = '';
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _priceController = TextEditingController();
   String? _etatProduit; // "Neuf" ou "Occasion"
   List<File> _images = [];
   final _picker = ImagePicker();
   bool _isUploading = false;
+  bool _isImageUploading = false;
+  String? _titleError;
+  String? _descriptionError;
+  String? _priceError;
 
   final String cloudName = "dfk7mskxv";
   final String uploadPreset = "plateforme_service";
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
   // Méthode pour sélectionner plusieurs images
   Future<void> _pickImages() async {
-    final pickedFiles = await _picker.pickMultiImage();
-    if (pickedFiles.isNotEmpty) {
-      setState(() {
-        _images = pickedFiles.map((file) => File(file.path)).toList();
-      });
+    try {
+      setState(() => _isImageUploading = true);
+      final pickedFiles = await _picker.pickMultiImage(
+        imageQuality: 70, // Compression pour optimiser le chargement
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      
+      if (pickedFiles.isNotEmpty) {
+        // Limiter le nombre d'images à 5 maximum
+        if (_images.length + pickedFiles.length > 5) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Maximum 5 images autorisées"),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          // Ajouter seulement les images jusqu'à atteindre 5 au total
+          final remainingSlots = 5 - _images.length;
+          final filesToAdd = pickedFiles.take(remainingSlots).toList();
+          setState(() {
+            _images.addAll(filesToAdd.map((file) => File(file.path)));
+          });
+        } else {
+          setState(() {
+            _images.addAll(pickedFiles.map((file) => File(file.path)));
+          });
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de la sélection des images: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isImageUploading = false);
     }
   }
 
@@ -51,79 +96,208 @@ class _AddPostPageState extends State<AddPostPage> {
       var request = http.MultipartRequest('POST', Uri.parse(url));
       request.fields['upload_preset'] = uploadPreset;
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      
       var response = await request.send();
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
         var jsonData = json.decode(responseData);
         return jsonData['secure_url'];
       } else {
-        return null;
+        throw Exception("Échec du téléchargement. Code: ${response.statusCode}");
       }
     } catch (e) {
+      debugPrint("Erreur d'upload: $e");
       return null;
     }
   }
 
+  // Validation des champs
+  bool _validateFields() {
+    bool isValid = true;
+    
+    // Réinitialiser les erreurs
+    setState(() {
+      _titleError = null;
+      _descriptionError = null;
+      _priceError = null;
+    });
+    
+    // Valider le titre
+    if (_titleController.text.trim().isEmpty) {
+      setState(() => _titleError = "Le titre est obligatoire");
+      isValid = false;
+    } else if (_titleController.text.length < 3) {
+      setState(() => _titleError = "Le titre doit contenir au moins 3 caractères");
+      isValid = false;
+    }
+    
+    // Valider la description
+    if (_descriptionController.text.trim().isEmpty) {
+      setState(() => _descriptionError = "La description est obligatoire");
+      isValid = false;
+    } else if (_descriptionController.text.length < 10) {
+      setState(() => _descriptionError = "La description doit contenir au moins 10 caractères");
+      isValid = false;
+    }
+    
+    // Valider le prix
+    if (_priceController.text.trim().isEmpty) {
+      setState(() => _priceError = "Le prix est obligatoire");
+      isValid = false;
+    } else {
+      try {
+        double price = double.parse(_priceController.text);
+        if (price <= 0) {
+          setState(() => _priceError = "Le prix doit être supérieur à 0");
+          isValid = false;
+        }
+      } catch (e) {
+        setState(() => _priceError = "Veuillez entrer un prix valide");
+        isValid = false;
+      }
+    }
+    
+    // Valider l'état du produit
+    if (_etatProduit == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Veuillez sélectionner l'état du produit"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      isValid = false;
+    }
+    
+    // Valider les images
+    if (_images.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Veuillez ajouter au moins une image"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      isValid = false;
+    }
+    
+    return isValid;
+  }
+
   // Soumission du post
   Future<void> _submitPost() async {
-    if (_formKey.currentState!.validate() &&
-        _etatProduit != null &&
-        _images.isNotEmpty &&
-        !_isUploading) {
-      _formKey.currentState!.save();
-      setState(() => _isUploading = true);
-      try {
-        List<String> imageUrls = [];
-        for (var image in _images) {
-          String? url = await _uploadImageToCloudinary(image);
-          if (url != null) {
-            imageUrls.add(url);
+    if (!_validateFields() || _isUploading) {
+      return;
+    }
+    
+    setState(() => _isUploading = true);
+    
+    try {
+      // Afficher un dialogue de progression
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text("Publication en cours..."),
+              ],
+            ),
+          );
+        },
+      );
+      
+      List<String> imageUrls = [];
+      int uploadedCount = 0;
+      
+      // Upload des images
+      for (var image in _images) {
+        String? url = await _uploadImageToCloudinary(image);
+        if (url != null) {
+          imageUrls.add(url);
+          uploadedCount++;
+          
+          // Mettre à jour le dialogue de progression
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        value: uploadedCount / _images.length,
+                      ),
+                      const SizedBox(height: 16),
+                      Text("Téléchargement des images: $uploadedCount/${_images.length}"),
+                    ],
+                  ),
+                );
+              },
+            );
           }
         }
-        if (imageUrls.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text("Erreur lors du téléchargement des images.")),
-          );
-          return;
-        }
-
-        User? user = FirebaseAuth.instance.currentUser;
-        if (user == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Utilisateur non connecté.")),
-          );
-          return;
-        }
-
-        Map<String, dynamic> postData = {
-          'title': _title,
-          'description': _description,
-'price': double.tryParse(_price) ?? 0.0,
-          'etat': _etatProduit,
-          'userId': user.uid,
-          'images': imageUrls,
-          'timestamp': FieldValue.serverTimestamp(),
-        };
-
-        await FirebaseFirestore.instance.collection('marketplace').add(postData);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Post ajouté avec succès !")),
-        );
-
-        Navigator.pop(context);
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur: ${e.toString()}")),
-        );
-      } finally {
-        setState(() => _isUploading = false);
       }
-    } else if (_etatProduit == null) {
+      
+      if (imageUrls.isEmpty) {
+        throw Exception("Échec du téléchargement des images");
+      }
+
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Utilisateur non connecté");
+      }
+
+      Map<String, dynamic> postData = {
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'price': double.parse(_priceController.text),
+        'etat': _etatProduit,
+        'userId': user.uid,
+        'images': imageUrls,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance.collection('marketplace').add(postData);
+
+      // Fermer le dialogue de progression
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+
+      // Afficher un message de succès
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Veuillez sélectionner l'état du produit.")),
+        const SnackBar(
+          content: Text("Produit publié avec succès !"),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
       );
+
+      // Retourner à la page précédente après un court délai
+      Future.delayed(const Duration(seconds: 1), () {
+        Navigator.pop(context);
+      });
+    } catch (e) {
+      // Fermer le dialogue de progression en cas d'erreur
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur: ${e.toString()}"),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() => _isUploading = false);
     }
   }
 
@@ -132,12 +306,26 @@ class _AddPostPageState extends State<AddPostPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ajouter un Post'),
-        backgroundColor: Colors.green,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        elevation: 0,
+        centerTitle: true,
       ),
       body: Stack(
         children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                  Theme.of(context).colorScheme.background,
+                ],
+              ),
+            ),
+          ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 100), // espace pour les boutons fixes
+            padding: const EdgeInsets.only(bottom: 100),
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -146,107 +334,250 @@ class _AddPostPageState extends State<AddPostPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Card des informations du post
+                      // Product Information Card
                       Card(
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 4,
+                          borderRadius: BorderRadius.circular(16)
+                        ),
+                        elevation: 2,
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(20.0),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              TextFormField(
-                                decoration: const InputDecoration(
-                                  labelText: 'Titre',
-                                  border: OutlineInputBorder(),
+                              const Text(
+                                "Informations du produit",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                validator: (value) => value!.isEmpty
-                                    ? 'Le titre est requis'
-                                    : null,
-                                onSaved: (value) => _title = value!,
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                controller: _titleController,
+                                decoration: InputDecoration(
+                                  labelText: 'Titre',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  prefixIcon: Icon(Icons.title, 
+                                    color: Theme.of(context).colorScheme.primary
+                                  ),
+                                  errorText: _titleError,
+                                  filled: true,
+                                  fillColor: Theme.of(context).colorScheme.surface,
+                                ),
                               ),
                               const SizedBox(height: 16),
                               TextFormField(
-                                decoration: const InputDecoration(
+                                controller: _descriptionController,
+                                decoration: InputDecoration(
                                   labelText: 'Description',
-                                  border: OutlineInputBorder(),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  prefixIcon: Icon(Icons.description,
+                                    color: Theme.of(context).colorScheme.primary
+                                  ),
+                                  errorText: _descriptionError,
+                                  filled: true,
+                                  fillColor: Theme.of(context).colorScheme.surface,
                                 ),
                                 maxLines: 4,
-                                validator: (value) => value!.isEmpty
-                                    ? 'La description est requise'
-                                    : null,
-                                onSaved: (value) => _description = value!,
                               ),
                               const SizedBox(height: 16),
                               TextFormField(
-                                decoration: const InputDecoration(
+                                controller: _priceController,
+                                decoration: InputDecoration(
                                   labelText: 'Prix (TND)',
-                                  border: OutlineInputBorder(),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  prefixIcon: Icon(Icons.attach_money,
+                                    color: Theme.of(context).colorScheme.primary
+                                  ),
+                                  suffixText: 'TND',
+                                  errorText: _priceError,
+                                  filled: true,
+                                  fillColor: Theme.of(context).colorScheme.surface,
                                 ),
                                 keyboardType: TextInputType.number,
-                                validator: (value) => value!.isEmpty
-                                    ? 'Le prix est requis'
-                                    : null,
-                                onSaved: (value) => _price = value!,
                               ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
 
-                      // Sélection de l'état du produit avec icônes et descriptions
-                      const Text("État du produit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      // Remplacement du Row par un Wrap pour éviter l'overflow
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 24,
-                        runSpacing: 8,
-                        children: [
-                          _buildEtatOption("Neuf", Icons.new_releases, Colors.green),
-                          _buildEtatOption("Occasion", Icons.handshake, Colors.orange),
-                        ],
+                      // Product State Section
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)
+                        ),
+                        elevation: 2,
+                        margin: const EdgeInsets.symmetric(vertical: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "État du produit",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildEtatOption(
+                                    "Neuf",
+                                    Icons.new_releases,
+                                    Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildEtatOption(
+                                    "Occasion",
+                                    Icons.history,
+                                    Theme.of(context).colorScheme.secondary,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
 
-                      // Section Images du produit
-                      const Text("Images du produit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      _images.isEmpty
-                          ? const Center(child: Text("Aucune image ajoutée", style: TextStyle(color: Colors.red)))
-                          : Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: List.generate(_images.length, (index) {
-                                return Stack(
-                                  alignment: Alignment.topRight,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Image.file(
-                                        _images[index],
-                                        width: 100,
-                                        height: 100,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    // Bouton de suppression
-                                    GestureDetector(
-                                      onTap: () => _removeImage(index),
-                                      child: Container(
-                                        decoration: const BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.red,
-                                        ),
-                                        padding: const EdgeInsets.all(4),
-                                        child: const Icon(Icons.close, size: 16, color: Colors.white),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }),
+                      // Section images
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  "Images du produit",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  "${_images.length}/5 images",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 16),
+                            _images.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.image_outlined,
+                                          size: 48,
+                                          color: Colors.grey[400],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          "Aucune image ajoutée",
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        ElevatedButton.icon(
+                                          onPressed: _pickImages,
+                                          icon: const Icon(Icons.add_photo_alternate),
+                                          label: const Text("Ajouter des images"),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Theme.of(context).colorScheme.primary,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 24,
+                                              vertical: 12,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: List.generate(_images.length, (index) {
+                                      return Stack(
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(12),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.1),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(12),
+                                              child: Image.file(
+                                                _images[index],
+                                                width: 120,
+                                                height: 120,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: 8,
+                                            right: 8,
+                                            child: GestureDetector(
+                                              onTap: () => _removeImage(index),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red,
+                                                  shape: BoxShape.circle,
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withOpacity(0.2),
+                                                      blurRadius: 2,
+                                                      offset: const Offset(0, 1),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons.close,
+                                                  color: Colors.white,
+                                                  size: 16,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
+                                  ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -262,14 +593,32 @@ class _AddPostPageState extends State<AddPostPage> {
             right: 0,
             child: Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.white,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _pickImages,
-                      icon: const Icon(Icons.image),
-                      label: const Text("Ajouter des images"),
+                      onPressed: _isImageUploading ? null : _pickImages,
+                      icon: _isImageUploading 
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.image),
+                      label: Text(_isImageUploading ? "Chargement..." : "Ajouter des images"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -279,11 +628,18 @@ class _AddPostPageState extends State<AddPostPage> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (_images.isNotEmpty && !_isUploading)
-                          ? _submitPost
-                          : null,
-                      icon: const Icon(Icons.upload),
-                      label: const Text("Publier le Post"),
+                      onPressed: (_images.isNotEmpty && !_isUploading) ? _submitPost : null,
+                      icon: _isUploading 
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.upload),
+                      label: Text(_isUploading ? "Publication..." : "Publier le Post"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -300,38 +656,47 @@ class _AddPostPageState extends State<AddPostPage> {
   }
 
   Widget _buildEtatOption(String etat, IconData icon, Color color) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _etatProduit = etat;
-        });
-      },
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            size: 48,
-            color: _etatProduit == etat ? color : Colors.grey,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            etat,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: _etatProduit == etat ? color : Colors.grey,
+    final isSelected = _etatProduit == etat;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _etatProduit = etat;
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 140,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : Colors.grey.withOpacity(0.3),
+              width: 2,
             ),
           ),
-          // Description sous l'icône
-          Text(
-            etat == "Neuf"
-                ? "Produit neuf, jamais utilisé"
-                : "Produit d'occasion, peut présenter des signes d'utilisation",
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 32,
+                color: isSelected ? color : Colors.grey,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                etat,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? color : Colors.grey,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -10,6 +10,15 @@ import '../widgets/custom_dialog.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
 import '../main.dart';
+<<<<<<< Updated upstream
+=======
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../login_signup/signup2_page.dart';
+import '../client_home_page.dart';
+import '../prestataire_home_page.dart';
+
+>>>>>>> Stashed changes
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -134,33 +143,37 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             .collection('users')
             .doc(userCredential.user!.uid)
             .get();
-
+  
         if (!doc.exists) {
-          await FirebaseAuth.instance.signOut();
-          CustomDialog.showWithActions(
-  context, 
-  'Compte non enregistré',
-  'Ce compte Google n\'est pas associé à un utilisateur existant. Voulez-vous créer un compte?',
-  [
-    TextButton(
-      onPressed: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SignupPage()),
-        );
-      },
-      child: const Text('S\'inscrire'),
-    ),
-    TextButton(
-      onPressed: () => Navigator.pop(context),
-      child: const Text('Annuler'),
-    ),
-  ],
-);
+          // Créer un nouveau document pour l'utilisateur
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .set({
+            'email': userCredential.user!.email,
+            'profileCompleted': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+  
+          // Rediriger vers la page de complétion du profil
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const Signup2Page()),
+          );
           return;
         }
-
+  
+        // Si le profil existe mais n'est pas complété
+        if (doc.exists && doc.data()?['profileCompleted'] != true) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const Signup2Page()),
+          );
+          return;
+        }
+  
         _redirectToHome(userCredential.user!);
       }
     } catch (e) {
@@ -295,137 +308,114 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: SafeArea(
-        child: Column(
-          children: [
-            SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, -0.5),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: _controller,
-                curve: Curves.easeOut,
-              )),
-              child: FadeTransition(
-                opacity: _controller,
-                child: Hero(
-                  tag: 'auth-hero',
-                  child: Image.asset('assets/images/login.png', height: 220),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+                Image.asset(
+                  "assets/images/login.png",
+                  height: 180,
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-              child: Card(
-                elevation: 5,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                const SizedBox(height: 20),
+                Text(
+                  "Connexion",
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Bienvenue',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Text(
-                          'Connectez-vous pour continuer',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 30),
-                        CustomTextField(
-                          controller: _emailController,
-                          hint: 'Adresse email',
-                          icon: Icons.email,
-                          obscure: false,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Veuillez entrer votre email';
-                            }
-                            if (!value.contains('@')) {
-                              return 'Email invalide';
-                            }
-                            return _emailError;
-                          },
-                          onChanged: (_) {
-                            if (_emailError != null) {
-                              setState(() => _emailError = null);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        Stack(
-                          alignment: Alignment.centerRight,
-                          children: [
-                            CustomTextField(
-                              controller: _passwordController,
-                              hint: 'Mot de passe',
-                              icon: Icons.lock,
-                              obscure: _obscurePassword,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Veuillez entrer votre mot de passe';
-                                }
-                                if (value.length < 6) {
-                                  return 'Minimum 6 caractères';
-                                }
-                                return _passwordError;
-                              },
-                              onChanged: (_) {
-                                if (_passwordError != null) {
-                                  setState(() => _passwordError = null);
-                                }
-                              },
-                            ),
-                            Positioned(
-                              right: 10,
-                              child: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                                onPressed: () {
-                                  setState(() => _obscurePassword = !_obscurePassword);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        _buildRememberMe(),
-                        const SizedBox(height: 20),
-                        SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, 0.5),
-                            end: Offset.zero,
-                          ).animate(CurvedAnimation(
-                            parent: _controller,
-                            curve: Curves.easeOut,
-                          )),
-                          child: CustomButton(
-                            text: 'Se connecter',
-                            onPressed: _login,
-                            icon: Icons.login,
-                          ),
-                        ),
-                        _buildForgotPassword(),
-                        _buildGoogleLogin(),
-                        _buildSignupLink(),
-                      ],
+                const SizedBox(height: 30),
+                
+                // Champ email
+                CustomTextField(
+                  controller: _emailController,
+                  hint: 'Adresse email',
+                  icon: Icons.email,
+                  obscure: false,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'L\'adresse email est requise';
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      return 'Format d\'email invalide';
+                    }
+                    return _emailError;
+                  },
+                  onChanged: (_) {
+                    if (_emailError != null) {
+                      setState(() => _emailError = null);
+                    }
+                  },
+                ),
+                const SizedBox(height: 20),
+                
+                // Nouveau champ mot de passe
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    hintText: 'Mot de passe',
+                    prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
                     ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.withOpacity(0.1),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Le mot de passe est requis';
+                    }
+                    if (value.length < 6) {
+                      return 'Minimum 6 caractères';
+                    }
+                    return _passwordError;
+                  },
+                  onChanged: (_) {
+                    if (_passwordError != null) {
+                      setState(() => _passwordError = null);
+                    }
+                  },
+                ),
+                
+                _buildRememberMe(),
+                const SizedBox(height: 20),
+                SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.5),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: _controller,
+                    curve: Curves.easeOut,
+                  )),
+                  child: CustomButton(
+                    text: 'Se connecter',
+                    onPressed: _login,
+                    icon: Icons.login,
                   ),
                 ),
-              ),
+                _buildForgotPassword(),
+                _buildGoogleLogin(),
+                _buildSignupLink(),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -514,26 +504,25 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             ],
           ),
         ),
-        GestureDetector(
-          onTap: _handleGoogleSignIn,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset("assets/images/google.jpg", height: 24),
-                const SizedBox(width: 10),
-                const Text(
-                  'Se connecter avec Google',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: InkWell(
+                onTap: _handleGoogleSignIn,
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SocialIcon(
+                    imagePath: "assets/images/google.jpg",
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );

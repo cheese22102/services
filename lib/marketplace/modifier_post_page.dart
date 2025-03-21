@@ -90,7 +90,10 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
         });
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Post updated successfully")),
+          SnackBar(
+            content: Text("Produit mis à jour avec succès"),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pop(context, {
           'title': _title,
@@ -102,7 +105,10 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error updating post: ${e.toString()}")),
+          SnackBar(
+            content: Text("Erreur lors de la mise à jour: ${e.toString()}"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

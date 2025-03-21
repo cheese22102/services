@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+<<<<<<< Updated upstream
 import 'package:intl/intl.dart';
 import 'notifications_service.dart';
+=======
+import 'package:collection/collection.dart';
+import 'package:plateforme_services/chat/notifications_service.dart';
+import 'package:intl/intl.dart';
+import 'message_bubble.dart';
+>>>>>>> Stashed changes
 
 class ChatScreenPage extends StatefulWidget {
   final String otherUserId; // ID of the other user (post owner or message sender)
@@ -20,19 +27,35 @@ class ChatScreenPage extends StatefulWidget {
   _ChatScreenPageState createState() => _ChatScreenPageState();
 }
 
+<<<<<<< Updated upstream
 class _ChatScreenPageState extends State<ChatScreenPage> {
+=======
+class _ChatScreenState extends State<ChatScreen> {
+  // Add back the partnerId variable
+  late String _partnerId;
+  String? _partnerName;
+>>>>>>> Stashed changes
   final TextEditingController _messageController = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late Stream<QuerySnapshot> _messagesStream;
   String? _conversationId;
   bool _isLoading = true;
+<<<<<<< Updated upstream
   String? _currentUserId;
   String? _currentUserName;
+=======
+  String? _errorMessage;
+  bool _isPostDeleted = false;
+  bool _isChatArchived = false;
+  // Remove typing-related variables
+  final ScrollController _scrollController = ScrollController();
+>>>>>>> Stashed changes
 
   @override
   void initState() {
     super.initState();
+<<<<<<< Updated upstream
     _initializeChat();
   }
 
@@ -43,12 +66,287 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       // Handle not logged in case
       Navigator.of(context).pop();
       return;
+=======
+    _partnerId = (_currentUser.uid == widget.senderId)
+        ? widget.receiverId
+        : widget.senderId;
+    _chatroomId = _generateChatroomId();
+    _fetchPartnerName();
+    _initializeChatroom();
+    // Remove _setupTypingListener();
+  }
+
+  // Remove _updateTypingStatus and _setupTypingListener methods
+
+  Future<void> _sendMessage() async {
+    if (_messageController.text.isEmpty || _isChatArchived || _chatroomId == null) return;
+    try {
+      final messageText = _messageController.text.trim();
+      final timestamp = FieldValue.serverTimestamp();
+      final senderId = _currentUser.uid;
+      
+      _messageController.clear();
+
+      // Send message
+      await _firestore
+          .collection('conversations')
+          .doc(_chatroomId)
+          .collection('messages')
+          .add({
+            'text': messageText,
+            'senderId': senderId,
+            'timestamp': timestamp,
+            'reactions': {},
+          });
+
+      // Update conversation metadata and increment unread counter for recipient
+      await _firestore.collection('conversations').doc(_chatroomId).update({
+        'lastMessage': messageText,
+        'lastMessageTime': timestamp,
+        'unreadCount.$_partnerId': FieldValue.increment(1),
+      });
+
+      final senderDoc = await _firestore.collection('users').doc(senderId).get();
+      final senderName = senderDoc.data()?['firstname'] ?? 'Un utilisateur';
+      
+      await NotificationsService.sendMessageNotification(
+        receiverId: _partnerId,
+        messageText: messageText,
+        senderName: senderName,
+        chatroomId: _chatroomId!,
+      );
+
+      // Add a small delay to ensure the message is loaded in the stream
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (mounted) {
+        _scrollController.animateTo(
+          0.0, // Scroll to top since ListView is reversed
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Échec de l\'envoi du message: $e')),
+      );
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  Widget _buildChatMessages() {
+    if (_chatroomId == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('conversations').doc(_chatroomId).snapshots(),
+      builder: (context, conversationSnapshot) {
+        if (conversationSnapshot.hasError) {
+          return Center(child: Text('Error: ${conversationSnapshot.error}'));
+        }
+
+        if (!conversationSnapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        if (!conversationSnapshot.data!.exists) {
+          return const Center(child: Text('No conversation found'));
+        }
+
+        final conversationData = conversationSnapshot.data!.data() as Map<String, dynamic>;
+        final participants = List<String>.from(conversationData['participants'] ?? []);
+
+        if (!participants.contains(_currentUser.uid)) {
+          return const Center(child: Text('Access denied'));
+        }
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('conversations')
+              .doc(_chatroomId)
+              .collection('messages')
+              .orderBy('timestamp', descending: true)
+              .limit(50)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+
+            // Remove loading indicator for subsequent updates
+            if (!snapshot.hasData && _isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final messages = snapshot.data?.docs ?? [];
+            if (messages.isEmpty) {
+              return const Center(child: Text('No messages yet'));
+            }
+
+            return ListView.builder(
+              reverse: true,
+              controller: _scrollController,
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index];
+                final data = message.data() as Map<String, dynamic>;
+                final isLastMessage = index == 0;
+                // Fix the type comparison here
+                final showAvatar = data['senderId'] != _currentUser.uid && isLastMessage;
+                
+                // Check if next message is from same sender (for grouping)
+                final nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+                final isNextSameSender = nextMessage != null && 
+                    (nextMessage.data() as Map<String, dynamic>)['senderId'] == data['senderId'];
+
+                return MessageBubble(
+                  messageId: message.id,
+                  message: data['text'],
+                  isSender: data['senderId'] == _currentUser.uid,
+                  chatroomId: _chatroomId!,
+                  timestamp: data['timestamp']?.toDate(),
+                  reactions: data['reactions'] is Map ? Map<String, dynamic>.from(data['reactions']) : null,
+                  showAvatar: showAvatar,
+                  isGrouped: isNextSameSender,
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(child: Text(_errorMessage!)),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: FutureBuilder<DocumentSnapshot>(
+          future: _firestore.collection('marketplace').doc(widget.postId).get(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Text('Error loading post');
+            }
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Text('Chat');
+            }
+            final postData = snapshot.data!.data() as Map<String, dynamic>;
+            final postTitle = postData['title'] ?? 'Chat';
+            return Text(
+              'Chat: $postTitle',
+              style: const TextStyle(color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+            );
+          },
+        ),
+        backgroundColor: Colors.deepPurple,
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _buildChatMessages()),
+          // Remove typing indicator widget
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    focusNode: _textFieldFocus,
+                    controller: _messageController,
+                    enabled: !_isChatArchived,
+                    decoration: InputDecoration(
+                      hintText: _isChatArchived ? 'This conversation is archived' : 'Type a message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: _isChatArchived ? Colors.grey[100] : Colors.grey[200],
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.emoji_emotions_outlined),
+                        onPressed: () {},
+                      ),
+                    ),
+                    // Remove onChanged typing handler
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: _isChatArchived ? Colors.grey : Colors.deepPurple,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: _isChatArchived ? null : _sendMessage,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Remove typing timer cancel
+    _textFieldFocus.dispose();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _generateChatroomId() {
+    final userIds = [widget.senderId, widget.receiverId]..sort();
+    return '${userIds[0]}_${userIds[1]}_${widget.postId}';
+  }
+
+  Future<void> _fetchPartnerName() async {
+    try {
+      final doc = await _firestore.collection('users').doc(_partnerId).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        String name = '';
+        if (data['firstname'] != null && data['lastname'] != null) {
+          name = '${data['firstname']} ${data['lastname']}';
+        }
+        setState(() {
+          _partnerName = name.isEmpty ? 'Partner' : name;
+        });
+      } else {
+        setState(() {
+          _partnerName = 'Partner';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _partnerName = 'Partner';
+      });
+>>>>>>> Stashed changes
     }
 
     _currentUserId = currentUser.uid;
     _currentUserName = currentUser.displayName ?? 'User';
 
     try {
+<<<<<<< Updated upstream
       // Find existing conversation or create new one
       await _findOrCreateConversation();
       setState(() {
@@ -378,4 +676,60 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
     _messageController.dispose();
     super.dispose();
   }
+=======
+      final userIds = [widget.senderId, widget.receiverId]..sort();
+      _chatroomId = '${userIds[0]}_${userIds[1]}_${widget.postId}';
+      
+      final chatRef = _firestore.collection('conversations').doc(_chatroomId);
+      
+      await chatRef.set({
+        'participants': [widget.senderId, widget.receiverId],
+        'postId': widget.postId,
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': _currentUser.uid,
+        'unreadCount': {
+          widget.senderId: 0,
+          widget.receiverId: 0,
+        },
+      }, SetOptions(merge: true));
+
+      // Reset unread count for current user when opening chat
+      await chatRef.update({
+        'unreadCount.${_currentUser.uid}': 0,
+      });
+
+      // First, try to create the conversation if it doesn't exist
+      await chatRef.set({
+        'participants': [widget.senderId, widget.receiverId],
+        'postId': widget.postId,
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': _currentUser.uid,
+      }, SetOptions(merge: true)); // Use merge to avoid overwriting existing data
+
+      // Then verify access
+      final chatDoc = await chatRef.get();
+      if (!chatDoc.exists) {
+        throw Exception('Failed to initialize chat');
+      }
+
+      final data = chatDoc.data()!;
+      final participants = List<String>.from(data['participants'] ?? []);
+      if (!participants.contains(_currentUser.uid)) {
+        throw Exception('Access denied');
+      }
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Chat initialization error: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+>>>>>>> Stashed changes
 }

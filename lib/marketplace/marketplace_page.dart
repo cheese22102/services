@@ -18,7 +18,7 @@ class MarketplacePage extends StatefulWidget {
   _MarketplacePageState createState() => _MarketplacePageState();
 }
 
-class _MarketplacePageState extends State<MarketplacePage> {
+class _MarketplacePageState extends State<MarketplacePage> with SingleTickerProviderStateMixin {
   String searchQuery = '';
 
   // Variables de filtre
@@ -160,70 +160,116 @@ class _MarketplacePageState extends State<MarketplacePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: const Sidebar(),
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
+        title: const Text(
+          'Marketplace',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
         ),
-        title: const Text('Marketplace', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.green,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        elevation: 0,
+        centerTitle: true,
         actions: [
-          if (_filterCondition != 'All' || !_sortByDateAsc || _priceRange.start != 0 || _priceRange.end != 100000)
+          if (_filterCondition != 'All' || !_sortByDateAsc || 
+              _priceRange.start != 0 || _priceRange.end != 100000)
             IconButton(
               icon: const Icon(Icons.clear),
               onPressed: _clearFilters,
+              tooltip: 'Réinitialiser les filtres',
             ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: _openFilterSheet,
+            tooltip: 'Filtrer',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Barre de recherche
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16.0),
             child: TextField(
-              onChanged: (value) {
-                setState(() {
-                  searchQuery = value.toLowerCase();
-                });
-              },
+              onChanged: (value) => setState(() => searchQuery = value.toLowerCase()),
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 hintText: 'Rechercher un produit...',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).colorScheme.surface,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  ),
+                ),
               ),
             ),
           ),
-          // Liste des posts
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _getMarketplacePosts(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "Aucun post disponible.",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   );
                 }
+                
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.store_outlined,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Aucun produit disponible",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Filter and sort logic remains the same
                 var posts = snapshot.data!.docs;
                 var filteredPosts = posts.where((post) {
                   String title = post['title']?.toLowerCase() ?? '';
@@ -257,31 +303,33 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   child: GridView.builder(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      crossAxisSpacing: 8.0,
-                      mainAxisSpacing: 8.0,
-                      childAspectRatio: 0.8,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
                     ),
                     itemCount: filteredPosts.length,
                     itemBuilder: (context, index) {
                       var post = filteredPosts[index];
                       List<dynamic>? images = post['images'];
                       String imageUrl = images != null && images.isNotEmpty ? images[0] : "";
-                      if (post['title'] == null || post['price'] == null || imageUrl.isEmpty) {
-                        return Container();
-                      }
-                      return InkWell(
-                        onTap: () {
-                          Navigator.push(
+
+                      return Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: InkWell(
+                          onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => PostDetailsPage(post: post),
                             ),
-                          );
-                        },
-                        child: ZoomProduct(
-                          imageUrl: imageUrl,
-                          title: post['title'] ?? 'Produit sans titre',
-                          price: post['price'] != null ? double.tryParse(post['price'].toString()) ?? 0 : 0,
+                          ),
+                          child: ZoomProduct(
+                            imageUrl: imageUrl,
+                            title: post['title'] ?? 'Sans titre',
+                            price: post['price']?.toDouble() ?? 0,
+                          ),
                         ),
                       );
                     },
@@ -292,54 +340,100 @@ class _MarketplacePageState extends State<MarketplacePage> {
           ),
         ],
       ),
-      // Footer fixe avec 3 icônes
       bottomNavigationBar: Container(
-  height: 55,
-  margin: const EdgeInsets.all(8),
-  padding: const EdgeInsets.symmetric(horizontal: 12),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(20),
-    boxShadow: [
-      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5),
-    ],
-  ),
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
-      // Bouton Accueil
-      IconButton(
-        icon: const Icon(Icons.home, size: 28, color: Colors.blue),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ClientHomePage()),
-          );
-        },
+        height: 65,
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildNavButton(
+              icon: Icons.home,
+              label: 'Accueil',
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ClientHomePage()),
+              ),
+            ),
+            _buildNavButton(
+              icon: Icons.favorite,
+              label: 'Favoris',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FavorisPage()),
+              ),
+            ),
+            _buildNavButton(
+              icon: Icons.add_circle,
+              label: 'Ajouter',
+              isMain: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddPostPage()),
+              ),
+            ),
+            _buildNavButton(
+              icon: Icons.list,
+              label: 'Mes Posts',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MesProduitsPage()),
+              ),
+            ),
+            _buildNavButton(
+              icon: Icons.chat,
+              label: 'Messages',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatListScreen()),
+              ),
+            ),
+          ],
+        ),
       ),
-      
-      // Bouton Favoris (NOUVEAU)
-      IconButton(
-        icon: const Icon(Icons.favorite, size: 28, color: Colors.redAccent),
-        onPressed: () {
-          // Remplace par la page Favoris
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const FavorisPage()),
-          );
-        },
-      ),
+    );
+  }
 
-      // Bouton Ajouter un Post
-      IconButton(
-        icon: const Icon(Icons.add_circle, size: 36, color: Colors.green),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddPostPage()),
-          );
-        },
+  Widget _buildNavButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isMain = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: isMain ? 32 : 24,
+            color: isMain 
+              ? Theme.of(context).colorScheme.secondary
+              : Theme.of(context).colorScheme.primary,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMain 
+                ? Theme.of(context).colorScheme.secondary
+                : Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
       ),
+<<<<<<< Updated upstream
 
       // Bouton Mes Posts (NOUVEAU)
       IconButton(
@@ -367,6 +461,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
   ),
 ),
 
+=======
+>>>>>>> Stashed changes
     );
   }
 }

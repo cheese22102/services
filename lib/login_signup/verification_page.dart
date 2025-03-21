@@ -78,38 +78,98 @@ class _VerificationPageState extends State<VerificationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Vérification Email')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.mark_email_unread_outlined,
-                  size: 100, color: Theme.of(context).primaryColor),
-              const SizedBox(height: 30),
-              Text(
-                'Un email de vérification a été envoyé à:',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(
-                _user.email ?? '',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 30),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.refresh),
-                label: const Text('Renvoyer l\'email'),
-                onPressed: _isLoading ? null : _resendVerification,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('J\'ai déjà vérifié'),
-                onPressed: _checkVerification,
-              ),
-              if (_isLoading) const CircularProgressIndicator(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.green.withOpacity(0.3),
+              Colors.white,
             ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.green.withOpacity(0.1),
+                    ),
+                    child: const Icon(
+                      Icons.mark_email_unread_outlined,
+                      size: 80,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  Text(
+                    'Vérifiez votre email',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Un email de vérification a été envoyé à:',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _user.email ?? '',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  ElevatedButton.icon(
+                    icon: _isLoading 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.refresh),
+                    label: Text(_isLoading ? 'Envoi en cours...' : 'Renvoyer l\'email'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    onPressed: _isLoading ? null : _resendVerification,
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton.icon(
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('J\'ai déjà vérifié mon email'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    ),
+                    onPressed: _checkVerification,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

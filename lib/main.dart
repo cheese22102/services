@@ -11,7 +11,10 @@ import 'login_signup/signup2_page.dart';
 import 'client_home_page.dart';
 import 'prestataire_home_page.dart';
 import 'tutorial_screen.dart';
-import 'chat/notifications_service.dart'; // Importation du service de notifications
+import 'chat/notifications_service.dart';
+
+// Add this line at the top level
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
 
@@ -29,65 +32,51 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(builder: (context, themeProvider, child) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: _buildLightTheme(),
-          darkTheme: _buildDarkTheme(),
-          themeMode: themeProvider.themeMode,
-          home: const AuthWrapper(),
-          onGenerateRoute: (settings) {
-            switch (settings.name) {
-              case '/signup2':
-                return _fadeRoute(const Signup2Page());
-              case '/clientHome':
-                return _fadeRoute(const ClientHomePage());
-              case '/prestataireHome':
-                return _fadeRoute(const PrestataireHomePage());
-              case '/tutorial':
-                return _fadeRoute(const TutorialScreen());
-              default:
-                return _fadeRoute(const AuthWrapper());
-            }
-          },
-        );
-      }),
-    );
-  }
-
-  ThemeData _buildLightTheme() {
-    return ThemeData(
-      brightness: Brightness.light,
-      primaryColor: Colors.green,
-      scaffoldBackgroundColor: Colors.white,
-      colorScheme: ColorScheme.fromSwatch().copyWith(
-        secondary: Colors.greenAccent,
-      ),
-    );
-  }
-
-  ThemeData _buildDarkTheme() {
-    return ThemeData(
-      brightness: Brightness.dark,
-      primaryColor: Colors.grey[800],
-      scaffoldBackgroundColor: Colors.grey[900],
-      colorScheme: ColorScheme.fromSwatch(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.grey,
-      ),
-    );
-  }
-
   PageRouteBuilder _fadeRoute(Widget page) {
     return PageRouteBuilder(
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) => FadeTransition(
-        opacity: animation,
-        child: child,
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            navigatorKey: navigatorKey, // Add this line
+            title: 'Services App',
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.getLightTheme(),
+            darkTheme: themeProvider.getDarkTheme(),
+            themeMode: themeProvider.themeMode,
+            home: const AuthWrapper(),
+            onGenerateRoute: (settings) {
+              switch (settings.name) {
+                case '/signup2':
+                  return _fadeRoute(const Signup2Page());
+                case '/clientHome':
+                  return _fadeRoute(const ClientHomePage());
+                case '/prestataireHome':
+                  return _fadeRoute(const PrestataireHomePage());
+                case '/tutorial':
+                  return _fadeRoute(const TutorialScreen());
+                default:
+                  return _fadeRoute(const AuthWrapper());
+              }
+            }
+          );
+        },
       ),
     );
   }
