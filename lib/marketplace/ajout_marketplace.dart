@@ -260,7 +260,8 @@ class _AddPostPageState extends State<AddPostPage> {
         'etat': _etatProduit,
         'userId': user.uid,
         'images': imageUrls,
-        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),  // Changed from 'timestamp'
+        'isValidated': false,
       };
 
       await FirebaseFirestore.instance.collection('marketplace').add(postData);
@@ -273,14 +274,14 @@ class _AddPostPageState extends State<AddPostPage> {
       // Afficher un message de succès
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Produit publié avec succès !"),
+          content: Text("Post soumis avec succès ! Il est maintenant en attente de validation. Vous serez notifié."),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 3),  // Increased duration to allow reading
         ),
       );
 
       // Retourner à la page précédente après un court délai
-      Future.delayed(const Duration(seconds: 1), () {
+      Future.delayed(const Duration(seconds: 2), () {  // Increased delay
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/marketplace',

@@ -24,11 +24,22 @@ class _FavorisPageState extends State<FavorisPage> {
         .collection('favoris')
         .snapshots()
         .asyncMap((favorites) async {
-      List<Future<DocumentSnapshot>> futures = [];
+      List<DocumentSnapshot> validPosts = [];
       for (var fav in favorites.docs) {
-        futures.add(_firestore.collection('marketplace').doc(fav.id).get());
+        final postDoc = await _firestore.collection('marketplace').doc(fav.id).get();
+        if (postDoc.exists && postDoc.data() != null) {
+          validPosts.add(postDoc);
+        } else {
+          // Optionally: Remove the invalid reference from favorites
+          await _firestore
+              .collection('users')
+              .doc(_user?.uid)
+              .collection('favoris')
+              .doc(fav.id)
+              .delete();
+        }
       }
-      return await Future.wait(futures);
+      return validPosts;
     });
   }
 
@@ -120,7 +131,8 @@ class _FavorisPageState extends State<FavorisPage> {
                   }
 
                   final posts = snapshot.data!.where((post) {
-                    final data = post.data() as Map<String, dynamic>;
+                    final data = post.data() as Map<String, dynamic>?;
+                    if (data == null) return false;
                     return data['title'].toString().toLowerCase().contains(_searchQuery);
                   }).toList();
 

@@ -12,6 +12,7 @@ import 'client_home_page.dart';
 import 'prestataire_home_page.dart';
 import 'tutorial_screen.dart';
 import 'chat/notifications_service.dart';
+import 'admin_home_page.dart';
 
 // Add this line at the top level
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -135,9 +136,17 @@ class AuthWrapper extends StatelessWidget {
 
                 if (!profileCompleted) return const Signup2Page();
 
-                return role == 'client'
-                    ? const ClientHomePage()
-                    : const PrestataireHomePage();
+                // Handle different roles including admin
+                switch (role) {
+                  case 'admin':
+                    return const AdminHomePage();
+                  case 'client':
+                    return const ClientHomePage();
+                  case 'prestataire':
+                    return const PrestataireHomePage();
+                  default:
+                    return const ClientHomePage();
+                }
               },
             );
           },

@@ -13,8 +13,8 @@
     <application
         android:label="plateforme_services"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         <!-- Disable Impeller (Vulkan) Rendering and use Skia instead -->
         <meta-data
             android:name="flutterEmbedding"

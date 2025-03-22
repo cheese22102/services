@@ -48,9 +48,10 @@ dependencies:
   async: ^2.12.0
   googleapis_auth: ^1.1.0
   animate_do: ^4.2.0
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  badges: ^3.1.1
   cupertino_icons: ^1.0.8
+
+# Remove the standalone 'dependencies:' line
 dev_dependencies:
   flutter_test:
     sdk: flutter

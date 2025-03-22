@@ -16,23 +16,125 @@ const ModifyPostPage({super.key, required this.post});
 
 class _ModifyPostPageState extends State<ModifyPostPage> {
   final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
   late String _title;
   late String _description;
-  late double  _price;
-  late List<String> _imageUrls;
-  final ImagePicker _picker = ImagePicker();
+  late double _price;
+  String? _etatProduit;
+  List<String> _imageUrls = [];
+  bool _isUploading = false;
 
-  // Cloudinary credentials (replace with your actual credentials)
+  // Add Cloudinary credentials
   final String cloudName = "dfk7mskxv";
   final String uploadPreset = "plateforme_service";
 
   @override
   void initState() {
     super.initState();
-    _title = widget.post['title'] ?? "";
-    _description = widget.post['description'] ?? "";
-    _price = widget.post['price'] ?? "";
-    _imageUrls = List<String>.from(widget.post['images'] ?? []);
+    final data = widget.post.data() as Map<String, dynamic>;
+    _title = data['title'];
+    _description = data['description'];
+    _price = data['price'].toDouble();
+    _etatProduit = data['etat'];
+    _imageUrls = List<String>.from(data['images'] ?? []);
+  }
+
+  // Add the build method
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Modifier le post'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                initialValue: _title,
+                decoration: const InputDecoration(labelText: 'Titre'),
+                validator: (value) => value?.isEmpty ?? true ? 'Ce champ est requis' : null,
+                onSaved: (value) => _title = value!,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: _description,
+                decoration: const InputDecoration(labelText: 'Description'),
+                maxLines: 3,
+                validator: (value) => value?.isEmpty ?? true ? 'Ce champ est requis' : null,
+                onSaved: (value) => _description = value!,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: _price.toString(),
+                decoration: const InputDecoration(labelText: 'Prix'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Ce champ est requis';
+                  }
+                  if (double.tryParse(value) == null) {
+                    return 'Veuillez entrer un nombre valide';
+                  }
+                  return null;
+                },
+                onSaved: (value) => _price = double.parse(value!),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _etatProduit,
+                decoration: const InputDecoration(labelText: 'État du produit'),
+                items: const [
+                  DropdownMenuItem(value: 'Neuf', child: Text('Neuf')),
+                  DropdownMenuItem(value: 'Occasion', child: Text('Occasion')),
+                ],
+                onChanged: (value) => setState(() => _etatProduit = value),
+                validator: (value) => value == null ? 'Ce champ est requis' : null,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ..._imageUrls.map((url) => Stack(
+                    children: [
+                      Image.network(url, width: 100, height: 100, fit: BoxFit.cover),
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => setState(() => _imageUrls.remove(url)),
+                        ),
+                      ),
+                    ],
+                  )).toList(),
+                  if (_imageUrls.length < 5)
+                    IconButton(
+                      onPressed: _pickAndUploadImage,
+                      icon: const Icon(Icons.add_photo_alternate),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isUploading ? null : () {
+                  if (_formKey.currentState?.validate() ?? false) {
+                    _formKey.currentState?.save();
+                    _updatePost();
+                  }
+                },
+                child: _isUploading
+                    ? const CircularProgressIndicator()
+                    : const Text('Modifier le post'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -76,170 +178,40 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
   }
 
   Future<void> _updatePost() async {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
+    if (_formKey.currentState?.validate() ?? false) {
+      setState(() => _isUploading = true);
       try {
-        await FirebaseFirestore.instance
-            .collection('marketplace')
-            .doc(widget.post.id)
-            .update({
+        await widget.post.reference.update({
           'title': _title,
           'description': _description,
           'price': _price,
           'images': _imageUrls,
+          'etatProduit': _etatProduit,
+          'isValidated': false,  // Reset validation status
+          'lastModified': FieldValue.serverTimestamp(),  // Add modification timestamp
         });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Produit mis à jour avec succès"),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context, {
-          'title': _title,
-          'description': _description,
-          'price': _price,
-          'images': _imageUrls,
-          'userId': widget.post['userId'],
-        });
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Post modifié avec succès et en attente de validation'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Erreur lors de la mise à jour: ${e.toString()}"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur: $e'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } finally {
+        setState(() => _isUploading = false);
       }
     }
-  }
-
-  void _removeImage(int index) {
-    if (!mounted) return;
-    setState(() {
-      _imageUrls.removeAt(index);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Modify Post'),
-        backgroundColor: Colors.green,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              // Title field
-              TextFormField(
-                initialValue: _title,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value == null || value.isEmpty ? 'Title is required' : null,
-                onSaved: (value) => _title = value!,
-              ),
-              const SizedBox(height: 16),
-              // Description field
-              TextFormField(
-                initialValue: _description,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 4,
-                validator: (value) => value == null || value.isEmpty ? 'Description is required' : null,
-                onSaved: (value) => _description = value!,
-              ),
-              const SizedBox(height: 16),
-               // Price field
-              TextFormField(
-                initialValue: _price.toString(), // <-- Converti en String pour l'affichage
-                decoration: const InputDecoration(
-                  labelText: 'Price',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true), // <-- Permet les décimaux
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Price is required';
-                  }
-                  final price = double.tryParse(value);
-                  if (price == null || price <= 0) {
-                    return 'Please enter a valid price';
-                  }
-                  return null;
-                },
-                onSaved: (value) => _price = double.parse(value!), // <-- Converti en double
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Images:",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              _imageUrls.isEmpty
-                  ? const Text("No images available.")
-                  : SizedBox(
-                      height: 150,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _imageUrls.length,
-                        itemBuilder: (context, index) {
-                          return Stack(
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 8),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    _imageUrls[index],
-                                    height: 150,
-                                    width: 150,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _removeImage(index),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _pickAndUploadImage,
-                icon: const Icon(Icons.add_a_photo),
-                label: const Text("Add Image"),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _updatePost,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: const Text("Save Changes"),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

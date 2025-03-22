@@ -30,7 +30,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
   RangeValues _priceRange = const RangeValues(0, 100000);
 
   Stream<QuerySnapshot> _getMarketplacePosts() {
-    return FirebaseFirestore.instance.collection('marketplace').snapshots();
+    return FirebaseFirestore.instance
+        .collection('marketplace')
+        .where('isValidated', isEqualTo: true)  // Only show validated posts
+        .orderBy('createdAt', descending: !_sortByDateAsc)
+        .snapshots();
   }
 
   // Ouvre le panneau de filtre
@@ -312,8 +316,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   );
                 }
                 filteredPosts.sort((a, b) {
-                  Timestamp ta = a['timestamp'] ?? Timestamp(0, 0);
-                  Timestamp tb = b['timestamp'] ?? Timestamp(0, 0);
+                  Timestamp ta = a['createdAt'] ?? Timestamp(0, 0);
+                  Timestamp tb = b['createdAt'] ?? Timestamp(0, 0);
                   return _sortByDateAsc ? ta.compareTo(tb) : tb.compareTo(ta);
                 });
                 return AnimatedContainer(

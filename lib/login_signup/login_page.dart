@@ -102,17 +102,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
   }
 
-  void _redirectToHome(User user) {
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const AuthWrapper(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
-      ),
-    );
+  void _redirectToHome(User user) async {
+    // Get user role from Firestore
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!mounted) return;
+
+    // Redirect based on role
+    switch (doc.data()?['role']) {
+      case 'admin':
+        Navigator.pushReplacementNamed(context, '/admin');
+        break;
+      case 'client':
+        Navigator.pushReplacementNamed(context, '/client');
+        break;
+      case 'prestataire':
+        Navigator.pushReplacementNamed(context, '/prestataire');
+        break;
+      default:
+        Navigator.pushReplacementNamed(context, '/marketplace');
+    }
   }
 
   Future<void> _handleGoogleSignIn() async {
