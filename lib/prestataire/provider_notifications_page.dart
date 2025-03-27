@@ -1,8 +1,10 @@
+// No specific navigation changes needed in this file as it's a destination page
+// Just ensure you're importing go_router:
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../chat/chat_screen.dart';
 
 class ProviderNotificationsPage extends StatefulWidget {
   const ProviderNotificationsPage({super.key});

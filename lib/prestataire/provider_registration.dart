@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:go_router/go_router.dart';
 
 // Modèle du Prestataire
 class Provider {
@@ -427,7 +428,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
             duration: Duration(seconds: 3),
           ),
         );
-        Navigator.pop(context);
+        context.go('/prestataireHome'); // Replace Navigator.pop with GoRouter
       }
     } catch (e) {
       if (mounted) {

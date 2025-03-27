@@ -46,7 +46,6 @@ class ThemeProvider extends ChangeNotifier {
         primary: const Color(0xFF1A5F7A), // Deep blue-teal
         secondary: const Color(0xFFFF8C42), // Warm orange
         surface: Colors.white,
-        background: const Color(0xFFF8F9FA),
       ),
     ).copyWith(
       appBarTheme: AppBarTheme(
@@ -56,8 +55,8 @@ class ThemeProvider extends ChangeNotifier {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all(const Color(0xFF1A5F7A)),
-          foregroundColor: MaterialStateProperty.all(Colors.white),
+          backgroundColor: WidgetStateProperty.all(const Color(0xFF1A5F7A)),
+          foregroundColor: WidgetStateProperty.all(Colors.white),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -79,8 +78,7 @@ class ThemeProvider extends ChangeNotifier {
       colorScheme: ColorScheme.dark(
         primary: const Color(0xFF62B6CB), // Lighter blue-teal
         secondary: const Color(0xFFFFB347), // Lighter orange for dark mode
-        surface: const Color(0xFF1E1E1E), // Dark surface
-        background: const Color(0xFF121212), // Dark background
+        surface: const Color(0xFF1E1E1E), // Dark background
       ),
     ).copyWith(
       appBarTheme: AppBarTheme(
@@ -90,8 +88,8 @@ class ThemeProvider extends ChangeNotifier {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all(const Color(0xFF62B6CB)),
-          foregroundColor: MaterialStateProperty.all(Colors.black),
+          backgroundColor: WidgetStateProperty.all(const Color(0xFF62B6CB)),
+          foregroundColor: WidgetStateProperty.all(Colors.black),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

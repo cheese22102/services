@@ -2,13 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../login_signup/profile_edit_page.dart';
-import '../login_signup/login_page.dart';
 import '../widgets/dark_mode_switch.dart';
-import 'package:plateforme_services/marketplace/favoris_page.dart';
-import 'package:plateforme_services/marketplace/mes_produits_page.dart';
-import 'package:plateforme_services/chat/chat_list_screen.dart';
-import '../screens/notifications_page.dart';
+import '../client/page_notifications.dart';
+import 'package:go_router/go_router.dart';
 
 class Sidebar extends StatefulWidget {
   const Sidebar({super.key});
@@ -18,28 +14,22 @@ class Sidebar extends StatefulWidget {
 }
 
 class _SidebarState extends State<Sidebar> {
-  bool _isMarketplaceExpanded = false; // To manage the expansion of the Marketplace section
+  bool _isMarketplaceExpanded = false;
 
-  // Future to load user data (we use currentUser! because we assume a signed in user)
   final Future<DocumentSnapshot> _userDataFuture = FirebaseFirestore.instance
       .collection('users')
       .doc(FirebaseAuth.instance.currentUser!.uid)
       .get();
 
-  // Function to log out
   Future<void> _logout() async {
     try {
-      // Close the drawer if open
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
       await FirebaseAuth.instance.signOut();
       await GoogleSignIn().signOut();
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
-      );
+      context.go('/');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -48,12 +38,79 @@ class _SidebarState extends State<Sidebar> {
     }
   }
 
+  void _navigateToProfile() {
+    Navigator.pop(context);
+    context.go('/clientHome/profile');
+  }
+
+  void _navigateToNotifications() {
+    Navigator.pop(context);
+    context.go('/clientHome/notifications');
+  }
+
+  Widget _buildMarketplaceItem(String title, IconData icon, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      contentPadding: const EdgeInsets.only(left: 32.0),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildMarketplaceSection() {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.shopping_cart),
+          title: const Text('Marketplace'),
+          trailing: AnimatedRotation(
+            duration: const Duration(milliseconds: 300),
+            turns: _isMarketplaceExpanded ? 0.5 : 0,
+            child: const Icon(Icons.arrow_drop_down),
+          ),
+          onTap: () {
+            setState(() {
+              _isMarketplaceExpanded = !_isMarketplaceExpanded;
+            });
+            Navigator.pop(context);
+            context.go('/clientHome/marketplace');
+          },
+        ),
+        if (_isMarketplaceExpanded) ...[
+          _buildMarketplaceItem(
+            'Mes favoris',
+            Icons.favorite,
+            () {
+              Navigator.pop(context);
+              context.go('/clientHome/marketplace/favorites');
+            },
+          ),
+          _buildMarketplaceItem(
+            'Mes produits',
+            Icons.inventory,
+            () {
+              Navigator.pop(context);
+              context.go('/clientHome/marketplace/my-products');
+            },
+          ),
+          _buildMarketplaceItem(
+            'Messages',
+            Icons.chat,
+            () {
+              Navigator.pop(context);
+              context.go('/clientHome/marketplace/chat');
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
       child: Column(
         children: [
-          // Fixed header with user data
           FutureBuilder<DocumentSnapshot>(
             future: _userDataFuture,
             builder: (context, snapshot) {
@@ -64,7 +121,6 @@ class _SidebarState extends State<Sidebar> {
               return _UserHeader(data: data);
             },
           ),
-          // Scrollable content
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -72,15 +128,8 @@ class _SidebarState extends State<Sidebar> {
                   ListTile(
                     leading: const Icon(Icons.person),
                     title: const Text("Modifier le profil"),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ProfileEditPage()),
-                      );
-                    },
+                    onTap: _navigateToProfile,
                   ),
-                  // Add Notifications Button here
                   ListTile(
                     leading: const Icon(Icons.notifications),
                     title: const Text("Notifications"),
@@ -111,14 +160,7 @@ class _SidebarState extends State<Sidebar> {
                         return const SizedBox.shrink();
                       },
                     ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsPage(),
-                        ),
-                      );
-                    },
+                    onTap: _navigateToNotifications,
                   ),
                   const Divider(thickness: 1.2),
                   _buildMarketplaceSection(),
@@ -136,54 +178,6 @@ class _SidebarState extends State<Sidebar> {
       ),
     );
   }
-
-  Widget _buildMarketplaceSection() {
-    return Column(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.shopping_cart),
-          title: const Text('Marketplace'),
-          trailing: AnimatedRotation(
-            duration: const Duration(milliseconds: 300),
-            turns: _isMarketplaceExpanded ? 0.5 : 0,
-            child: const Icon(Icons.arrow_drop_down),
-          ),
-          onTap: () {
-            setState(() {
-              _isMarketplaceExpanded = !_isMarketplaceExpanded;
-            });
-          },
-        ),
-        if (_isMarketplaceExpanded) ...[
-          _buildMarketplaceItem(
-            'Mes favoris',
-            Icons.favorite,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const FavorisPage()),
-            ),
-          ),
-          _buildMarketplaceItem(
-            'Mes produits',
-            Icons.inventory,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const MesProduitsPage()),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildMarketplaceItem(String title, IconData icon, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      contentPadding: const EdgeInsets.only(left: 32.0),
-      onTap: onTap,
-    );
-  }
 }
 
 class _UserHeader extends StatelessWidget {
@@ -196,12 +190,12 @@ class _UserHeader extends StatelessWidget {
     final firstName = data?['firstname'] ?? "Prénom inconnu";
     final lastName = data?['lastname'] ?? "Nom inconnu";
     final email = data?['email'] ?? "Email inconnu";
-    final avatarUrl = data?['avatarUrl'];  // Changed from photoURL to avatarUrl
+    final avatarUrl = data?['avatarUrl'];
     final fullName = "$firstName $lastName";
 
     return UserAccountsDrawerHeader(
-      decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 117, 117, 118),
+      decoration: const BoxDecoration(
+        color: Color.fromARGB(255, 117, 117, 118),
       ),
       accountName: Text(
         fullName,

@@ -47,8 +47,9 @@ class PasswordStrengthIndicator extends StatelessWidget {
     if (!RegExp(r'[A-Z]').hasMatch(password)) missing.add('majuscule');
     if (!RegExp(r'[a-z]').hasMatch(password)) missing.add('minuscule');
     if (!RegExp(r'[0-9]').hasMatch(password)) missing.add('chiffre');
-    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) 
+    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) {
       missing.add('caractère spécial');
+    }
     if (password.length < 8) missing.add('8 caractères');
     
     if (missing.isEmpty) return 'Excellent!';

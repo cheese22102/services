@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../login_signup/login_page.dart';
+import '../login_signup/connexion.dart';
 
 class AuthHelper {
   static Future<bool> checkUserRole(BuildContext context, String requiredRole) async {

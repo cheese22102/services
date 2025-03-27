@@ -2,7 +2,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../main.dart';
+import 'package:go_router/go_router.dart';  // Add this import
 import '../providers/theme_provider.dart';
 
 class TutorialScreen extends StatefulWidget {
@@ -173,19 +173,17 @@ class _TutorialScreenState extends State<TutorialScreen> {
 
   void _completeTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('firstLaunch', false);
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const AuthWrapper()),
-    );
+    await prefs.setBool('is_first_launch', false);  // Match the key name from main.dart
+    if (mounted) {
+      context.go('/');  // Redirect to root which is LoginPage
+    }
   }
 
   void _skipTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('firstLaunch', false);
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const AuthWrapper()),
-    );
+    await prefs.setBool('is_first_launch', false);  // Match the key name from main.dart
+    if (mounted) {
+      context.go('/');  // Redirect to root which is LoginPage
+    }
   }
 }

@@ -7,11 +7,11 @@ class ZoomProduct extends StatefulWidget {
   final double price;
 
   const ZoomProduct({
-    Key? key,
+    super.key,
     required this.imageUrl,
     required this.title,
     required this.price,
-  }) : super(key: key);
+  });
 
   @override
   _ZoomProductState createState() => _ZoomProductState();
@@ -22,7 +22,7 @@ class _ZoomProductState extends State<ZoomProduct> {
 
   void _showZoomOverlay() {
     _overlayEntry = _createOverlayEntry();
-    Overlay.of(context)?.insert(_overlayEntry!);
+    Overlay.of(context).insert(_overlayEntry!);
   }
 
   void _removeZoomOverlay() {
@@ -44,12 +44,13 @@ class _ZoomProductState extends State<ZoomProduct> {
               child: Container(
                 width: size.width,
                 height: size.height,
+                // ignore: deprecated_member_use
                 color: Colors.black.withOpacity(0.5),
               ),
             ),
             // Carte centrée occupant 80% de l'écran
             Center(
-              child: Container(
+              child: SizedBox(
                 width: size.width * 0.8,
                 height: size.height * 0.8,
                 child: Card(

@@ -3,64 +3,80 @@ import 'package:flutter/material.dart';
 class CustomTextField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
-  final IconData icon;
+  final IconData? icon;
   final bool obscure;
   final String? Function(String?)? validator;
-  final Function(String)? onChanged; // Add this line for the onChanged callback
+  final Widget? suffixIcon;  // Add this line
 
   const CustomTextField({
     super.key,
     required this.controller,
     required this.hint,
-    required this.icon,
-    required this.obscure,
+    this.icon,
+    this.obscure = false,
     this.validator,
-    this.onChanged, // Add this to the constructor
+    this.suffixIcon,  // Add this line
   });
 
   @override
-  _CustomTextFieldState createState() => _CustomTextFieldState();
+  State<CustomTextField> createState() => _CustomTextFieldState();
 }
 
 class _CustomTextFieldState extends State<CustomTextField> {
-  bool _passwordVisible = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _passwordVisible = !widget.obscure;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(30),
+        color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFE8E8E8),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(
+          color: isDark ? Colors.grey[700]! : Colors.grey[400]!,
+          width: 1,
+        ),
       ),
       child: TextFormField(
         controller: widget.controller,
-        obscureText: widget.obscure ? !_passwordVisible : false,
-        validator: widget.validator,
-        onChanged: widget.onChanged, // Add this line to pass the onChanged callback
-        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color),
-        decoration: InputDecoration(
-          icon: Icon(widget.icon, color: Theme.of(context).iconTheme.color),
-          hintText: widget.hint,
-          hintStyle: TextStyle(color: Theme.of(context).hintColor),
-          border: InputBorder.none,
-          suffixIcon: widget.obscure
-              ? IconButton(
-                  icon: Icon(
-                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                    color: Theme.of(context).iconTheme.color,
-                  ),
-                  onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-                )
-              : null,
+        obscureText: widget.obscure,
+        style: TextStyle(
+          color: isDark ? Colors.white : Colors.black87,
         ),
+        decoration: InputDecoration(
+          hintText: widget.hint,
+          hintStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : const Color(0xFF9E9E9E),
+          ),
+          prefixIcon: Icon(
+            widget.icon,
+            color: isDark ? Colors.grey[400] : const Color(0xFF757575),
+          ),
+          suffixIcon: widget.suffixIcon,  // Add this line
+          border: InputBorder.none,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: BorderSide.none,
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: BorderSide.none,
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFE8E8E8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 15,
+          ),
+        ),
+        validator: widget.validator,
       ),
     );
   }
