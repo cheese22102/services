@@ -179,13 +179,7 @@ class _ConversationServicePageState extends State<ConversationServicePage> {
         },
       }, SetOptions(merge: true));
 
-      // Send notification
-      await NotificationsService.sendServiceMessageNotification(
-        receiverId: widget.otherUserId,
-        messageText: messageText,
-        senderName: FirebaseAuth.instance.currentUser?.displayName ?? 'Un utilisateur',
-        chatroomId: chatId,
-      );
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

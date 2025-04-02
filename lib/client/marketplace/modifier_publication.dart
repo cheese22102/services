@@ -5,12 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '/widgets/custom_card.dart';
-import '/widgets/custom_button.dart';
+import '../../widgets/custom_card.dart';
+import '../../widgets/custom_button.dart';
 import '/widgets/labeled_text_field.dart';
-import '/widgets/product_state_option.dart';
+import '../../widgets/product_state_option.dart';
 import '/widgets/image_upload_section.dart';
-import '/widgets/custom_dialog.dart';
+import '../../widgets/custom_dialog.dart';
 
 class ModifyPostPage extends StatefulWidget {
   final DocumentSnapshot post;
@@ -26,7 +26,7 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   String? _etatProduit;
-  final List<File> _images = [];  // Changed from _imageUrls
+  List<File> _images = [];  // Changed from _imageUrls
   List<String> _existingImageUrls = [];  // To store existing image URLs
   final _picker = ImagePicker();
   bool _isUploading = false;
@@ -226,7 +226,7 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
             end: Alignment.bottomCenter,
             colors: [
               Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.background,
             ],
           ),
         ),

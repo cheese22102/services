@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../login_signup/connexion.dart';
+import 'login_signup/connexion.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class ProfileEditPage extends StatefulWidget {

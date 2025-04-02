@@ -10,6 +10,71 @@ class PostsValidationPage extends StatefulWidget {
 }
 
 class _PostsValidationPageState extends State<PostsValidationPage> {
+  final _rejectionReasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _rejectionReasonController.dispose();
+    super.dispose();
+  }
+
+  void _showRejectionDialog(String postId) {
+    _rejectionReasonController.clear(); 
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Raison du refus'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Veuillez indiquer la raison du refus de cette publication',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _rejectionReasonController,
+              decoration: const InputDecoration(
+                labelText: 'Raison',
+                border: OutlineInputBorder(),
+                hintText: 'Expliquez pourquoi la publication est refusée',
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _rejectionReasonController.clear();
+            },
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (_rejectionReasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Veuillez indiquer une raison'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _rejectPost(postId, _rejectionReasonController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Refuser'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -86,10 +151,13 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
                         ],
                       ),
                     ),
-                    OverflowBar(
+                    ButtonBar(
                       children: [
                         TextButton(
-                          onPressed: () => _rejectPost(post.id),
+                          onPressed: () => _showRejectionDialog(post.id),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
                           child: const Text('Rejeter'),
                         ),
                         ElevatedButton(
@@ -154,7 +222,8 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
     }
   }
 
-  Future<void> _rejectPost(String postId) async {
+  // Update the _rejectPost method to include the rejection reason
+  Future<void> _rejectPost(String postId, String rejectionReason) async {
     try {
       final postDoc = await FirebaseFirestore.instance
           .collection('marketplace')
@@ -164,14 +233,25 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
       final postData = postDoc.data();
       if (postData == null) return;
 
-      // Send notification before deleting the post
+      // Send notification with rejection reason
       await NotificationsService.sendMarketplaceNotification(
         userId: postData['userId'],
         title: 'Publication Refusée',
-        body: 'Votre publication "${postData['title']}" n\'a pas été approuvée. Veuillez vérifier les critères de publication.',
+        body: 'Votre publication "${postData['title']}" n\'a pas été approuvée.\n\nRaison: $rejectionReason',
         postId: postId,
         action: 'rejected',
       );
+
+      // Store rejection reason in a separate collection for history
+      await FirebaseFirestore.instance
+          .collection('marketplace_rejections')
+          .add({
+            'postId': postId,
+            'userId': postData['userId'],
+            'postTitle': postData['title'],
+            'rejectionReason': rejectionReason,
+            'rejectedAt': FieldValue.serverTimestamp(),
+          });
 
       // Delete the post
       await FirebaseFirestore.instance

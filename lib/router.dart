@@ -4,7 +4,7 @@ import 'login_signup/ROUTES_CONNEXION.dart';
 import 'tutorial_screen.dart';
 import 'admin/accueil_admin.dart';
 import 'client/ROUTES_CLIENT.dart';
-import 'prestataire/ROUTES_PRESTATAIRE.dart';  // Add this import
+import 'prestataire/ROUTES_PRESTATAIRE.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final GoRouter router = GoRouter(
@@ -21,9 +21,7 @@ final GoRouter router = GoRouter(
   routes: <RouteBase>[
     ...loginSignupRoutes,
     clientRoutes,
-    prestataireRoutes,  // Add the provider routes
-    
-    // Other main routes
+    prestataireRoutes,    
     GoRoute(
       path: '/tutorial',
       builder: (BuildContext context, GoRouterState state) => const TutorialScreen(),

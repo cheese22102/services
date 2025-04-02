@@ -25,7 +25,7 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Changed to 3 for the new tab
   }
 
   @override
@@ -73,6 +73,7 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
           tabs: const [
             Tab(text: 'Posts Publiés'),
             Tab(text: 'En Attente'),
+            Tab(text: 'Refusés'), // Added the third tab
           ],
         ),
       ),
@@ -90,8 +91,9 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
         child: TabBarView(
           controller: _tabController,
           children: [
-            _PostsList(isValidated: true),
-            _PostsList(isValidated: false),
+            _PostsList(type: PostListType.published),
+            _PostsList(type: PostListType.pending),
+            _RejectedPostsList(),
           ],
         ),
       ),
@@ -110,14 +112,15 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
 }
 
 class _PostsList extends StatelessWidget {
-  final bool isValidated;
+  final PostListType type;
 
-  const _PostsList({required this.isValidated});
+  const _PostsList({required this.type});
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isValidated = type == PostListType.published;
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -314,5 +317,167 @@ class _PostsList extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+enum PostListType { published, pending, rejected }
+
+class _RejectedPostsList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('marketplace_rejections')
+          .where('userId', isEqualTo: user?.uid)
+          .orderBy('rejectedAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Erreur: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          );
+        }
+
+        final rejectedPosts = snapshot.data?.docs ?? [];
+
+        if (rejectedPosts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.block_outlined,
+                    size: 64,
+                    color: Colors.red[700],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  "Aucune publication refusée",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red[700],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Les publications refusées\napparaîtront ici",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: rejectedPosts.length,
+          itemBuilder: (context, index) {
+            final rejection = rejectedPosts[index].data() as Map<String, dynamic>;
+
+            return CustomCard(
+              title: '',
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cancel_outlined,
+                          color: Colors.red[700],
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Publication Refusée',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      rejection['postTitle'] ?? 'Sans titre',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.red[200]!,
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Raison du refus:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[700],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            rejection['rejectionReason'] ?? 'Aucune raison fournie',
+                            style: TextStyle(
+                              color: Colors.red[900],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Refusé le ${_formatDate(rejection['rejectedAt'])}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return 'Date inconnue';
+    final date = timestamp.toDate();
+    return '${date.day}/${date.month}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -10,7 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 class PostDetailsPage extends StatefulWidget {
   final DocumentSnapshot post;
   
-  const PostDetailsPage({super.key, required this.post});
+  const PostDetailsPage({Key? key, required this.post}) : super(key: key);
 
   @override
   State<PostDetailsPage> createState() => _PostDetailsPageState();

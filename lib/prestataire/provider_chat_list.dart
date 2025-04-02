@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../chat/conversation_service_page.dart';
 import '../widgets/search_bar.dart';
 
 class ProviderChatListScreen extends StatefulWidget {

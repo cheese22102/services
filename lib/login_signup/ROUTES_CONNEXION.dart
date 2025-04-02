@@ -14,7 +14,7 @@ final loginSignupRoutes = [
     routes: [
       GoRoute(
         path: 'signup',  // This is correct - it becomes '/signup' when accessed
-        builder: (BuildContext context, GoRouterState state) => const SignupPage(),
+        builder: (BuildContext context, GoRouterState state) => SignupPage(),
       ),
       GoRoute(
         path: 'verification',  // This becomes '/verification' when accessed

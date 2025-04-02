@@ -370,7 +370,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     if (!_formKey.currentState!.validate()) return;
     if (selectedServices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez sélectionner au moins un service')),
+        const SnackBar(content: Text('Sélectionnez au moins un service')),
       );
       return;
     }
@@ -378,7 +378,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     setState(() => _isLoading = true);
 
     try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
+      final userId = FirebaseAuth.instance.currentUser!.uid;
       if (userId == null) throw Exception('Non authentifié');
 
       // Upload ID Card
@@ -411,11 +411,28 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
         'professionalPhone': _phoneController.text,
         'professionalEmail': _emailController.text,
         'professionalAddress': _addressController.text,
-        'isVerified': false,
         'status': 'pending',
-        'submissionDate': Timestamp.now(),
+        'submissionDate': FieldValue.serverTimestamp(),
+        // Add new fields for matching service
+        'averageResponseTime': 30, // Default 30 minutes
+        'completionRate': 1.0,    // Start with perfect rate
+        'totalServices': 0,
+        'completedServices': 0,
+        'lastStatsUpdate': FieldValue.serverTimestamp(),
+        'isAvailable': true,      // Provider availability status
+        'currentLocation': GeoPoint(0, 0), // Default location, update later
+        'workingHours': {
+          'monday': {'start': '08:00', 'end': '18:00'},
+          'tuesday': {'start': '08:00', 'end': '18:00'},
+          'wednesday': {'start': '08:00', 'end': '18:00'},
+          'thursday': {'start': '08:00', 'end': '18:00'},
+          'friday': {'start': '08:00', 'end': '18:00'},
+          'saturday': {'start': '08:00', 'end': '18:00'},
+          'sunday': {'start': '00:00', 'end': '00:00'},
+        },
       };
 
+      // Create request in Firestore
       await FirebaseFirestore.instance
           .collection('provider_requests')
           .doc(userId)

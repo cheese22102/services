@@ -12,7 +12,9 @@ import 'marketplace/modifier_publication.dart';  // File has ModifierPostPage
 import '../profile_edit_page.dart';
 import 'page_notifications.dart';
 import 'marketplace/liste_conversations.dart';
-import 'marketplace/conversation_marketplace.dart';  // Add this import
+import 'marketplace/conversation_marketplace.dart';
+import 'my_requests_page.dart'; // Make sure this import is present
+import '../chat/conversation_service_page.dart';  // Add this import
 
 final clientRoutes = GoRoute(
   path: '/clientHome',
@@ -49,6 +51,8 @@ final clientRoutes = GoRoute(
                 );
               },
             ),
+            // Ajouter cette route si elle n'existe pas déjà
+         
           ],
         ),
         GoRoute(
@@ -103,6 +107,29 @@ final clientRoutes = GoRoute(
     GoRoute(
       path: 'notifications',
       builder: (context, state) => const NotificationsPage(),
+    ),
+    // Make sure this route is properly defined
+    // Add a route for chat conversations
+    GoRoute(
+      path: 'chat/conversation/:otherUserId',
+      builder: (context, state) {
+        final params = state.extra as Map<String, dynamic>?;
+        return ConversationServicePage(
+          otherUserId: state.pathParameters['otherUserId']!,
+          otherUserName: params?['otherUserName'] ?? 'Prestataire',
+        );
+      },
+    ),
+    // Add a route for request-service if it doesn't exist
+    GoRoute(
+      path: 'request-service',
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Request Service Page')),
+      ),
+    ),
+     GoRoute(
+      path: 'my-requests',
+      builder: (context, state) => const MyRequestsPage(),
     ),
   ],
 );

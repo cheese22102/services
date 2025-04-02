@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:badges/badges.dart' as badges;
-import 'provider_notifications_page.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'provider_chat_list.dart';
 import 'package:go_router/go_router.dart';
 
 class PrestataireHomePage extends StatefulWidget {
@@ -14,8 +11,6 @@ class PrestataireHomePage extends StatefulWidget {
   @override
   State<PrestataireHomePage> createState() => _PrestataireHomePageState();
 }
-
-// Add to imports
 
 class _PrestataireHomePageState extends State<PrestataireHomePage> {
   late Stream<DocumentSnapshot> _providerRequestStream;
@@ -163,61 +158,76 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Accueil Prestataire'),
-        backgroundColor: Colors.green,
         actions: [
-          StreamBuilder<int>(
-            stream: ProviderChatListScreen.getTotalUnreadCount(),
-            builder: (context, snapshot) {
-              final unreadCount = snapshot.data ?? 0;
-              return badges.Badge(
-                showBadge: unreadCount > 0,
-                badgeContent: Text(
-                  unreadCount.toString(),
-                  style: const TextStyle(color: Colors.white),
-                ),
-                position: badges.BadgePosition.topEnd(top: 0, end: 0),
-                child: IconButton(
-                  icon: const Icon(Icons.chat),
-                  onPressed: () => context.go('/prestataireHome/chat'),
-                ),
-              );
-            },
-          ),
-          StreamBuilder<int>(
-            stream: ProviderNotificationsPage.getUnreadNotificationsCount(),
-            builder: (context, snapshot) {
-              final unreadCount = snapshot.data ?? 0;
-              return badges.Badge(
-                showBadge: unreadCount > 0,
-                badgeContent: Text(
-                  unreadCount.toString(),
-                  style: const TextStyle(color: Colors.white),
-                ),
-                position: badges.BadgePosition.topEnd(top: 0, end: 0),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications),
-                  onPressed: () => context.go('/prestataireHome/notifications'),
-                ),
-              );
-            },
-          ),
+          // Add logout button in app bar
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
-            tooltip: "Se déconnecter",
+            tooltip: 'Déconnexion',
           ),
         ],
       ),
-      body: Center(
+      // Remove the drawer since there's no sidebar for this page
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Bienvenue sur votre espace prestataire !',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // Provider status card
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Statut de votre compte prestataire',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildProviderStatus(),
+                  ],
+                ),
+              ),
             ),
+            
+            const SizedBox(height: 20),
+            
+            // Service Requests button
+            ElevatedButton.icon(
+              onPressed: () => context.push('/prestataireHome/requests'),
+              icon: const Icon(Icons.assignment),
+              label: const Text('Voir les demandes de service'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Add logout button at the bottom as well
+            ElevatedButton.icon(
+              onPressed: () => _logout(context),
+              icon: const Icon(Icons.logout),
+              label: const Text('Déconnexion'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                backgroundColor: Colors.red.shade100,
+                foregroundColor: Colors.red.shade900,
+              ),
+            ),
+            
             const SizedBox(height: 24),
-            _buildProviderStatus(),
           ],
         ),
       ),

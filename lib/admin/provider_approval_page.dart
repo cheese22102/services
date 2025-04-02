@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../notifications_service.dart';
+import 'package:go_router/go_router.dart';
 
 // Move VerificationItem class outside
 class VerificationItem {
@@ -187,7 +188,7 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
                       item.isVerified = value ?? false;
                     });
                   },
-                )),
+                )).toList(),
 
                 const Divider(height: 32),
                 const Text('Commentaire:', 
@@ -225,7 +226,8 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              // Replace Navigator.pop with context.pop
+              onPressed: () => context.pop(),
               child: const Text('Fermer'),
             ),
             TextButton(

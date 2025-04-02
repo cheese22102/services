@@ -43,101 +43,117 @@ class _ClientHomePageState extends State<ClientHomePage> {
             icon: const Icon(Icons.notifications_rounded),
             onPressed: () => context.push('/clientHome/notifications'),
           ),
-          // Remove the shopping cart icon button from app bar
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('services')
-            .snapshots(),
-        builder: (context, snapshot) {
-          // Add debug print
-          print('Services data: ${snapshot.data?.docs.length ?? 0} items');
-          
-          if (snapshot.hasError) {
-            print('Error fetching services: ${snapshot.error}');
-            return const Center(child: Text('Une erreur est survenue'));
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final services = snapshot.data?.docs ?? [];
-          
-          if (services.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.engineering, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'Aucun service disponible',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/clientHome/request-service'),  // Fix the path to match route definition
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Demander un service'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-            );
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
             ),
-            itemCount: services.length,
-            itemBuilder: (context, index) {
-              final service = services[index].data() as Map<String, dynamic>;
-              
-              return InkWell(
-                onTap: () => context.push('/clientHome/services/${service['name']}'), // Ajout du préfixe clientHome
-                child: Card(
-                  elevation: 4,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      service['imageUrl'] != null
-                          ? Image.network(
-                              service['imageUrl'],
-                              height: 48,
-                              width: 48,
-                              fit: BoxFit.cover,
-                            )
-                          : const Icon(
-                              Icons.home_repair_service,
-                              size: 48,
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('services')
+                  .orderBy('name')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Une erreur est survenue'));
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final services = snapshot.data!.docs;
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: services.length,
+                  itemBuilder: (context, index) {
+                    final service = services[index].data() as Map<String, dynamic>;
+                    
+                    // Also fix the service card navigation
+                    return InkWell(
+                      onTap: () => context.push('/clientHome/services/${service['name']}'),
+                      child: Card(
+                        elevation: 4,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            service['imageUrl'] != null
+                                ? Image.network(
+                                    service['imageUrl'],
+                                    height: 48,
+                                    width: 48,
+                                    fit: BoxFit.cover,
+                                  )
+                                : const Icon(
+                                    Icons.home_repair_service,
+                                    size: 48,
+                                  ),
+                            const SizedBox(height: 8),
+                            Text(
+                              service['name'],
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                      const SizedBox(height: 8),
-                      Text(
-                        service['name'],
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      // Modified bottom navigation bar
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ElevatedButton.icon(
-          onPressed: () => context.go('/clientHome/marketplace'), // Déjà corrigé
-          icon: const Icon(Icons.shopping_cart),
-          label: const Text("Marketplace"),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 50),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
+        ],
+      ),
+      // Replace the current bottomNavigationBar with a proper BottomNavigationBar
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0, // Home page is selected
+        onTap: (index) {
+          if (index == 0) {
+            // Already on home page, do nothing
+          } else if (index == 1) {
+            // Navigate to My Requests page
+            context.go('/clientHome/my-requests');
+          } else if (index == 2) {
+            // Navigate to Marketplace
+            context.go('/clientHome/marketplace');
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assignment),
+            label: 'Mes demandes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart),
+            label: 'Marketplace',
+          ),
+        ],
       ),
     );
   }

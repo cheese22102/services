@@ -3,6 +3,7 @@ import 'prestataire_home_page.dart';
 import 'provider_chat_list.dart';
 import 'provider_notifications_page.dart';
 import 'provider_registration.dart';
+import 'service_requests_page.dart';
 import '../chat/conversation_service_page.dart';
 
 final prestataireRoutes = GoRoute(
@@ -16,6 +17,10 @@ final prestataireRoutes = GoRoute(
     GoRoute(
       path: 'notifications',
       builder: (context, state) => const ProviderNotificationsPage(),
+    ),
+    GoRoute(
+      path: 'requests',
+      builder: (context, state) => const ServiceRequestsPage(),
     ),
     GoRoute(
       path: 'chat',

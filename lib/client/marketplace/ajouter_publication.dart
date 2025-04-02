@@ -27,7 +27,7 @@ class _AddPostPageState extends State<AddPostPage> {
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   String? _etatProduit; // "Neuf" ou "Occasion"
-  final List<File> _images = [];
+  List<File> _images = [];
   final _picker = ImagePicker();
   bool _isUploading = false;
   bool _isImageUploading = false;
@@ -324,7 +324,7 @@ class _AddPostPageState extends State<AddPostPage> {
             end: Alignment.bottomCenter,
             colors: [
               Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.background,
             ],
           ),
         ),

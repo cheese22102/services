@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../chat/conversation_service_page.dart';
+import 'provider_profile_page.dart';
 
 class ServiceProvidersPage extends StatelessWidget {
   final String serviceName;
@@ -69,41 +70,132 @@ class ServiceProvidersPage extends StatelessWidget {
 
                   return Card(
                     margin: const EdgeInsets.all(8),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: userData['avatarUrl'] != null
-                            ? NetworkImage(userData['avatarUrl'])
-                            : null,
-                        child: userData['avatarUrl'] == null
-                            ? Text(
-                                (userData['firstname'] ?? '?')[0].toUpperCase(),
-                              )
-                            : null,
-                      ),
-                      title: Text('${userData['firstname']} ${userData['lastname']}'),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Zone: ${providerData['workingArea']}'),
-                          Text(
-                            'Tarif: ${providerData['rateRange']['min']} - ${providerData['rateRange']['max']} DT/h'
-                          ),
-                          Text('Bio: ${providerData['bio']}'),
-                        ],
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.message),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ConversationServicePage(
-                                otherUserId: providerId,
-                                otherUserName: '${userData['firstname']} ${userData['lastname']}',
-                              ),
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProviderProfilePage(
+                              providerId: providerId,
+                              providerData: providerData,
+                              userData: userData,
+                              serviceName: serviceName,
                             ),
-                          );
-                        },
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 30,
+                                  backgroundImage: userData['avatarUrl'] != null
+                                      ? NetworkImage(userData['avatarUrl'])
+                                      : null,
+                                  child: userData['avatarUrl'] == null
+                                      ? Text(
+                                          (userData['firstname'] ?? '?')[0].toUpperCase(),
+                                          style: const TextStyle(fontSize: 24),
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${userData['firstname']} ${userData['lastname']}',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Zone: ${providerData['workingArea']}',
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                      Text(
+                                        'Tarif: ${providerData['rateRange']['min']} - ${providerData['rateRange']['max']} DT/h',
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (providerData['bio'] != null && providerData['bio'].toString().isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                'Bio:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              Text(
+                                providerData['bio'],
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton.icon(
+                                  icon: const Icon(Icons.person),
+                                  label: const Text('Voir profil'),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ProviderProfilePage(
+                                          providerId: providerId,
+                                          providerData: providerData,
+                                          userData: userData,
+                                          serviceName: serviceName,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  icon: const Icon(Icons.message),
+                                  label: const Text('Contacter'),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ConversationServicePage(
+                                          otherUserId: providerId,
+                                          otherUserName: '${userData['firstname']} ${userData['lastname']}',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
