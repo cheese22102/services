@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:cloudinary_url_gen/cloudinary.dart';
-import 'package:shared_preferences/shared_preferences.dart';  // Fixed import
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'providers/theme_provider.dart';
 import 'notifications_service.dart';
 import 'router.dart';
+import 'firebase_options.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
@@ -21,12 +23,48 @@ Future<bool> checkFirstLaunch() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  cloudinary.config.urlConfig.secure = true;
-  await NotificationsService.initialize();
   
-  final isFirstLaunch = await checkFirstLaunch();
-  runApp(MyApp(isFirstLaunch: isFirstLaunch));
+  try {
+    // Initialize Firebase with platform-specific options
+    if (kIsWeb) {
+      // For web, we need to initialize Firebase with web options
+      await Firebase.initializeApp(
+        // You can omit options for web if you've initialized Firebase in index.html
+        // But providing them here as well ensures proper initialization
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyDaghSyR8_TISxbwN1T2HVt_waYOO0A9II",
+          authDomain: "plateformeservices-72c64.firebaseapp.com",
+          projectId: "plateformeservices-72c64",
+          storageBucket: "plateformeservices-72c64.appspot.com",
+          messagingSenderId: "710615234824",
+          appId: "1:710615234824:web:8775e718f54818309ed4bd"
+        ),
+      );
+      print("Firebase initialized for web");
+    } else {
+      // For other platforms, use the platform-specific options
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print("Firebase initialized for non-web platform");
+    }
+    
+    // Configure Cloudinary
+    cloudinary.config.urlConfig.secure = true;
+    
+    // Only initialize notifications on non-web platforms
+    if (!kIsWeb) {
+      await NotificationsService.initialize();
+    }
+    
+    final isFirstLaunch = await checkFirstLaunch();
+    runApp(MyApp(isFirstLaunch: isFirstLaunch));
+  } catch (e) {
+    print('Error initializing app: $e');
+    // Fallback to run the app even if Firebase fails
+    final isFirstLaunch = await checkFirstLaunch();
+    runApp(MyApp(isFirstLaunch: isFirstLaunch));
+  }
 }
 
 class MyApp extends StatelessWidget {

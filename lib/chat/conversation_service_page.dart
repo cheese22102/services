@@ -8,11 +8,13 @@ import '../notifications_service.dart';
 class ConversationServicePage extends StatefulWidget {
   final String otherUserId;
   final String otherUserName;
+  final String serviceName; // Add this parameter
 
   const ConversationServicePage({
     super.key,
     required this.otherUserId,
     required this.otherUserName,
+    this.serviceName = '', // Make it optional with a default value
   });
 
   @override

@@ -5,45 +5,93 @@ service cloud.firestore {
     
     // Helper functions
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isParticipant(conversationId) {
-      return request.auth.uid in get(/databases/$(database)/documents/service_conversations/$(conversationId)).data.participants;
+    // Admin access - Allow admins to read and write to all collections
+    match /{document=**} {
+      allow read, write: if isAuthenticated() && isAdmin();
     }
 
-    // Service conversations
-    match /service_conversations/{conversationId} {
-      allow read, write: if isAuthenticated() && isParticipant(conversationId);
+    // Allow authenticated users to read most collections
+    match /marketplace/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /provider_reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Simplified conversation rules
+    match /conversations/{conversationId} {
+      allow read, write: if isAuthenticated();
       
-      // Messages subcollection
       match /messages/{messageId} {
-        allow read, write: if isAuthenticated() && isParticipant(conversationId);
+        allow read, write: if isAuthenticated();
       }
     }
 
-    // Provider requests collection
-    match /provider_requests/{userId} {
-      allow read, write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    match /service_conversations/{conversationId} {
+      allow read, write: if isAuthenticated();
       
-      // Notifications subcollection
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Provider requests - simplified to allow queries
+    match /provider_requests/{userId} {
+      allow read, list: if isAuthenticated();
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /providers/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /services/{serviceId} {
+      allow read, list: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
+    }
+
+    // Users collection - simplified
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      
+      // Allow access to notifications subcollection
       match /notifications/{notificationId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
+      
+      // Add rules for favorite_providers subcollection
+      match /favorite_providers/{providerId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+      }
     }
 
-    // Global rule - allow read/write for authenticated users
-    match /{document=**} {
-      allow read, write: if isAuthenticated();
+    // Service requests - simplified
+    match /serviceRequests/{requestId} {
+      allow read, list: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
     }
-    
-    // Admin-only collections
-    match /admin/{document=**} {
-      allow read, write: if isAuthenticated() && isAdmin();
+
+    match /public_data/{document=**} {
+      allow read: if isAuthenticated();
     }
   }
 }

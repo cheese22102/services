@@ -43,6 +43,7 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       final userIds = [_currentUser.uid, widget.otherUserId]..sort();
       _chatroomId = '${userIds[0]}_${userIds[1]}_${widget.postId}';
       
+      // Make sure we're using 'conversations' collection
       final chatRef = _firestore.collection('conversations').doc(_chatroomId);
       
       // Initialize or update chat
@@ -58,11 +59,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
           widget.otherUserId: 0,
         },
       }, SetOptions(merge: true));
-
-      // Reset unread count for current user
-      await chatRef.update({
-        'unreadCount.${_currentUser.uid}': 0,
-      });
 
       setState(() => _isLoading = false);
     } catch (e) {
@@ -81,7 +77,7 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       
       _messageController.clear();
 
-      // Send message
+      // Make sure we're using 'conversations' collection
       await _firestore
           .collection('conversations')
           .doc(_chatroomId)

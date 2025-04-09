@@ -512,7 +512,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                                                   width: 120,
                                                   onPressed: () {
                                                     context.push(
-                                                      '/clientHome/chat/conversation/${postData['userId']}',
+                                                      '/clientHome/marketplace/chat/conversation/${postData['userId']}',
                                                       extra: {
                                                         'postId': widget.post.id,
                                                         'otherUserName': userName,

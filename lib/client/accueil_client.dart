@@ -50,8 +50,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton.icon(
-              onPressed: () => context.push('/clientHome/request-service'),  // Fix the path to match route definition
-              icon: const Icon(Icons.add_circle_outline),
+            onPressed: () => context.push('/clientHome/request-service'),              icon: const Icon(Icons.add_circle_outline),
               label: const Text('Demander un service'),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),

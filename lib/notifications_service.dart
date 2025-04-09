@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:plateforme_services/client/marketplace/conversation_marketplace.dart';
 import 'package:plateforme_services/main.dart';
 import '/config/constants.dart';
@@ -14,7 +15,6 @@ class NotificationsService {
   static final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // Canal de notification pour les messages (son par défaut)
   static const AndroidNotificationChannel _messageChannel = AndroidNotificationChannel(
     'message_channel', 
     'New Message Notifications', 
@@ -24,7 +24,12 @@ class NotificationsService {
   );
 
   static Future<void> initialize() async {
-    // Demande de permissions
+    // Skip initialization for web platforms
+    if (kIsWeb) {
+      print('Skipping Firebase Messaging initialization on web platform');
+      return;
+    }
+
     await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
@@ -36,8 +41,6 @@ class NotificationsService {
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
     );
-
-    // Add this to your existing notification service initialization method:
     
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
@@ -84,28 +87,43 @@ class NotificationsService {
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_messageChannel);
 
-    // Gérer les messages en arrière-plan
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // Écouter les messages au premier plan
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
         _showNotification(message);
       }
     });
-
-    // Sauvegarde du token FCM dans Firestore
-    String? token = await _firebaseMessaging.getToken();
-    print(token);
-    if (token != null) {
-      _saveFCMToken(token);
-    }
-    _firebaseMessaging.onTokenRefresh.listen(_saveFCMToken);
   }
 
-  // Add these methods to your existing NotificationsService class
-  
-  // Save notification to Firestore when received
+  static Future<void> _sendFCMNotification({
+    required String token,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.notificationServerUrl}/send-notification'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'token': token,
+          'title': title,
+          'body': body,
+          'data': data,
+        }),
+      );
+        
+      if (response.statusCode != 200) {
+        print('Failed to send notification. Status: ${response.statusCode}, Body: ${response.body}');
+      }
+    } catch (e) {
+      print('Error sending notification: $e');
+    }
+  }
+
   static Future<void> _saveNotificationToFirestore(RemoteMessage message) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
@@ -124,7 +142,6 @@ class NotificationsService {
         });
   }
 
-  // Update the _showNotification method to also save to Firestore
   static Future<void> _showNotification(RemoteMessage message) async {
     // Save to Firestore first
     await _saveNotificationToFirestore(message);
@@ -148,24 +165,56 @@ class NotificationsService {
     );
   }
 
-  // Also update the background handler to save notifications
   static Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     print("Background message: ${message.messageId}");
     await _saveNotificationToFirestore(message);
   }
 
   static Future<void> _saveFCMToken(String token) async {
+    // Skip for web platforms
+    if (kIsWeb) {
+      print('Skipping FCM token save on web platform');
+      return;
+    }
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      await FirebaseFirestore.instance
+    if (uid == null) {
+      print('Cannot save FCM token: User not logged in');
+      return;
+    }
+    
+    try {
+      final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
-          .update({'fcmToken': token});
+          .get();
+
+      if (!userDoc.exists) {
+        // For new users, create the document with the token
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .set({
+              'fcmToken': token,
+              'tokenLastUpdated': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      } else {
+        // For existing users, update the token
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({
+              'fcmToken': token,
+              'tokenLastUpdated': FieldValue.serverTimestamp(),
+            });
+      }
+      print('FCM token saved successfully for user: $uid');
+    } catch (e) {
+      print('Error in _saveFCMToken: $e');
+      throw e; // Re-throw to handle in the calling method
     }
   }
 
-  /// Envoie une notification push via l’API Firebase Cloud Messaging V1.
-  /// Veillez à ne pas exposer vos clés sensibles dans le dépôt public.
   static Future<void> sendMessageNotification({
     required String receiverId,
     required String messageText,
@@ -179,11 +228,8 @@ class NotificationsService {
           .get();
 
       final receiverToken = receiverDoc.data()?['fcmToken'];
-      if (receiverToken == null) {
-        print('Receiver token is null for user: $receiverId');
-        return;
-      }
-
+      
+      // Skip FCM notification on web, but still save to Firestore
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) return;
       
@@ -205,39 +251,19 @@ class NotificationsService {
             },
           });
 
-      // Update the FCM notification sending part
-      final response = await http.post(
-        Uri.parse('https://fcm.googleapis.com/fcm/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=${AppConstants.fcmServerKey}',
-        },
-        body: jsonEncode({
-          'to': receiverToken,
-          'notification': {
-            'title': 'Nouveau message de $senderName',
-            'body': messageText,
-          },
-          'android': {
-            'notification': {
-              'channel_id': 'message_channel',
-              'sound': 'default',
-            },
-          },
-          'data': {
+      // Only send FCM if not on web and token exists
+      if (!kIsWeb && receiverToken != null) {
+        await _sendFCMNotification(
+          token: receiverToken,
+          title: 'Nouveau message de $senderName',
+          body: messageText,
+          data: {
             'chatroomId': chatroomId,
             'senderId': currentUserId,
             'type': 'message',
             'click_action': 'FLUTTER_NOTIFICATION_CLICK',
           },
-        }),
-      );
-
-      print('Notification sent: ${response.statusCode}');
-      if (response.statusCode != 200) {
-        print('FCM Error: ${response.body}');
-      } else {
-        print('FCM Success: ${response.body}');
+        );
       }
     } catch (e) {
       print('Error sending notification: $e');
@@ -252,8 +278,6 @@ class NotificationsService {
     required String action,
   }) async {
     try {
-      // Remove the OAuth2 credentials part
-      
       // Get the user's FCM token
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -261,11 +285,7 @@ class NotificationsService {
           .get();
 
       final userToken = userDoc.data()?['fcmToken'];
-      if (userToken == null) {
-        print('User token is null for user: $userId');
-        return;
-      }
-
+      
       // Save notification to Firestore
       await FirebaseFirestore.instance
           .collection('users')
@@ -284,213 +304,131 @@ class NotificationsService {
             },
           });
 
-      // Update the FCM notification sending part
-      final response = await http.post(
-        Uri.parse('https://fcm.googleapis.com/fcm/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=${AppConstants.fcmServerKey}',
-        },
-        body: jsonEncode({
-          'to': userToken,
-          'notification': {
-            'title': title,
-            'body': body,
-          },
-          'android': {
-            'notification': {
-              'channel_id': 'message_channel',
-              'sound': 'default',
-            },
-          },
-          'data': {
+      // Only send FCM if not on web and token exists
+      if (!kIsWeb && userToken != null) {
+        await _sendFCMNotification(
+          token: userToken,
+          title: title,
+          body: body,
+          data: {
             'type': 'marketplace',
             'postId': postId,
             'action': action,
             'click_action': 'FLUTTER_NOTIFICATION_CLICK',
           },
-        }),
-      );
-
-      print('Marketplace notification sent: ${response.statusCode}');
-      if (response.statusCode != 200) {
-        print('FCM Error: ${response.body}');
-      } else {
-        print('FCM Success: ${response.body}');
+        );
       }
     } catch (e) {
       print('Error sending marketplace notification: $e');
     }
   }
 
-  // Update the sendProviderStatusNotification method
   static Future<void> sendProviderStatusNotification({
-      required String providerId,
-      required String status,
-      String? rejectionReason,
-    }) async {
-      try {
-        // Remove the OAuth2 credentials part
-        
-        // Get the provider's FCM token
-        final providerDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(providerId)
-            .get();
-  
-        final providerToken = providerDoc.data()?['fcmToken'];
-        if (providerToken == null) {
-          print('Provider token is null for user: $providerId');
-          return;
-        }
-  
-        // Prepare notification content based on status
-        final title = status == 'approved' 
-            ? 'Demande approuvée'
-            : 'Demande refusée';
-            
-        final body = status == 'approved'
-            ? 'Félicitations ! Votre compte prestataire est maintenant actif.'
-            : 'Votre demande de prestataire a été refusée. ${rejectionReason ?? ''}';
-  
-        // Save notification to Firestore
-        await FirebaseFirestore.instance
-            .collection('provider_requests')
-            .doc(providerId)
-            .collection('notifications')
-            .add({
-              'title': title,
-              'body': body,
-              'type': status == 'approved' ? 'approval' : 'rejection',
-              'timestamp': FieldValue.serverTimestamp(),
-              'read': false,
-              'data': {
-                'status': status,
-                'rejectionReason': rejectionReason,
-                'type': 'provider_status',
-              },
-            });
-  
-        // Update the FCM notification sending part
-        final response = await http.post(
-          Uri.parse('https://fcm.googleapis.com/fcm/send'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'key=${AppConstants.fcmServerKey}',
-          },
-          body: jsonEncode({
-            'to': providerToken,
-            'notification': {
-              'title': title,
-              'body': body,
-            },
-            'android': {
-              'notification': {
-                'channel_id': 'message_channel',
-                'sound': 'default',
-              },
-            },
+    required String providerId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    try {
+      // Get the provider's FCM token
+      final providerDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(providerId)
+          .get();
+
+      final providerToken = providerDoc.data()?['fcmToken'];
+      
+      // Prepare notification content based on status
+      final title = status == 'approved' 
+          ? 'Demande approuvée'
+          : 'Demande refusée';
+          
+      final body = status == 'approved'
+          ? 'Félicitations ! Votre compte prestataire est maintenant actif.'
+          : 'Votre demande de prestataire a été refusée. ${rejectionReason ?? ''}';
+
+      // Save notification to Firestore
+      await FirebaseFirestore.instance
+          .collection('provider_requests')
+          .doc(providerId)
+          .collection('notifications')
+          .add({
+            'title': title,
+            'body': body,
+            'type': status == 'approved' ? 'approval' : 'rejection',
+            'timestamp': FieldValue.serverTimestamp(),
+            'read': false,
             'data': {
-              'type': 'provider_status',
               'status': status,
-              'rejectionReason': rejectionReason ?? '',
-              'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+              'rejectionReason': rejectionReason,
+              'type': 'provider_status',
             },
-          }),
+          });
+
+      // Only send FCM if not on web and token exists
+      if (!kIsWeb && providerToken != null) {
+        await _sendFCMNotification(
+          token: providerToken,
+          title: title,
+          body: body,
+          data: {
+            'type': 'provider_status',
+            'status': status,
+            'rejectionReason': rejectionReason ?? '',
+            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+          },
         );
-  
-        print('Provider status notification sent: ${response.statusCode}');
-        if (response.statusCode != 200) {
-          print('FCM Error: ${response.body}');
-        } else {
-          print('FCM Success: ${response.body}');
-        }
-      } catch (e) {
-        print('Error sending provider status notification: $e');
       }
+    } catch (e) {
+      print('Error sending provider status notification: $e');
     }
+  }
     
-    // Add this new method for sending notifications
-    static Future<void> sendNotification({
-      required String userId,
-      required String title,
-      required String body,
-      Map<String, dynamic>? data,
-    }) async {
-      try {
-        // Get the user's FCM token
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .get();
-        
-        if (!userDoc.exists) {
-          print('User document does not exist for userId: $userId');
-          return;
-        }
-        
-        final userData = userDoc.data();
-        final fcmToken = userData?['fcmToken'];
-        
-        if (fcmToken == null || fcmToken.isEmpty) {
-          print('No FCM token found for user: $userId');
-          return;
-        }
-        
-        // Save notification to Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('notifications')
-            .add({
-          'title': title,
-          'body': body,
-          'data': data ?? {},
-          'timestamp': FieldValue.serverTimestamp(),
-          'read': false,
-        });
-        
-        // Send FCM notification
+  // Update the general notification method as well
+  static Future<void> sendNotification({
+    required String userId,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      // Get the user's FCM token
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (!userDoc.exists) {
+        print('User document does not exist for userId: $userId');
+        return;
+      }
+      
+      final userData = userDoc.data();
+      final fcmToken = userData?['fcmToken'];
+      
+      // Save notification to Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .add({
+        'title': title,
+        'body': body,
+        'data': data ?? {},
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+      
+      // Only send FCM if not on web and token exists
+      if (!kIsWeb && fcmToken != null && fcmToken.isNotEmpty) {
         await _sendFCMNotification(
           token: fcmToken,
           title: title,
           body: body,
           data: data ?? {},
         );
-      } catch (e) {
-        print('Error sending notification: $e');
       }
+    } catch (e) {
+      print('Error sending notification: $e');
     }
-    
-    // Helper method to send FCM notification
-    static Future<void> _sendFCMNotification({
-      required String token,
-      required String title,
-      required String body,
-      required Map<String, dynamic> data,
-    }) async {
-      try {
-        final response = await http.post(
-          Uri.parse('https://fcm.googleapis.com/fcm/send'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'key=${AppConstants.fcmServerKey}',
-          },
-          body: jsonEncode({
-            'to': token,
-            'notification': {
-              'title': title,
-              'body': body,
-            },
-            'data': data,
-          }),
-        );
-        
-        if (response.statusCode != 200) {
-          print('Failed to send FCM notification. Status: ${response.statusCode}, Body: ${response.body}');
-        }
-      } catch (e) {
-        print('Error sending FCM notification: $e');
-      }
-    }
+  }
 }

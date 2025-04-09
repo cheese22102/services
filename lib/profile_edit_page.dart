@@ -5,11 +5,20 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'login_signup/connexion.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class ProfileEditPage extends StatefulWidget {
-  const ProfileEditPage({super.key});
+  final String? providerId;
+  final Map<String, dynamic>? providerData;
+  final Map<String, dynamic>? userData;
+
+  const ProfileEditPage({
+    super.key, 
+    this.providerId,
+    this.providerData,
+    this.userData,
+  });
 
   @override
   _ProfileEditPageState createState() => _ProfileEditPageState();
@@ -34,17 +43,27 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
     try {
-      final userData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
-          .get();
-
-      if (userData.exists) {
+      // If userData is provided through widget, use it
+      if (widget.userData != null) {
         setState(() {
-          _firstNameController.text = userData.data()?['firstname'] ?? '';
-          _lastNameController.text = userData.data()?['lastname'] ?? '';
-          _currentAvatarUrl = userData.data()?['avatarUrl'];
+          _firstNameController.text = widget.userData?['firstname'] ?? '';
+          _lastNameController.text = widget.userData?['lastname'] ?? '';
+          _currentAvatarUrl = widget.userData?['avatarUrl'];
         });
+      } else {
+        // Otherwise load from Firestore
+        final userData = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(FirebaseAuth.instance.currentUser!.uid)
+            .get();
+
+        if (userData.exists) {
+          setState(() {
+            _firstNameController.text = userData.data()?['firstname'] ?? '';
+            _lastNameController.text = userData.data()?['lastname'] ?? '';
+            _currentAvatarUrl = userData.data()?['avatarUrl'];
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -97,11 +116,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => context.pop(false),
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => context.pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Supprimer'),
           ),
@@ -145,11 +164,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       await FirebaseAuth.instance.signOut();
   
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
-        (route) => false,
-      );
+      context.go('/');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -183,7 +198,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profil mis à jour avec succès')),
       );
-      Navigator.pop(context);
+      context.pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur de mise à jour: $e')),

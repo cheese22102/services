@@ -4,6 +4,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
+import 'prestataire_sidebar.dart';
+import 'provider_notifications_page.dart';
 
 class PrestataireHomePage extends StatefulWidget {
   const PrestataireHomePage({super.key});
@@ -159,15 +161,49 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
       appBar: AppBar(
         title: const Text('Accueil Prestataire'),
         actions: [
-          // Add logout button in app bar
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _logout(context),
-            tooltip: 'Déconnexion',
+          // Add notifications button
+          StreamBuilder<int>(
+            stream: ProviderNotificationsPage.getUnreadNotificationsCount(),
+            builder: (context, snapshot) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () => context.push('/prestataireHome/notifications'),
+                    tooltip: 'Notifications',
+                  ),
+                  if (snapshot.hasData && snapshot.data! > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '${snapshot.data}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
-      // Remove the drawer since there's no sidebar for this page
+      drawer: const PrestataireSidebar(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -197,6 +233,37 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
             
             const SizedBox(height: 20),
             
+            // View Profile button
+            StreamBuilder<DocumentSnapshot>(
+              stream: _providerRequestStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SizedBox.shrink();
+                }
+                
+                final data = snapshot.data?.data() as Map<String, dynamic>?;
+                final status = data?['status'] as String?;
+                
+                // Only show the button if the provider is approved
+                if (status == 'approved') {
+                  return ElevatedButton.icon(
+                    onPressed: () => _viewProviderProfile(context),
+                    icon: const Icon(Icons.visibility),
+                    label: const Text('Voir mon profil prestataire'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            
+            const SizedBox(height: 12),
+            
             // Service Requests button
             ElevatedButton.icon(
               onPressed: () => context.push('/prestataireHome/requests'),
@@ -212,18 +279,16 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
             
             const SizedBox(height: 12),
             
-            // Add logout button at the bottom as well
+            // Messages button
             ElevatedButton.icon(
-              onPressed: () => _logout(context),
-              icon: const Icon(Icons.logout),
-              label: const Text('Déconnexion'),
+              onPressed: () => context.push('/prestataireHome/messages'),
+              icon: const Icon(Icons.message),
+              label: const Text('Messages'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 12,
                 ),
-                backgroundColor: Colors.red.shade100,
-                foregroundColor: Colors.red.shade900,
               ),
             ),
             
@@ -232,5 +297,51 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
         ),
       ),
     );
+  }
+  
+  // Add this method to view the provider's own profile
+  Future<void> _viewProviderProfile(BuildContext context) async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+    
+    try {
+      // Get provider data
+      final providerData = await FirebaseFirestore.instance
+          .collection('provider_requests')
+          .doc(userId)
+          .get();
+          
+      // Get user data
+      final userData = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (!mounted) return;
+      
+      // Get service name
+      final serviceId = providerData.data()?['serviceId'];
+      final serviceDoc = await FirebaseFirestore.instance
+          .collection('services')
+          .doc(serviceId)
+          .get();
+      final serviceName = serviceDoc.data()?['name'] ?? 'Service inconnu';
+      
+      if (!mounted) return;
+      
+      // Navigate to provider profile page with isOwnProfile flag using GoRouter
+      context.push('/prestataireHome/providerProfile', extra: {
+        'providerId': userId,
+        'providerData': providerData.data() ?? {},
+        'userData': userData.data() ?? {},
+        'serviceName': serviceName,
+        'isOwnProfile': true, // This flag will hide contact buttons and review options
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e')),
+      );
+    }
   }
 }

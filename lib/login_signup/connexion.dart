@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/social_icon.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/labeled_text_field.dart';
-import '../widgets/dark_mode_switch.dart';
-
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../front/custom_snackbar.dart';
+import '../front/custom_dialog.dart';
+import '../front/app_colors.dart';
+import '../front/custom_text_field.dart';
+import '../front/custom_button.dart';
+import '../front/loading_overlay.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,7 +21,6 @@ class LoginPage extends StatefulWidget {
   _LoginPageState createState() => _LoginPageState();
 }
 
-// Add this getter near the top of your _LoginPageState class, after the variable declarations
 class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   late AnimationController _controller;
   final _formKey = GlobalKey<FormState>();
@@ -38,417 +41,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(seconds: 1),
     );
     _loadSavedCredentials();
-    _controller.forward();
-  }
-
-  Future<void> _loadSavedCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _emailController.text = prefs.getString('savedEmail') ?? '';
-      _passwordController.text = prefs.getString('savedPassword') ?? '';
-      _rememberMe = prefs.getBool('rememberMe') ?? false;
-    });
-  }
-
-  Future<void> _saveCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_rememberMe) {
-      await prefs.setString('savedEmail', _emailController.text);
-      await prefs.setString('savedPassword', _passwordController.text);
-    } else {
-      // Clear saved credentials if "remember me" is unchecked
-      await prefs.remove('savedEmail');
-      await prefs.remove('savedPassword');
-    }
-    await prefs.setBool('rememberMe', _rememberMe);
-  }
-
-  Future<void> _login() async {
-    // Reset error messages
-    setState(() {
-      _emailError = null;
-      _passwordError = null;
-    });
-
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-    
-    try {
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (!userCredential.user!.emailVerified) {
-        throw FirebaseAuthException(
-          code: 'email-not-verified',
-          message: 'Veuillez vérifier votre email',
-        );
-      }
-
-      await _saveCredentials();
-      _redirectToHome(userCredential.user!);
-    } on FirebaseAuthException catch (e) {
-      _handleError(e);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _handleError(FirebaseAuthException e) {
-    String message = 'Erreur de connexion';
-    
-    // Field-specific error handling
-    switch (e.code) {
-      case 'user-not-found':
-        setState(() => _emailError = 'Aucun compte associé à cet email');
-        message = 'Utilisateur non trouvé';
-        break;
-      case 'wrong-password':
-        setState(() => _passwordError = 'Mot de passe incorrect');
-        message = 'Mot de passe incorrect';
-        break;
-      case 'invalid-email':
-        setState(() => _emailError = 'Format d\'email invalide');
-        message = 'Format d\'email invalide';
-        break;
-      case 'too-many-requests':
-        message = 'Trop de tentatives. Veuillez réessayer plus tard';
-        break;
-      case 'email-not-verified':
-        message = 'Email non vérifié. Veuillez vérifier votre boîte de réception';
-        // Option to resend verification email
-        _showResendVerificationDialog();
-        return;
-      default:
-        message = e.message ?? 'Une erreur est survenue';
-    }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
-  }
-
-  void _redirectToHome(User user) async {
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-
-    if (!mounted) return;
-
-    // Redirect based on role using GoRouter
-    switch (doc.data()?['role']) {
-      case 'admin':
-        context.go('/admin');
-        break;
-      case 'client':
-        context.go('/clientHome');
-        break;
-      case 'prestataire':
-        context.go('/prestataireHome');
-        break;
-      default:
-        context.go('/marketplace');
-    }
-  }
-
-  void _showResendVerificationDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Email non vérifié'),
-        content: const Text('Votre adresse email n\'a pas été vérifiée. Souhaitez-vous recevoir un nouvel email de vérification?'),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Plus tard'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              context.pop();
-              try {
-                await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-                if (!mounted) return;
-                // Update to use the new route structure
-                context.push('/verification');
-                
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erreur: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Envoyer'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Add Google Sign-In method here
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
-    try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential = 
-          await FirebaseAuth.instance.signInWithCredential(credential);
-      
-      if (userCredential.user != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .get();
-  
-        if (!doc.exists) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .set({
-            'email': userCredential.user!.email,
-            'profileCompleted': false,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-          if (!mounted) return;
-          context.go('/signup2');
-          return;
-        }
-  
-        if (doc.data()?['profileCompleted'] != true) {
-          if (!mounted) return;
-          context.go('/signup2');
-          return;
-        }
-  
-        _redirectToHome(userCredential.user!);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google Sign-In Failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        actions: const [DarkModeSwitch()],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
-                Center(
-                  child: Image.asset(
-                    "assets/images/login.png",
-                    height: 180,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  "Connexion",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Veuillez vous connecter pour continuer",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-
-                // Email Field
-                LabeledTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  icon: Icons.email,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return "L'email est requis";
-                    return _emailError;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // In the build method, update the password field:
-                
-                // Password Field
-                LabeledTextField(
-                  controller: _passwordController,
-                  label: 'Mot de passe',
-                  hint: 'Entrez votre mot de passe',
-                  icon: Icons.lock,
-                  obscureText: _obscurePassword,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: Theme.of(context).brightness == Brightness.dark 
-                        ? Colors.grey[400] 
-                        : Colors.grey[600],
-                    ),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Le mot de passe est requis';
-                    return _passwordError;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Remember Me & Forgot Password
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _rememberMe,
-                          onChanged: (value) => setState(() => _rememberMe = value!),
-                          activeColor: const Color(0xFF0066FF),
-                        ),
-                        const Text(
-                          'Se souvenir de moi',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                    TextButton(
-                      onPressed: () => context.push('/forgot-password'),  // Update this navigation
-                      child: const Text(
-                        'Mot de passe oublié ?',
-                        style: TextStyle(
-                          color: Color(0xFF0066FF),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // Login Button
-                CustomButton(
-                  text: 'Se connecter',
-                  onPressed: _isLoading ? () {} : _login,
-                ),
-                const SizedBox(height: 32),
-
-                // Social Login
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Ou continuer avec',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildSocialButton(
-                      "assets/images/google.jpg",
-                      _handleGoogleSignIn,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                // Signup Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Vous n'avez pas de compte ? ",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    TextButton(
-                      onPressed: () => context.go('/signup'),  // Add the leading slash here
-                      child: Text(
-                        'S\'inscrire',
-                        style: TextStyle(
-                          color: isDark ? const Color(0xFF62B6CB) : const Color(0xFF1A5F7A),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton(String imagePath, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: SocialIcon(imagePath: imagePath),
-      ),
-    );
   }
 
   @override
@@ -457,5 +52,693 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('email');
+    final savedPassword = prefs.getString('password');
+    final rememberMe = prefs.getBool('rememberMe');
+
+    if (rememberMe == true && savedEmail != null && savedPassword != null) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword;
+        _rememberMe = true;
+      });
+    }
+  }
+
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString('email', _emailController.text);
+      await prefs.setString('password', _passwordController.text);
+      await prefs.setBool('rememberMe', true);
+    } else {
+      await prefs.remove('email');
+      await prefs.remove('password');
+      await prefs.setBool('rememberMe', false);
+    }
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    // Set loading state at the beginning
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _emailError = null;
+        _passwordError = null;
+      });
+    }
+
+    try {
+      // Add a small delay to ensure the loader is visible
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      // Save credentials if remember me is checked
+      await _saveCredentials();
+
+      // Get user data from Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        // User document doesn't exist, create it
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'email': userCredential.user!.email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Update last login
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .update({
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Subscribe to FCM topic for the user
+      await FirebaseMessaging.instance.subscribeToTopic('user_${userCredential.user!.uid}');
+
+      // Check if email is verified
+      if (!userCredential.user!.emailVerified) {
+        if (!mounted) return;
+        CustomSnackbar.showError(
+          context: context,
+          message: 'Veuillez vérifier votre email avant de vous connecter',
+        );
+        context.go('/verification');
+        return;
+      }
+
+      // Check if profile is complete
+      final userData = userDoc.data();
+      if (userData == null || userData['firstname'] == null || userData['lastname'] == null) {
+        if (!mounted) return;
+        CustomSnackbar.showInfo(
+          context: context,
+          message: 'Veuillez compléter votre profil',
+        );
+        context.go('/signup2');
+        return;
+      }
+
+      // Check user role and redirect
+      final role = userData['role'];
+      if (role == 'admin') {
+        if (!mounted) return;
+        CustomSnackbar.showSuccess(
+          context: context,
+          message: 'Bienvenue, administrateur!',
+        );
+        context.go('/admin');
+      } else if (role == 'prestataire') {
+        if (!mounted) return;
+        CustomSnackbar.showSuccess(
+          context: context,
+          message: 'Bienvenue, prestataire!',
+        );
+        context.go('/prestataireHome');
+      } else {
+        if (!mounted) return;
+        CustomSnackbar.showSuccess(
+          context: context,
+          message: 'Connexion réussie!',
+        );
+        context.go('/clientHome');
+      }
+    } on FirebaseAuthException catch (e) {
+      _handleAuthError(e);
+    } catch (e) {
+      setState(() {
+        _emailError = 'Une erreur inattendue s\'est produite: $e';
+      });
+      CustomSnackbar.showError(
+        context: context,
+        message: 'Une erreur inattendue s\'est produite',
+      );
+    } finally {
+      // Hide the loading overlay
+      LoadingOverlay.hide();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Add this method to handle Firebase Auth errors
+  void _handleAuthError(FirebaseAuthException e) {
+    String message = 'Une erreur s\'est produite lors de la connexion';
+    
+    switch (e.code) {
+      case 'user-not-found':
+        message = 'Aucun utilisateur trouvé avec cet email';
+        setState(() => _emailError = message);
+        break;
+      case 'wrong-password':
+        message = 'Mot de passe incorrect';
+        setState(() => _passwordError = message);
+        break;
+      case 'invalid-email':
+        message = 'Format d\'email invalide';
+        setState(() => _emailError = message);
+        break;
+      case 'user-disabled':
+        message = 'Ce compte a été désactivé';
+        setState(() => _emailError = message);
+        break;
+      case 'too-many-requests':
+        message = 'Trop de tentatives de connexion. Veuillez réessayer plus tard';
+        break;
+      default:
+        message = 'Erreur: ${e.message}';
+        break;
+    }
+    
+    CustomSnackbar.showError(
+      context: context,
+      message: message,
+    );
+  }
+
+  Future<void> _signInWithGoogle() async {
+    // Set loading state at the beginning
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _emailError = null;
+        _passwordError = null;
+      });
+    }
+    
+    // Show loading overlay
+    LoadingOverlay.show(context, message: 'Connexion avec Google...');
+
+    try {
+      // Add a small delay to ensure the loader is visible
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      UserCredential? userCredential;
+      
+      // Use different sign-in methods for web and mobile
+      if (kIsWeb) {
+        // Web implementation
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        
+        // Add scopes if needed
+        googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+        googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
+        googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+        
+        // Sign in with popup for web
+        userCredential = await FirebaseAuth.instance.signInWithPopup(googleProvider);
+      } else {
+        // Mobile implementation - with better error handling
+        try {
+          final GoogleSignInAccount? gUser = await _googleSignIn.signIn();
+          
+          // If user cancels the Google sign-in dialog
+          if (gUser == null) {
+            // Make sure to hide the loader if user cancels
+            LoadingOverlay.hide();
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+            print('Google Sign-In canceled by user');
+            return;
+          }
+          
+          print('Google Sign-In successful, getting auth details');
+          // Obtain auth details from request
+          final GoogleSignInAuthentication gAuth = await gUser.authentication;
+          
+          // Create a new credential for user
+          final credential = GoogleAuthProvider.credential(
+            accessToken: gAuth.accessToken,
+            idToken: gAuth.idToken,
+          );
+          
+          print('Signing in with Firebase using Google credential');
+          // Sign in with credential
+          userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+        } catch (googleError) {
+          print('Error during Google Sign-In process: $googleError');
+          // Make sure to hide the loader
+          LoadingOverlay.hide();
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            CustomSnackbar.showError(
+              context: context,
+              message: 'Erreur de connexion Google: ${googleError.toString()}',
+            );
+          }
+          return;
+        }
+      }
+      
+      // If sign-in was canceled or failed
+      if (userCredential == null) {
+        LoadingOverlay.hide();
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          CustomSnackbar.showError(
+            context: context,
+            message: 'La connexion avec Google a échoué',
+          );
+        }
+        return;
+      }
+      
+      print('Firebase Auth successful, checking if new user');
+      // Check if this is a new user
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+      
+      // Get or create user document
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+          
+      if (!userDoc.exists || isNewUser) {
+        print('Creating new user document');
+        // Create new user document
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'email': userCredential.user!.email,
+          'displayName': userCredential.user!.displayName,
+          'photoURL': userCredential.user!.photoURL,
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLogin': FieldValue.serverTimestamp(),
+          'role': 'client', // Default role
+        });
+        
+        // Hide loader before navigation
+        LoadingOverlay.hide();
+        
+        if (!mounted) return;
+        CustomSnackbar.showSuccess(
+          context: context,
+          message: 'Compte créé avec succès! Veuillez compléter votre profil.',
+        );
+        context.go('/signup2');
+        return;
+      } else {
+        // Update last login time for existing user
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .update({
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+        
+        // Subscribe to FCM topic for the user
+        try {
+          await FirebaseMessaging.instance.subscribeToTopic('user_${userCredential.user!.uid}');
+        } catch (e) {
+          print('Error subscribing to FCM topic: $e');
+          // Continue even if FCM subscription fails
+        }
+        
+        // Check if profile is complete
+        final userData = userDoc.data();
+        if (userData == null || userData['firstname'] == null || userData['lastname'] == null) {
+          // Hide loader before navigation
+          LoadingOverlay.hide();
+          
+          if (!mounted) return;
+          CustomSnackbar.showInfo(
+            context: context,
+            message: 'Veuillez compléter votre profil',
+          );
+          context.go('/signup2');
+          return;
+        }
+        
+        // Check user role and redirect
+        final role = userData['role'];
+        
+        // Hide loader before navigation
+        LoadingOverlay.hide();
+        
+        if (!mounted) return;
+        
+        if (role == 'admin') {
+          CustomSnackbar.showSuccess(
+            context: context,
+            message: 'Bienvenue, administrateur!',
+          );
+          context.go('/admin');
+        } else if (role == 'prestataire') {
+          CustomSnackbar.showSuccess(
+            context: context,
+            message: 'Bienvenue, prestataire!',
+          );
+          context.go('/prestataireHome');
+        } else {
+          CustomSnackbar.showSuccess(
+            context: context,
+            message: 'Connexion réussie!',
+          );
+          context.go('/clientHome');
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      // Hide loader on error
+      LoadingOverlay.hide();
+      _handleAuthError(e);
+    } catch (e) {
+      // Hide loader on error
+      LoadingOverlay.hide();
+      print('Google Sign-In Error: $e');
+      if (mounted) {
+        CustomDialog.showError(
+          context: context,
+          title: 'Erreur de connexion',
+          message: 'Une erreur s\'est produite lors de la connexion avec Google: $e',
+        );
+      }
+    } finally {
+      // This might not be called if we navigate away, so we need to hide the loader before navigation
+      LoadingOverlay.hide();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDarkMode ? AppColors.darkGradient : AppColors.lightGradient,
+            stops: AppColors.gradientStops,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0), // Added vertical padding
+                child: Card(
+                  elevation: 4, // Increased elevation for better visibility
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 5),
+                          
+                          // Login Image
+                          Container(
+                            height: 160, // Reduced from 240
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Image.asset(
+                              "assets/images/login.png",
+                              height: 120, // Reduced from 150
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 5), // Reduced spacing
+                          
+                          // App Title
+                          Text(
+                            "Services Pro",
+                            style: GoogleFonts.poppins(
+                              fontSize: 22, // Reduced from 24
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4), // Reduced from 8
+                          
+                          // Subtitle
+                          Text(
+                            "Veuillez vous connecter pour continuer",
+                            style: GoogleFonts.poppins(
+                              fontSize: 13, // Reduced from 14
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16), // Reduced from 24
+                          
+                          // Email Field
+                          CustomTextField(
+                            controller: _emailController,
+                            labelText: "Email",
+                            hintText: "Votre email",
+                            keyboardType: TextInputType.emailAddress,
+                            errorText: _emailError,
+                          ),
+                          const SizedBox(height: 12), // Reduced from 16
+                          
+                          // Password Field
+                          CustomTextField(
+                            controller: _passwordController,
+                            labelText: "Mot de passe",
+                            hintText: "Entrez votre mot de passe",
+                            obscureText: _obscurePassword,
+                            errorText: _passwordError,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 4), // Reduced from 8
+                          
+                          // Forgot Password Link
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {
+                                context.go('/forgot-password');
+                              },
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(50, 30),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Mot de passe oublié?',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: isDarkMode ? Colors.white70 : const Color(0xFF4D8C3F),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Remember Me Checkbox
+                          Row(
+                            children: [
+                              SizedBox(
+                                height: 20, // Reduced from 24
+                                width: 20, // Reduced from 24
+                                child: Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _rememberMe = value!;
+                                    });
+                                  },
+                                  activeColor: const Color(0xFF4D8C3F),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Se souvenir de moi',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13, // Reduced from 14
+                                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16), // Reduced from 24
+                          
+                          // Login Button
+                          CustomButton(
+                            text: 'Se connecter',
+                            onPressed: _login,
+                            isLoading: _isLoading,
+                            width: double.infinity,
+                            height: 45, // Reduced from default 50
+                            useFullScreenLoader: true, // Enable full-screen loader
+                          ),
+                          const SizedBox(height: 12), // Reduced from 16
+                          
+                          // Divider
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color: isDarkMode ? Colors.white24 : Colors.black12,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'Ou',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color: isDarkMode ? Colors.white24 : Colors.black12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Social Login Buttons - Row with Google and Facebook
+                          Row(
+                            children: [
+                              // Google Sign In Button
+                              Expanded(
+                                child: CustomButton(
+                                  text: 'Google',
+                                  onPressed: _signInWithGoogle,
+                                  isPrimary: false,
+                                  isLoading: _isLoading,
+                                  icon: Image.asset(
+                                    'assets/images/google.png',
+                                    height: 20,
+                                    width: 20,
+                                    color: isDarkMode ? Colors.white : null,
+                                    colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
+                                  ),
+                                  height: 45,
+                                  useFullScreenLoader: true, // Enable full-screen loader
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Facebook Sign In Button
+                              Expanded(
+                                child: CustomButton(
+                                  text: 'Facebook',
+                                  onPressed: () {
+                                    if (mounted) {  // Add this check
+                                      CustomSnackbar.showInfo(
+                                        context: context,
+                                        message: 'Connexion Facebook à venir',
+                                      );
+                                    }
+                                  },
+                                  isPrimary: false,
+                                  icon: Image.asset(
+                                    isDarkMode 
+                                      ? 'assets/images/facebook_dark.png'
+                                      : 'assets/images/facebook.png',
+                                    height: 20,
+                                    width: 20,
+                                  ),
+                                  height: 45,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Sign Up Link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Vous n\'avez pas de compte?',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  context.go('/signup');
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  minimumSize: const Size(50, 30),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'S\'inscrire',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../front/custom_snackbar.dart';
+import '../front/app_colors.dart';
+import '../front/custom_text_field.dart';
+import '../front/custom_button.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -12,11 +18,15 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  String? _emailError;
 
   Future<void> _sendResetEmail() async {
     if (!_formKey.currentState!.validate()) return;
     
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _emailError = null;
+    });
     
     try {
       // First, check if the email exists
@@ -28,140 +38,190 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       // If signInMethods is empty, no account exists with this email
       if (signInMethods.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Aucun compte trouvé avec cet email'),
-            backgroundColor: Colors.red,
-          ),
+        setState(() {
+          _emailError = 'Aucun compte trouvé avec cet email';
+        });
+        
+        CustomSnackbar.showError(
+          context: context,
+          message: 'Aucun compte trouvé avec cet email',
         );
-        setState(() => _isLoading = false);
         return;
       }
 
-      // If we reach here, the account exists, so send the reset email
+      // Send password reset email
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: _emailController.text.trim(),
       );
       
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email de réinitialisation envoyé!'),
-          backgroundColor: Colors.green,
-        ),
+      
+      CustomSnackbar.showSuccess(
+        context: context,
+        message: 'Email de réinitialisation envoyé! Vérifiez votre boîte de réception.',
       );
-      Navigator.pop(context);
+      
+      // Navigate back to login page after a short delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          context.go('/');
+        }
+      });
     } on FirebaseAuthException catch (e) {
-      String message = 'Erreur inconnue';
-      switch (e.code) {
-        case 'invalid-email':
-          message = 'Format d\'email invalide';
-          break;
-        case 'too-many-requests':
-          message = 'Trop de tentatives. Veuillez réessayer plus tard';
-          break;
-        default:
-          message = 'Une erreur s\'est produite. Veuillez réessayer';
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
+      setState(() {
+        _emailError = 'Erreur: ${e.message}';
+      });
+      
+      CustomSnackbar.showError(
+        context: context,
+        message: 'Erreur: ${e.message}',
+      );
+    } catch (e) {
+      setState(() {
+        _emailError = 'Une erreur inattendue s\'est produite';
+      });
+      
+      CustomSnackbar.showError(
+        context: context,
+        message: 'Une erreur inattendue s\'est produite',
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.green.withOpacity(0.3),
-              Colors.white,
-            ],
+            colors: isDarkMode ? AppColors.darkGradient : AppColors.lightGradient,
+            stops: AppColors.gradientStops,
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  const SizedBox(height: 40),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.green.withOpacity(0.1),
-                    ),
-                    child: const Icon(
-                      Icons.lock_reset_outlined,
-                      size: 80,
-                      color: Colors.green,
-                    ),
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  const SizedBox(height: 40),
-                  Text(
-                    'Réinitialisation du mot de passe',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Entrez votre adresse email pour recevoir un lien de réinitialisation',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Adresse Email',
-                      prefixIcon: const Icon(Icons.email),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Champ obligatoire';
-                      if (!value.contains('@')) return 'Email invalide';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _sendResetEmail,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 5),
+                          
+                          // Reset Password Image
+                          Container(
+                            height: 160,
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Image.asset(
+                              "assets/images/forgot_password.png",
+                              height: 120,
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                        )
-                      : const Text('Envoyer le lien de réinitialisation'),
+                          const SizedBox(height: 5),
+                          
+                          // Title
+                          Text(
+                            "Mot de passe oublié",
+                            style: GoogleFonts.poppins(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          
+                          // Subtitle
+                          Text(
+                            "Entrez votre email pour recevoir un lien de réinitialisation",
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Email Field
+                          CustomTextField(
+                            controller: _emailController,
+                            labelText: "Email",
+                            hintText: "Votre email",
+                            keyboardType: TextInputType.emailAddress,
+                            errorText: _emailError,
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Send Reset Link Button
+                          CustomButton(
+                            text: 'Envoyer le lien',
+                            onPressed: _sendResetEmail,
+                            isLoading: _isLoading,
+                            width: double.infinity,
+                            height: 45,
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Back to Login Link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Retour à',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  context.go('/');
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  minimumSize: const Size(50, 30),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'la connexion',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
