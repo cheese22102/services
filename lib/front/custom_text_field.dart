@@ -9,6 +9,7 @@ class CustomTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType keyboardType;
   final Widget? suffixIcon;
+  final Widget? prefixIcon; // This is already correctly defined
   final String? errorText;
   final FormFieldValidator<String>? validator;
 
@@ -20,6 +21,7 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.suffixIcon,
+    this.prefixIcon, // This is already correctly defined
     this.errorText,
     this.validator,
   }) : super(key: key);
@@ -44,6 +46,9 @@ class CustomTextField extends StatelessWidget {
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+          ),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.poppins(
@@ -71,6 +76,7 @@ class CustomTextField extends StatelessWidget {
               vertical: 14,
             ),
             suffixIcon: suffixIcon,
+            prefixIcon: prefixIcon,
             errorText: errorText,
           ),
           validator: validator,

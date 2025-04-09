@@ -5,12 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/custom_snackbar.dart';
-import '../front/custom_dialog.dart';
 import '../front/app_colors.dart';
 import '../front/custom_text_field.dart';
 import '../front/custom_button.dart';
 import '../front/loading_overlay.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../front/password_strength_indicator.dart'; // Add this import
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -49,6 +49,12 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Make sure to hide any active loaders when the component is disposed
+    try {
+      LoadingOverlay.hide();
+    } catch (e) {
+      // Ignore errors when trying to hide the overlay during disposal
+    }
     _controller.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -56,21 +62,27 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _showErrorDialog(String message) {
-    CustomDialog.show(
-      context: context,
-      title: "Erreur d'inscription",
-      message: message,
-    );
-  }
-
   Future<void> _signupWithEmail() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      // If validation fails, ensure loading state is reset
+      setState(() => _isLoading = false);
+      return;
+    }
     
-    setState(() => _isLoading = true);
-    LoadingOverlay.show(context);
+    // Reset error states
+    setState(() {
+      _isLoading = true;
+      _emailError = null;
+      _passwordError = null;
+    });
     
+    // Show loading overlay with message
     try {
+      LoadingOverlay.show(context, message: 'Création de votre compte...');
+      
+      // Add a small delay to ensure the loader is visible
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       // Create user with email and password
       final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -99,16 +111,24 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         'tokenLastUpdated': FieldValue.serverTimestamp(),
       });
 
-      LoadingOverlay.hide();
+      // Hide loading overlay before checking mounted state
+      _safeHideOverlay();
       
       if (!mounted) return;
+      
+      setState(() => _isLoading = false);
+      
       CustomSnackbar.showSuccess(
         context: context,
         message: "Votre compte a été créé avec succès. Veuillez vérifier votre email pour activer votre compte.",
       );
       context.push('/verification');
     } on FirebaseAuthException catch (e) {
-      LoadingOverlay.hide();
+      // Hide loading overlay
+      _safeHideOverlay();
+      
+      if (!mounted) return;
+      
       setState(() => _isLoading = false);
       
       String errorMessage = "Une erreur s'est produite lors de l'inscription.";
@@ -122,6 +142,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       } else if (e.code == 'invalid-email') {
         errorMessage = 'L\'email fourni n\'est pas valide.';
         setState(() => _emailError = errorMessage);
+      } else if (e.message != null && e.message!.contains('PASSWORD_DOES_NOT_MEET_REQUIREMENTS')) {
+        errorMessage = 'Le mot de passe doit contenir au moins une majuscule.';
+        setState(() => _passwordError = errorMessage);
       }
       
       CustomSnackbar.showError(
@@ -129,7 +152,11 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         message: errorMessage,
       );
     } catch (e) {
-      LoadingOverlay.hide();
+      // Hide loading overlay
+      _safeHideOverlay();
+      
+      if (!mounted) return;
+      
       setState(() => _isLoading = false);
       
       CustomSnackbar.showError(
@@ -139,14 +166,37 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-    LoadingOverlay.show(context);
-    
+  // Add this helper method to safely hide the overlay
+  void _safeHideOverlay() {
     try {
+      LoadingOverlay.hide();
+    } catch (e) {
+      print("Error hiding overlay: $e");
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    // Reset error states
+    setState(() {
+      _isLoading = true;
+      _emailError = null;
+      _passwordError = null;
+    });
+    
+    // Show loading overlay with message
+    try {
+      LoadingOverlay.show(context, message: 'Connexion avec Google...');
+      
+      // Add a small delay to ensure the loader is visible
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        LoadingOverlay.hide();
+        // User cancelled the sign-in flow
+        _safeHideOverlay();
+        
+        if (!mounted) return;
+        
         setState(() => _isLoading = false);
         return;
       }
@@ -195,6 +245,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           LoadingOverlay.hide();
           
           if (!mounted) return;
+          
+          setState(() => _isLoading = false);
+          
           CustomSnackbar.showSuccess(
             context: context,
             message: 'Compte créé avec succès! Veuillez compléter votre profil.',
@@ -221,6 +274,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
             LoadingOverlay.hide();
             
             if (!mounted) return;
+            
+            setState(() => _isLoading = false);
+            
             CustomSnackbar.showInfo(
               context: context,
               message: 'Veuillez compléter votre profil',
@@ -232,24 +288,25 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           // Hide loader before navigation
           LoadingOverlay.hide();
           
+          if (!mounted) return;
+          
+          setState(() => _isLoading = false);
+          
           // Check user role and redirect
           final role = userData['role'];
           if (role == 'admin') {
-            if (!mounted) return;
             CustomSnackbar.showSuccess(
               context: context,
               message: 'Bienvenue, administrateur!',
             );
             context.go('/admin');
           } else if (role == 'prestataire') {
-            if (!mounted) return;
             CustomSnackbar.showSuccess(
               context: context,
               message: 'Bienvenue, prestataire!',
             );
             context.go('/prestataireHome');
           } else {
-            if (!mounted) return;
             CustomSnackbar.showSuccess(
               context: context,
               message: 'Connexion réussie!',
@@ -259,7 +316,11 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         }
       }
     } on FirebaseAuthException catch (e) {
+      // Hide loading overlay
       LoadingOverlay.hide();
+      
+      if (!mounted) return;
+      
       setState(() => _isLoading = false);
       
       CustomSnackbar.showError(
@@ -267,7 +328,11 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         message: "Erreur Google : ${e.message}",
       );
     } catch (e) {
+      // Hide loading overlay
       LoadingOverlay.hide();
+      
+      if (!mounted) return;
+      
       setState(() => _isLoading = false);
       
       CustomSnackbar.showError(
@@ -354,14 +419,30 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           CustomTextField(
                             controller: _emailController,
                             labelText: 'Email',
-                            hintText: 'Email',
+                            hintText: 'Entrez votre adresse email',
                             keyboardType: TextInputType.emailAddress,
                             errorText: _emailError,
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Veuillez entrer votre email',
+                                );
                                 return 'Veuillez entrer votre email';
                               }
                               if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Veuillez entrer un email valide',
+                                );
                                 return 'Veuillez entrer un email valide';
                               }
                               return null;
@@ -369,13 +450,20 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 16),
                           
+                          // Find the Password Field section in your code and add the password strength indicator after it
+                          // This should be around line 370-400 in your file
+                          
                           // Password Field
                           CustomTextField(
                             controller: _passwordController,
                             labelText: 'Mot de passe',
-                            hintText: 'Mot de passe',
+                            hintText: 'Créez un mot de passe sécurisé (min. 6 caractères avec 1 majuscule)',
                             obscureText: _obscurePassword,
                             errorText: _passwordError,
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -388,14 +476,43 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               },
                             ),
                             validator: (value) {
+                              // Validator remains the same
                               if (value == null || value.isEmpty) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Veuillez entrer votre mot de passe',
+                                );
                                 return 'Veuillez entrer votre mot de passe';
                               }
                               if (value.length < 6) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Le mot de passe doit contenir au moins 6 caractères',
+                                );
                                 return 'Le mot de passe doit contenir au moins 6 caractères';
+                              }
+                              if (!value.contains(RegExp(r'[A-Z]'))) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Le mot de passe doit contenir au moins une majuscule',
+                                );
+                                return 'Le mot de passe doit contenir au moins une majuscule';
                               }
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Add the password strength indicator here
+                          PasswordStrengthIndicator(
+                            password: _passwordController.text,
+                            isDarkMode: isDarkMode,
                           ),
                           const SizedBox(height: 16),
                           
@@ -403,8 +520,12 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           CustomTextField(
                             controller: _confirmPasswordController,
                             labelText: 'Confirmer le mot de passe',
-                            hintText: 'Confirmer le mot de passe',
+                            hintText: 'Saisissez à nouveau votre mot de passe',
                             obscureText: _obscureConfirmPassword,
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
@@ -417,10 +538,23 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               },
                             ),
                             validator: (value) {
+                              // Validator remains the same
                               if (value == null || value.isEmpty) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Veuillez confirmer votre mot de passe',
+                                );
                                 return 'Veuillez confirmer votre mot de passe';
                               }
                               if (value != _passwordController.text) {
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                                CustomSnackbar.showError(
+                                  context: context,
+                                  message: 'Les mots de passe ne correspondent pas',
+                                );
                                 return 'Les mots de passe ne correspondent pas';
                               }
                               return null;
@@ -431,11 +565,20 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           // Signup Button
                           CustomButton(
                             text: "S'inscrire",
-                            onPressed: _signupWithEmail,
+                            onPressed: () {
+                              // First check if form is valid before showing loader
+                              if (_formKey.currentState!.validate()) {
+                                _signupWithEmail();
+                              } else {
+                                // Ensure loading state is reset if validation fails
+                                _safeHideOverlay();
+                                setState(() => _isLoading = false);
+                              }
+                            },
                             isLoading: _isLoading,
                             width: double.infinity,
-                            height: 45, // Same height as login button
-                            useFullScreenLoader: true, // Enable full-screen loader
+                            height: 45,
+                            useFullScreenLoader: true,
                           ),
                           const SizedBox(height: 12), // Same spacing as login button
                           
