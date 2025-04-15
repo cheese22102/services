@@ -13,6 +13,7 @@ import '../front/custom_text_field.dart';
 import '../front/custom_button.dart';
 import '../front/loading_overlay.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../front/page_transition.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -83,16 +84,22 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Set loading state first so we can show validation errors
+    setState(() {
+      _isLoading = true;
+      _emailError = null;
+      _passwordError = null;
+    });
 
-    // Set loading state at the beginning
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _emailError = null;
-        _passwordError = null;
-      });
+    // Check form validation
+    if (!_formKey.currentState!.validate()) {
+      // If validation fails, reset loading state and return
+      setState(() => _isLoading = false);
+      return;
     }
+    
+    // Show loading overlay only if validation passes
+    LoadingOverlay.show(context, message: 'Connexion en cours');
 
     try {
       // Add a small delay to ensure the loader is visible
@@ -249,7 +256,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
     
     // Show loading overlay
-    LoadingOverlay.show(context, message: 'Connexion avec Google...');
+    LoadingOverlay.show(context, message: 'Connexion avec Google');
 
     try {
       // Add a small delay to ensure the loader is visible
@@ -283,11 +290,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 _isLoading = false;
               });
             }
-            print('Google Sign-In canceled by user');
             return;
           }
           
-          print('Google Sign-In successful, getting auth details');
           // Obtain auth details from request
           final GoogleSignInAuthentication gAuth = await gUser.authentication;
           
@@ -297,11 +302,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             idToken: gAuth.idToken,
           );
           
-          print('Signing in with Firebase using Google credential');
           // Sign in with credential
           userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
         } catch (googleError) {
-          print('Error during Google Sign-In process: $googleError');
           // Make sure to hide the loader
           LoadingOverlay.hide();
           if (mounted) {
@@ -332,7 +335,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         return;
       }
       
-      print('Firebase Auth successful, checking if new user');
       // Check if this is a new user
       final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
       
@@ -343,7 +345,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           .get();
           
       if (!userDoc.exists || isNewUser) {
-        print('Creating new user document');
         // Create new user document
         await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
           'email': userCredential.user!.email,
@@ -377,7 +378,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         try {
           await FirebaseMessaging.instance.subscribeToTopic('user_${userCredential.user!.uid}');
         } catch (e) {
-          print('Error subscribing to FCM topic: $e');
           // Continue even if FCM subscription fails
         }
         
@@ -431,7 +431,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     } catch (e) {
       // Hide loader on error
       LoadingOverlay.hide();
-      print('Google Sign-In Error: $e');
       if (mounted) {
         CustomDialog.showError(
           context: context,
@@ -452,8 +451,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 600;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -527,26 +524,43 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           // Email Field
                           CustomTextField(
                             controller: _emailController,
-                            labelText: "Email",
-                            hintText: "Votre email",
+                            labelText: 'Email',
+                            hintText: 'Entrez votre adresse email',
                             keyboardType: TextInputType.emailAddress,
                             errorText: _emailError,
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                // Reset loading state when validation fails
+                                if (_isLoading) {
+                                  setState(() => _isLoading = false);
+                                  LoadingOverlay.hide();
+                                }
+                                return 'Veuillez entrer votre email';
+                              }
+                              return null;
+                            },
                           ),
-                          const SizedBox(height: 12), // Reduced from 16
+                          const SizedBox(height: 16),
                           
                           // Password Field
                           CustomTextField(
                             controller: _passwordController,
-                            labelText: "Mot de passe",
-                            hintText: "Entrez votre mot de passe",
+                            labelText: 'Mot de passe',
+                            hintText: 'Entrez votre mot de passe',
                             obscureText: _obscurePassword,
                             errorText: _passwordError,
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                               onPressed: () {
                                 setState(() {
@@ -554,6 +568,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 });
                               },
                             ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                // Reset loading state when validation fails
+                                if (_isLoading) {
+                                  setState(() => _isLoading = false);
+                                  LoadingOverlay.hide();
+                                }
+                                return 'Veuillez entrer votre mot de passe';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 4), // Reduced from 8
                           
@@ -619,6 +644,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             width: double.infinity,
                             height: 45, // Reduced from default 50
                             useFullScreenLoader: true, // Enable full-screen loader
+                            backgroundColor: isDark 
+                                ? CustomTextField.getBorderColor(context) // Utiliser la couleur de bordure en mode sombre
+                                : null, // Garder la couleur par défaut en mode clair
                           ),
                           const SizedBox(height: 12), // Reduced from 16
                           
@@ -703,7 +731,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Vous n\'avez pas de compte?',
+                                'Pas de compte?',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -711,7 +739,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  context.go('/signup');
+                                  context.go('/signup', extra: getSlideTransitionInfo(SlideDirection.leftToRight));
                                 },
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.only(left: 8),
@@ -719,7 +747,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 child: Text(
-                                  'S\'inscrire',
+                                  'Inscrivez vous',
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,

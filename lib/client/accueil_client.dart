@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/auth_helper.dart';
 import '../../widgets/sidebar.dart';
 import 'package:go_router/go_router.dart';
+import '../front/custom_bottom_nav.dart'; // Add this import
 
 class ClientHomePage extends StatefulWidget {
   const ClientHomePage({super.key});
@@ -13,6 +14,9 @@ class ClientHomePage extends StatefulWidget {
 }
 
 class _ClientHomePageState extends State<ClientHomePage> {
+  // Define the selected index for the bottom nav
+  final int _selectedIndex = 0; // Home page is index 0
+  
   @override
   void initState() {
     super.initState();
@@ -125,34 +129,9 @@ class _ClientHomePageState extends State<ClientHomePage> {
           ),
         ],
       ),
-      // Replace the current bottomNavigationBar with a proper BottomNavigationBar
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0, // Home page is selected
-        onTap: (index) {
-          if (index == 0) {
-            // Already on home page, do nothing
-          } else if (index == 1) {
-            // Navigate to My Requests page
-            context.go('/clientHome/my-requests');
-          } else if (index == 2) {
-            // Navigate to Marketplace
-            context.go('/clientHome/marketplace');
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Accueil',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment),
-            label: 'Mes demandes',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: 'Marketplace',
-          ),
-        ],
+      // Replace the current bottomNavigationBar with CustomBottomNav
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _selectedIndex,
       ),
     );
   }

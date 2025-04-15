@@ -38,51 +38,37 @@ final clientRoutes = GoRoute(
           path: 'my-products',
           builder: (context, state) => const MesProduitsPage(),
         ),
-        GoRoute(
-          path: 'chat',
-          builder: (context, state) => const ChatListScreen(),
-          routes: [
-            GoRoute(
-              path: 'conversation/:otherUserId',
-              builder: (context, state) {
-                final params = state.extra as Map<String, dynamic>;
-                return ChatScreenPage(
-                  otherUserId: state.pathParameters['otherUserId']!,
-                  postId: params['postId'],
-                  otherUserName: params['otherUserName'],
-                );
-              },
-            ),
-            // Ajouter cette route si elle n'existe pas déjà
-         
-          ],
-        ),
+       GoRoute(
+         path: 'chat',
+         builder: (context, state) => const ChatListScreen(),
+         routes: [
+           GoRoute(
+             path: 'conversation/:otherUserId',
+             builder: (context, state) {
+               final params = state.extra as Map<String, dynamic>;
+               return ChatScreenPage(
+                 otherUserId: state.pathParameters['otherUserId']!,
+                 postId: params['postId'],
+                 otherUserName: params['otherUserName'],
+               );
+             },
+           ),
+           // Keep only one route for chatId
+           GoRoute(
+             path: ':chatId',
+             builder: (context, state) {
+               final chatId = state.pathParameters['chatId']!;
+               return ChatScreenPage(chatId: chatId);
+             },
+           ),
+           // Remove the duplicate route below
+         ],
+       ),
         GoRoute(
           path: 'details/:postId',
           builder: (context, state) {
-            final post = state.extra as DocumentSnapshot?;
-            if (post == null) {
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('marketplace')
-                    .doc(state.pathParameters['postId'])
-                    .get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (!snapshot.hasData || snapshot.data == null) {
-                    return const Scaffold(
-                      body: Center(child: Text("Post not found")),
-                    );
-                  }
-                  return PostDetailsPage(post: snapshot.data!);
-                },
-              );
-            }
-            return PostDetailsPage(post: post);
+            final postId = state.pathParameters['postId']!;
+            return PostDetailsPage(postId: postId);
           },
         ),
         GoRoute(

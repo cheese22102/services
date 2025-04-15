@@ -9,7 +9,7 @@ class CustomTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType keyboardType;
   final Widget? suffixIcon;
-  final Widget? prefixIcon; // This is already correctly defined
+  final Widget? prefixIcon;
   final String? errorText;
   final FormFieldValidator<String>? validator;
 
@@ -21,14 +21,21 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.suffixIcon,
-    this.prefixIcon, // This is already correctly defined
+    this.prefixIcon,
     this.errorText,
     this.validator,
   }) : super(key: key);
 
+  // Méthode statique pour obtenir la couleur de bordure
+  static Color getBorderColor(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,15 +68,15 @@ class CustomTextField extends StatelessWidget {
                 : AppColors.lightInputBackground,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.lightBorderColor, width: 1.5),
+              borderSide: BorderSide(color: borderColor, width: 1.5),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.lightBorderColor, width: 1.5),
+              borderSide: BorderSide(color: borderColor, width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.lightBorderColor, width: 2.0),
+              borderSide: BorderSide(color: borderColor, width: 2.0),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,

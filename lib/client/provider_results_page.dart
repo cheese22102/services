@@ -40,7 +40,6 @@ class ProviderResultsPage extends StatefulWidget {
 class _ProviderResultsPageState extends State<ProviderResultsPage> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _matchedProviders = [];
-  String? _requestId;
   String _errorMessage = '';
 
   @override
@@ -102,7 +101,6 @@ class _ProviderResultsPageState extends State<ProviderResultsPage> {
       setState(() {
         _matchedProviders = providers;
         _isLoading = false;
-        _requestId = requestRef.id;
       });
 
     } catch (e) {

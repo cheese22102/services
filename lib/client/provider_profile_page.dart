@@ -298,27 +298,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
               try {
                 // Create a new service request
-                final requestRef = await FirebaseFirestore.instance
-                    .collection('service_requests')
-                    .add({
-                  'clientId': currentUserId,
-                  'providerId': widget.providerId,
-                  'serviceName': widget.serviceName,
-                  'description': _descriptionController.text,
-                  'status': 'pending', // pending, accepted, rejected, completed
-                  'timestamp': FieldValue.serverTimestamp(),
-                });
                 
                 // Create a conversation for this service
-                final conversationRef = await FirebaseFirestore.instance
-                    .collection('conversations')
-                    .add({
-                  'participants': [currentUserId, widget.providerId],
-                  'serviceRequestId': requestRef.id,
-                  'lastMessage': 'Nouvelle demande de service',
-                  'lastMessageTimestamp': FieldValue.serverTimestamp(),
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
                 
                 if (mounted) {
                   context.pop(); // Replace Navigator.pop with context.pop

@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
-import 'package:collection/collection.dart';
 
 class ProviderFinderService {
   // Upload images to cloud storage
@@ -363,68 +362,6 @@ class ProviderFinderService {
   }
 
   // Add this new helper method
-  static Future<Map<String, double>> _calculateProviderScore({
-    required String providerId,
-    required Map<String, dynamic> data,
-    required LatLng clientLocation,
-    required DateTime preferredDateTime,
-    required bool isImmediate,
-  }) async {
-    try {
-      // Get ratings
-      final reviews = await FirebaseFirestore.instance
-          .collection('provider_reviews')
-          .where('providerId', isEqualTo: providerId)
-          .get();
-      
-      double rating = 0.0;
-      if (reviews.docs.isNotEmpty) {
-        rating = reviews.docs.fold(0.0, (sum, doc) => 
-          sum + (doc.data()['rating'] as num).toDouble()) / reviews.docs.length;
-      }
-  
-      // Calculate distance
-      final providerLocation = data['exactLocation'];
-      if (providerLocation == null) return {'total': 0.0};
-      
-      final distance = Geolocator.distanceBetween(
-        clientLocation.latitude,
-        clientLocation.longitude,
-        providerLocation['latitude'],
-        providerLocation['longitude'],
-      ) / 1000; // Convert to km
-  
-      // Check availability
-      final isAvailable = await _isProviderAvailable(
-        data,
-        preferredDateTime,
-        isImmediate,
-        clientLocation,
-        providerLocation,
-      );
-  
-      if (!isAvailable) return {'total': 0.0};
-  
-      // Calculate score components
-      final distanceScore = 1.0 - (distance.clamp(0, 20) / 20); // 0-1 score
-      final ratingScore = rating / 5.0; // 0-1 score
-      final experienceScore = (data['completedServices'] ?? 0) / 100.0; // 0-1 score
-  
-      // Calculate total score (weighted average)
-      final totalScore = (distanceScore * 0.4) + 
-                      (ratingScore * 0.3) + 
-                      (experienceScore * 0.3);
-  
-      return {
-        'total': totalScore,
-        'rating': rating,
-        'distance': distance,
-      };
-    } catch (e) {
-      debugPrint('Error calculating provider score: $e');
-      return {'total': 0.0};
-    }
-  }
 
   // Helper method: Availability check
   static Future<bool> _isProviderAvailable(
@@ -468,49 +405,8 @@ class ProviderFinderService {
   }
 
   // Helper method: Distance calculation
-  static double _calculateDistance(LatLng clientLoc, Map<String, dynamic> providerLoc) {
-    return Geolocator.distanceBetween(
-      clientLoc.latitude,
-      clientLoc.longitude,
-      providerLoc['latitude'],
-      providerLoc['longitude'],
-    ) / 1000;
-  }
 
   // Helper method: Build provider data
-  static Map<String, dynamic> _buildProviderData(
-    Map<String, dynamic> data,
-    String providerId,
-    double rating,
-    int reviewCount,
-    double distance,
-  ) {
-    final completedJobs = data['completedServices'] ?? 0;
-    
-    // Enhanced scoring with clear weights
-    const distanceWeight = 0.4;
-    const ratingWeight = 0.3;
-    const experienceWeight = 0.2;
-    const priceWeight = 0.1;
-
-    final score = (distance.clamp(0, 20) * distanceWeight) +
-        ((5 - (rating * 0.5)) * ratingWeight) + // 0-5 rating impact
-        (completedJobs * experienceWeight) +
-        ((data['rateRange']?['min'] ?? 0) * priceWeight);
-
-    return {
-      'id': providerId,
-      'name': data['name'] ?? data['professionalEmail'] ?? 'Prestataire',
-      'profileImage': data['profileImage'] ?? '',
-      'rating': rating,
-      'reviewCount': reviewCount,
-      'distance': distance,
-      'completedJobs': completedJobs,
-      'hourlyRate': data['rateRange']?['min'] ?? 0,
-      'score': score,
-      // ... other fields ...
-    };
-  }
 
   // Helper method to get day name from weekday number
   static String _getDayName(int weekday) {

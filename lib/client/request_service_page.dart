@@ -1,10 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -21,7 +18,6 @@ class RequestServicePage extends StatefulWidget {
 }
 
 class _RequestServicePageState extends State<RequestServicePage> {
-  final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _pageController = PageController();
   String? _selectedService;
@@ -38,7 +34,6 @@ class _RequestServicePageState extends State<RequestServicePage> {
   bool _showResults = false;
   int _currentPage = 0;
   bool _isImmediateService = false;
-  String _requestId = '';
 
   @override
   void initState() {
@@ -153,26 +148,6 @@ class _RequestServicePageState extends State<RequestServicePage> {
     });
   }
 
-  Future<String?> _uploadImageToCloudinary(File image) async {
-    try {
-      final uri = Uri.parse('https://api.cloudinary.com/v1_1/your-cloud-name/image/upload');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['upload_preset'] = 'your-upload-preset'
-        ..files.add(await http.MultipartFile.fromPath('file', image.path));
-      
-      final response = await request.send();
-      if (response.statusCode == 200) {
-        final responseData = await response.stream.toBytes();
-        final responseString = String.fromCharCodes(responseData);
-        final jsonData = jsonDecode(responseString);
-        return jsonData['secure_url'];
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error uploading image: $e');
-      return null;
-    }
-  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(

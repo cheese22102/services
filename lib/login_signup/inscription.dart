@@ -11,6 +11,7 @@ import '../front/custom_button.dart';
 import '../front/loading_overlay.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../front/password_strength_indicator.dart'; // Add this import
+import '../front/page_transition.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -78,7 +79,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     
     // Show loading overlay with message
     try {
-      LoadingOverlay.show(context, message: 'Création de votre compte...');
+      LoadingOverlay.show(context, message: 'Création de votre compte');
       
       // Add a small delay to ensure the loader is visible
       await Future.delayed(const Duration(milliseconds: 300));
@@ -579,6 +580,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                             width: double.infinity,
                             height: 45,
                             useFullScreenLoader: true,
+                            backgroundColor: isDarkMode 
+                                ? CustomTextField.getBorderColor(context) // Utiliser la couleur de bordure en mode sombre
+                                : null, // Garder la couleur par défaut en mode clair
                           ),
                           const SizedBox(height: 12), // Same spacing as login button
                           
@@ -617,60 +621,46 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                             children: [
                               // Google Button
                               Expanded(
-                                child: ElevatedButton.icon(
+                                child: CustomButton(
+                                  text: 'Google',
                                   onPressed: _isLoading ? null : _signInWithGoogle,
+                                  isPrimary: false,
+                                  isLoading: _isLoading,
                                   icon: Image.asset(
                                     'assets/images/google.png',
-                                    height: 24,
-                                    width: 24,
+                                    height: 20,
+                                    width: 20,
                                     color: isDarkMode ? Colors.white : null,
                                     colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
                                   ),
-                                  label: const Text('Google'),
-                                  style: ElevatedButton.styleFrom(
-                                    foregroundColor: isDarkMode ? Colors.white : Colors.black87,
-                                    backgroundColor: isDarkMode ? Colors.grey[800] : Colors.white,
-                                    elevation: 1,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                      side: BorderSide(
-                                        color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
+                                  height: 45,
+                                  useFullScreenLoader: true,
+                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                                  textColor: isDarkMode ? Colors.white : Colors.black87,
                                 ),
                               ),
                               const SizedBox(width: 16),
                               // Facebook Button
                               Expanded(
-                                child: ElevatedButton.icon(
+                                child: CustomButton(
+                                  text: 'Facebook',
                                   onPressed: _isLoading ? null : () {
                                     CustomSnackbar.showInfo(
                                       context: context,
                                       message: 'La connexion avec Facebook sera bientôt disponible',
                                     );
                                   },
+                                  isPrimary: false,
                                   icon: Image.asset(
                                     isDarkMode 
                                         ? 'assets/images/facebook_dark.png' 
                                         : 'assets/images/facebook.png',
-                                    height: 24,
-                                    width: 24,
+                                    height: 20,
+                                    width: 20,
                                   ),
-                                  label: const Text('Facebook'),
-                                  style: ElevatedButton.styleFrom(
-                                    foregroundColor: isDarkMode ? Colors.white : Colors.black87,
-                                    backgroundColor: isDarkMode ? Colors.grey[800] : Colors.white,
-                                    elevation: 1,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                      side: BorderSide(
-                                        color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
+                                  height: 45,
+                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                                  textColor: isDarkMode ? Colors.white : Colors.black87,
                                 ),
                               ),
                             ],
@@ -690,7 +680,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  context.go('/');
+                                  context.go('/', extra: getSlideTransitionInfo(SlideDirection.rightToLeft));
                                 },
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.only(left: 8),
@@ -705,7 +695,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                     color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
                                   ),
                                 ),
-                        )],
+                              ),
+                        ],
                           ),
                         ],
                       ),

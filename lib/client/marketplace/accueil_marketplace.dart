@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../widgets/zoom_product.dart'; // Le widget ZoomProduct
 import 'package:go_router/go_router.dart';
-import '../../widgets/bottom_navbar.dart';
-import '../../widgets/search_bar.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../front/app_colors.dart';
+import '../../front/marketplace_card.dart'; 
+import '../../front/marketplace_filter.dart'; 
+import '../../front/marketplace_search.dart'; 
+import '../../front/custom_app_bar.dart';
+import '../../front/custom_bottom_nav.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -13,207 +17,410 @@ class MarketplacePage extends StatefulWidget {
 }
 
 class _MarketplacePageState extends State<MarketplacePage> {
-  // Add this variable for selected index
-  int _selectedIndex = 0;
+  // Navigation index
+  int _selectedIndex = 2; // Assuming marketplace is the 3rd tab
 
-  String searchQuery = '';
+  // Search and filter variables
+  String _searchQuery = '';
+  String _filterCondition = 'All';
+  bool _sortByDateAsc = false; // Default to newest first
+  RangeValues _priceRange = const RangeValues(0, 10000);
+  bool _isFilterVisible = false;
+  
+  // Scroll controller for hiding search bar
+  final ScrollController _scrollController = ScrollController();
+  bool _isSearchBarVisible = true;
 
-  // Variables de filtre
-  String _filterCondition = 'All'; // "All", "Neuf", "Occasion"
-  bool _sortByDateAsc = true; // true = date ascendante, false = descendante
-  RangeValues _priceRange = const RangeValues(0, 100000);
+  // Categories with added "Autre" category
+  final List<Map<String, dynamic>> _categories = [
+    {'name': 'Tous', 'icon': Icons.apps, 'isSelected': true},
+    {'name': 'Électronique', 'icon': Icons.phone_android, 'isSelected': false},
+    {'name': 'Vêtements', 'icon': Icons.checkroom, 'isSelected': false},
+    {'name': 'Maison', 'icon': Icons.chair, 'isSelected': false},
+    {'name': 'Sport', 'icon': Icons.sports_soccer, 'isSelected': false},
+    {'name': 'Véhicules', 'icon': Icons.directions_car, 'isSelected': false},
+    {'name': 'Jardinage', 'icon': Icons.grass, 'isSelected': false},
+    {'name': 'Autre', 'icon': Icons.more_horiz, 'isSelected': false}, // Added "Autre" category
+  ];
 
+  // Controller for search field
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
+    });
+    
+    // Add scroll listener to hide/show search bar
+    _scrollController.addListener(_scrollListener);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    super.dispose();
+  }
+  
+  // Scroll listener to hide/show search bar
+  // Modify the _scrollListener method to prevent interfering with normal scrolling
+  void _scrollListener() {
+  // Disable the behavior that might be causing the refresh issue
+  // We'll keep this empty to prevent any state changes during scrolling
+  }
+  
+  // Method to scroll to top and show search bar
+
+  // Cache pour le stream
+  Stream<QuerySnapshot>? _cachedStream;
+
+  // Get marketplace posts with filters
   Stream<QuerySnapshot> _getMarketplacePosts() {
-    return FirebaseFirestore.instance
-        .collection('marketplace')
-        .where('isValidated', isEqualTo: true)  // Only show validated posts
-        .orderBy('createdAt', descending: !_sortByDateAsc)
-        .snapshots();
-  }
+    // Reset the cached stream when filters change
+    _cachedStream = null;
+    
+    Query query = FirebaseFirestore.instance.collection('marketplace');
+    
+    // Only show validated posts
+    query = query.where('isValidated', isEqualTo: true);
 
-  // Ouvre le panneau de filtre
-  void _openFilterSheet() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        String localCondition = _filterCondition;
-        bool localSortAsc = _sortByDateAsc;
-        RangeValues localPriceRange = _priceRange;
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text("Filtrer les posts", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  // Tri par date
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Tri par date :"),
-                      DropdownButton<bool>(
-                        value: localSortAsc,
-                        items: const [
-                          DropdownMenuItem(value: true, child: Text("Ascendant")),
-                          DropdownMenuItem(value: false, child: Text("Descendant")),
-                        ],
-                        onChanged: (value) {
-                          setModalState(() {
-                            localSortAsc = value!;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Filtre par état
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        const Text("État du produit:"),
-                        const SizedBox(width: 16),
-                        ChoiceChip(
-                          label: const Text("Tous"),
-                          selected: localCondition == 'All',
-                          onSelected: (selected) {
-                            setModalState(() {
-                              localCondition = 'All';
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ChoiceChip(
-                          label: const Text("Neuf"),
-                          selected: localCondition == 'Neuf',
-                          onSelected: (selected) {
-                            setModalState(() {
-                              localCondition = 'Neuf';
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ChoiceChip(
-                          label: const Text("Occasion"),
-                          selected: localCondition == 'Occasion',
-                          onSelected: (selected) {
-                            setModalState(() {
-                              localCondition = 'Occasion';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Filtre par intervalle de prix
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Intervalle de prix (TND):"),
-                      RangeSlider(
-                        values: localPriceRange,
-                        min: 0,
-                        max: 100000,
-                        divisions: 100,
-                        labels: RangeLabels(
-                          localPriceRange.start.round().toString(),
-                          localPriceRange.end.round().toString(),
-                        ),
-                        onChanged: (values) {
-                          setModalState(() {
-                            localPriceRange = values;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _filterCondition = localCondition;
-                        _sortByDateAsc = localSortAsc;
-                        _priceRange = localPriceRange;
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: const Text("Appliquer"),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    // Apply condition filter
+    if (_filterCondition != 'All') {
+      query = query.where('condition', isEqualTo: _filterCondition);
+    }
+
+    // Apply price range filter
+    query = query.where('price', isGreaterThanOrEqualTo: _priceRange.start);
+    query = query.where('price', isLessThanOrEqualTo: _priceRange.end);
+
+    // Apply category filter
+    final selectedCategory = _categories.firstWhere(
+      (category) => category['isSelected'] == true,
+      orElse: () => _categories.first,
     );
+    
+    if (selectedCategory['name'] != 'Tous') {
+      if (selectedCategory['name'] == 'Autre') {
+        // For "Autre" category, we need a different approach
+        // We'll filter in the UI since Firebase doesn't support "not in" queries easily
+      } else {
+        query = query.where('category', isEqualTo: selectedCategory['name']);
+      }
+    }
+
+    // Apply sorting
+    query = query.orderBy('createdAt', descending: !_sortByDateAsc);
+
+    // Cache the stream
+    _cachedStream = query.snapshots();
+    return _cachedStream!;
   }
 
-  // Réinitialiser les filtres
-  void _clearFilters() {
+  void _selectCategory(int index) {
     setState(() {
-      _filterCondition = 'All';
-      _sortByDateAsc = true;
-      _priceRange = const RangeValues(0, 100000);
+      for (int i = 0; i < _categories.length; i++) {
+        _categories[i]['isSelected'] = (i == index);
+      }
+      // Reset the cached stream to force a new query with the updated category filter
+      _cachedStream = null;
     });
   }
 
+  void _toggleFilterVisibility() {
+    setState(() {
+      _isFilterVisible = !_isFilterVisible;
+    });
+  }
 
-  // In _onItemTapped method, change the chat route
+  void _applyFilters({
+    required String condition,
+    required bool sortByDateAsc,
+    required RangeValues priceRange,
+  }) {
+    setState(() {
+      _filterCondition = condition;
+      _sortByDateAsc = sortByDateAsc;
+      _priceRange = priceRange;
+      _isFilterVisible = false;
+    });
+  }
 
-  void _navigateToDetails(DocumentSnapshot post) {
-    print("Navigating to details with post ID: ${post.id}");
-    print("Post data: ${post.data()}");
-    context.push('/clientHome/marketplace/details/${post.id}', extra: post);
+  void _resetFilters() {
+    setState(() {
+      _filterCondition = 'All';
+      _sortByDateAsc = false;
+      _priceRange = const RangeValues(0, 10000);
+      _searchController.clear();
+      _searchQuery = '';
+      
+      // Reset categories
+      for (int i = 0; i < _categories.length; i++) {
+        _categories[i]['isSelected'] = (i == 0); // Select 'All' category
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        // Replace the sidebar menu with back arrow
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark 
-                  ? Colors.black38 
-                  : Colors.white38,
-              shape: BoxShape.circle,
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return WillPopScope(
+      onWillPop: () async {
+        return false; // Simplement retourner false sans appeler _scrollToTop
+      },
+      child: Scaffold(
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        appBar: CustomAppBar(
+          title: 'Marketplace',
+          showBackButton: false,
+          actions: [
+            IconButton(
+              icon: Icon(
+                Icons.add_circle_outline,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+              onPressed: () {
+                // Navigate to add new marketplace item using the correct route
+                context.push('/clientHome/marketplace/add');
+              },
             ),
-            child: const Icon(Icons.arrow_back),
-          ),
-          onPressed: () => context.go('/clientHome'),
+            IconButton(
+              icon: Icon(
+                _isFilterVisible ? Icons.filter_list_off : Icons.filter_list,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+              onPressed: _toggleFilterVisibility,
+            ),
+          ],
         ),
-        title: const Text('Marketplace'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _openFilterSheet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _clearFilters,
-          ),
-        ],
-      ),
-      // Remove the drawer property since we no longer need it
-      // drawer: const Sidebar(),
-      body: Column(
-        children: [
-          // Replace the old search bar with the new CustomSearchBar
-          CustomSearchBar(
-            onChanged: (value) {
-              setState(() {
-                searchQuery = value;
-              });
-            },
-            hintText: 'Rechercher un produit...',
+        body: Column(
+          children: [
+            // Search bar and categories (always visible)
+            Column(
+              children: [
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: MarketplaceSearch(
+                    controller: _searchController,
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchQuery = '';
+                      });
+                    },
+                  ),
+                ),
+                
+                // Categories
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    itemCount: _categories.length,
+                    itemBuilder: (context, index) {
+                      final category = _categories[index];
+                      final isSelected = category['isSelected'] as bool;
+                      
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: GestureDetector(
+                          onTap: () => _selectCategory(index),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                      : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Icon(
+                                  category['icon'] as IconData,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isDarkMode ? Colors.white70 : Colors.black54),
+                                  size: 30,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                category['name'] as String,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected
+                                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                      : (isDarkMode ? Colors.white70 : Colors.black54),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                
+                // Filter panel (conditionally visible)
+                if (_isFilterVisible)
+                  MarketplaceFilter(
+                    condition: _filterCondition,
+                    sortByDateAsc: _sortByDateAsc,
+                    priceRange: _priceRange,
+                    onApply: _applyFilters,
+                    onReset: _resetFilters,
+                  ),
+            ],
           ),
           
+          // Results count and sort indicator replaced with buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Buttons for favorites and my products
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              context.push('/clientHome/marketplace/favorites');
+                            },
+                            child: Ink(
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.favorite,
+                                      size: 14,
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        'Favoris',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              context.push('/clientHome/marketplace/my-products');
+                            },
+                            child: Ink(
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2,
+                                      size: 14,
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        'Mes articles',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Sort indicator
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _sortByDateAsc = !_sortByDateAsc;
+                    });
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Trier: ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                      Text(
+                        _sortByDateAsc ? 'Plus ancien' : 'Plus récent',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                      Icon(
+                        _sortByDateAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 14,
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Marketplace items
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _getMarketplacePosts(),
@@ -221,66 +428,158 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
+                
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Erreur de chargement: ${snapshot.error}',
+                      style: GoogleFonts.poppins(),
+                    ),
+                  );
+                }
+                
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "Aucun post disponible.",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: isDarkMode ? Colors.white54 : Colors.black38,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune annonce trouvée',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Essayez de modifier vos filtres',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.white54 : Colors.black45,
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 }
-
+                
+                // Get the selected category
+                final selectedCategory = _categories.firstWhere(
+                  (category) => category['isSelected'] == true,
+                  orElse: () => _categories.first,
+                );
+                
+                // Filter posts for the "Autre" category client-side
                 var posts = snapshot.data!.docs;
-                var filteredPosts = posts.where((post) {
-                  String title = post['title']?.toString().toLowerCase() ?? '';
-                  if (searchQuery.isNotEmpty && !title.contains(searchQuery.toLowerCase())) {
-                    return false;
-                  }
-                  if (_filterCondition != 'All') {
-                    String etat = post['etat']?.toString().toLowerCase() ?? '';
-                    if (etat != _filterCondition.toLowerCase()) {
-                      return false;
-                    }
-                  }
-                  String priceStr = post['price']?.toString() ?? '0';
-                  double price = double.tryParse(priceStr) ?? 0;
-                  if (price < _priceRange.start || price > _priceRange.end) {
-                    return false;
-                  }
-                  return true;
-                }).toList();
-
-                if (filteredPosts.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "Aucun produit ne correspond à vos critères.",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                if (selectedCategory['name'] == 'Autre') {
+                  // Get the list of standard categories (excluding "Tous" and "Autre")
+                  final standardCategories = _categories
+                      .where((cat) => cat['name'] != 'Tous' && cat['name'] != 'Autre')
+                      .map((cat) => cat['name'] as String)
+                      .toList();
+                  
+                  // Filter posts that don't belong to any standard category
+                  posts = posts.where((doc) {
+                    final category = doc['category'] as String?;
+                    return category != null && !standardCategories.contains(category);
+                  }).toList();
+                }
+                
+                // Filter by search query if provided
+                if (_searchQuery.isNotEmpty) {
+                  final query = _searchQuery.toLowerCase();
+                  posts = posts.where((doc) {
+                    final title = (doc['title'] as String).toLowerCase();
+                    final description = (doc['description'] as String).toLowerCase();
+                    return title.contains(query) || description.contains(query);
+                  }).toList();
+                }
+                
+                if (posts.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: isDarkMode ? Colors.white54 : Colors.black38,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune annonce trouvée',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Essayez de modifier vos filtres',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.white54 : Colors.black45,
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 }
-
+                
+                // Replace the GridView.builder with this updated version
                 return GridView.builder(
-                  padding: const EdgeInsets.all(16),
+                  controller: _scrollController,
+                  // Use NeverScrollableScrollPhysics to disable the native scrolling behavior
+                  // that might be causing the refresh, then wrap with ScrollConfiguration
+                  physics: const ScrollPhysics(), // Use basic ScrollPhysics
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 0.75,
+                    childAspectRatio: 0.8, // Adjust this ratio for card dimensions
+                    crossAxisSpacing: 8, // Increased for better spacing
+                    mainAxisSpacing: 8, // Increased for better spacing
                   ),
-                  itemCount: filteredPosts.length,
+                  itemCount: posts.length,
                   itemBuilder: (context, index) {
-                    var post = filteredPosts[index];
-                    List<dynamic>? images = post['images'];
-                    String imageUrl = images != null && images.isNotEmpty ? images[0] : "";
+                    final doc = posts[index];
+                    final data = doc.data() as Map<String, dynamic>;
                     
-                    return InkWell(
-                      onTap: () => _navigateToDetails(post),
-                      child: ZoomProduct(
-                        imageUrl: imageUrl,
-                        title: post['title'] ?? 'Produit sans titre',
-                        price: post['price'] != null ? double.tryParse(post['price'].toString()) ?? 0 : 0,
-                      ),
+                    // Ensure all required data is available and has valid types
+                    final String title = data['title'] as String? ?? 'Sans titre';
+                    final double price = (data['price'] is num) 
+                        ? (data['price'] as num).toDouble() 
+                        : 0.0;
+                    final String location = data['location'] as String? ?? 'Emplacement inconnu';
+                    final String condition = data['condition'] as String? ?? 'État inconnu';
+                    
+                    // Safely extract the image URL
+                    String imageUrl = 'https://via.placeholder.com/300';
+                    if (data['images'] is List && (data['images'] as List).isNotEmpty) {
+                      final firstImage = (data['images'] as List).first;
+                      if (firstImage is String) {
+                        imageUrl = firstImage;
+                      }
+                    }
+                    
+                    return MarketplaceCard(
+                      id: doc.id,
+                      title: title,
+                      price: price,
+                      location: location,
+                      imageUrl: imageUrl,
+                      condition: condition,
+                      onTap: () {
+                        // Navigate to detail page
+                        context.push('/clientHome/marketplace/details/${doc.id}');
+                      },
                     );
                   },
                 );
@@ -289,9 +588,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
           ),
         ],
       ),
-      bottomNavigationBar: MarketplaceBottomNav(
-        selectedIndex: _selectedIndex,
+      // Pas de floatingActionButton pour éviter les interférences
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _selectedIndex,
       ),
-    );
-  }
-} // Close class
+    ),
+  );
+}
+}

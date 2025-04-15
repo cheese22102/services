@@ -7,6 +7,8 @@ import 'dart:async';
 import '../front/custom_snackbar.dart';
 import '../front/app_colors.dart';
 import '../front/custom_button.dart';
+import '../front/page_transition.dart';
+import '../front/loading_overlay.dart'; // Add this import for LoadingOverlay
 
 class VerificationPage extends StatefulWidget {
   const VerificationPage({super.key});
@@ -81,10 +83,25 @@ class _VerificationPageState extends State<VerificationPage> {
   }
 
   Future<void> _resendVerification() async {
-    if (!_canResend) return;
+    if (!_canResend) {
+      // Show snackbar to indicate user needs to wait
+      CustomSnackbar.showInfo(
+        context: context,
+        message: 'Veuillez attendre $_timeoutSeconds secondes avant de renvoyer un email',
+      );
+      return;
+    }
 
+    // Set loading state
     setState(() => _isLoading = true);
+    
+    // Show loading overlay with message
+    LoadingOverlay.show(context, message: 'Envoi de l\'email...');
+    
     try {
+      // Add a small delay to ensure the loader is visible
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       await _user.sendEmailVerification();
       _timeoutSeconds = 60;
       _startResendTimeout();
@@ -101,256 +118,208 @@ class _VerificationPageState extends State<VerificationPage> {
         message: 'Erreur: ${e.toString()}',
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      // Hide the loading overlay
+      LoadingOverlay.hide();
+      
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
+    final size = MediaQuery.of(context).size;
+    
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDarkMode ? AppColors.darkGradient : AppColors.lightGradient,
-            stops: AppColors.gradientStops,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
+          onPressed: () {
+            context.go('/', extra: getSlideTransitionInfo(SlideDirection.rightToLeft));
+          },
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: size.width * 0.06,
+              vertical: size.height * 0.02,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Text(
+                  'Vérification Email',
+                  style: GoogleFonts.poppins(
+                    fontSize: size.width * 0.07,
+                    fontWeight: FontWeight.bold,
+                    color: isDarkMode ? Colors.white : Colors.black87,
                   ),
-                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Un email de vérification a été envoyé à ${_user.email}',
+                  style: GoogleFonts.poppins(
+                    fontSize: size.width * 0.04,
+                    color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+                
+                // Add image - using the same image as forgot password page
+                Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 5),
-                        
-                        // Verification Image
-                        Container(
-                          height: 160,
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Image.asset(
-                            "assets/images/email_verification.png",
-                            height: 120,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        
-                        // Title
-                        Text(
-                          "Vérification Email",
-                          style: GoogleFonts.poppins(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        
-                        // Subtitle
-                        Text(
-                          "Un email de vérification a été envoyé à",
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        
-                        // Email display
-                        Container(
-                          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: (isDarkMode ? Colors.green[800]! : Colors.green).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(
-                              color: (isDarkMode ? Colors.green[700]! : Colors.green[300])!,
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            _user.email ?? '',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.green[400] : Colors.green,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 16),
-                        
-                        // Instructions
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.blueGrey.shade800 : Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                "Veuillez suivre les instructions dans l'email pour vérifier votre compte.",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: isDarkMode ? Colors.white70 : Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                "Une fois vérifié, vous serez automatiquement redirigé.",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: isDarkMode ? Colors.white70 : Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        
-                        // Resend Button
-                        CustomButton(
-                          text: _canResend 
-                              ? 'Renvoyer l\'email' 
-                              : 'Renvoyer l\'email (${_timeoutSeconds}s)',
-                          onPressed: _canResend && !_isLoading 
-                              ? () { _resendVerification(); } 
-                              : () {}, // Provide an empty function instead of null
-                          isLoading: _isLoading,
-                          width: double.infinity,
-                          height: 45,
-                          isPrimary: _canResend,
-                          useFullScreenLoader: true, // Enable full-screen loader
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        // Warning about spam
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDarkMode ? Colors.orange.shade800 : Colors.orange.shade300,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                color: isDarkMode ? Colors.orange.shade300 : Colors.orange.shade800,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Si vous ne trouvez pas l\'email, vérifiez votre dossier spam.',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: isDarkMode ? Colors.orange.shade100 : Colors.orange.shade900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        // Back to Login Link
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Retour à',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                _timer?.cancel();
-                                context.go('/');
-                              },
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.only(left: 8),
-                                minimumSize: const Size(50, 30),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'la connexion',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    padding: EdgeInsets.symmetric(vertical: size.height * 0.03),
+                    child: Image.asset(
+                      'assets/images/emailverif.png',
+                      height: size.height * 0.2,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
-              ),
+                
+                // Instructions
+                Text(
+                  'Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification.',
+                  style: GoogleFonts.poppins(
+                    fontSize: size.width * 0.04,
+                    color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+                SizedBox(height: size.height * 0.02),
+                
+                // Countdown text
+                Center(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDarkMode 
+                          ? Colors.grey.shade800.withOpacity(0.5)
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _canResend
+                            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                            : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      _canResend 
+                        ? 'Vous pouvez renvoyer l\'email maintenant'
+                        : 'Vous pourrez renvoyer l\'email dans $_timeoutSeconds secondes',
+                      style: GoogleFonts.poppins(
+                        fontSize: size.width * 0.035,
+                        fontWeight: _canResend ? FontWeight.w600 : FontWeight.normal,
+                        color: _canResend
+                            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                            : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                SizedBox(height: size.height * 0.04),
+                
+                // Resend button
+                CustomButton(
+                  text: 'Renvoyer l\'email de vérification',
+                  onPressed: _canResend ? _resendVerification : null,
+                  isLoading: _isLoading,
+                  width: double.infinity,
+                  useFullScreenLoader: true,
+                ),
+                SizedBox(height: size.height * 0.03),
+                
+                // Back to login
+                Center(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'Retourner à ',
+                        style: GoogleFonts.poppins(
+                          fontSize: size.width * 0.035,
+                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          context.go('/', extra: getSlideTransitionInfo(SlideDirection.rightToLeft));
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'la page de connexion',
+                          style: GoogleFonts.poppins(
+                            fontSize: size.width * 0.035,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
-
+  
+  // Add this getter to determine if dark mode is active
+  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  
+  // Navigate based on profile completion
+  Future<void> _navigateBasedOnProfile() async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user.uid)
+          .get();
+      
+      if (!mounted) return;
+      
+      if (!userDoc.exists || userDoc.data()?['firstname'] == null) {
+        context.go('/signup2');
+      } else {
+        final role = userDoc.data()?['role'];
+        if (role == 'admin') {
+          context.go('/admin');
+        } else if (role == 'prestataire') {
+          context.go('/prestataireHome');
+        } else {
+          context.go('/clientHome');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error navigating based on profile: $e');
+      if (mounted) {
+        context.go('/');
+      }
+    }
+  }
+  
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
-  }
-
-  // Navigate based on profile completion
-  Future<void> _navigateBasedOnProfile() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_user.uid)
-        .get();
-
-    if (!mounted) return;
-
-    if (doc.exists) {
-      final data = doc.data();
-      final role = data?['role'] ?? 'client';
-      final profileCompleted = data?['profileCompleted'] ?? false;
-
-      if (profileCompleted) {
-        if (!mounted) return;
-        context.go(role == 'client' ? '/clientHome' : '/prestataireHome');
-        return;
-      }
-    }
-    
-    if (!mounted) return;
-    context.go('/signup2');
   }
 }

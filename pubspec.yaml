@@ -89,9 +89,10 @@ flutter:
   assets:
     - assets/images/google.png
     - assets/images/login.png
-    - assets/images/register.png
     - assets/images/facebook.png
     - assets/images/facebook_dark.png
+    - assets/images/motdepasseoublié.png
+    - assets/images/emailverif.png
 
   
 

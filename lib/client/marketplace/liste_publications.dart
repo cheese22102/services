@@ -2,11 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../widgets/zoom_product.dart';
-import '../../widgets/custom_card.dart';
-import '../../widgets/custom_button.dart';
-import '../../widgets/bottom_navbar.dart';
-
+import 'package:google_fonts/google_fonts.dart';
+import '../../front/app_colors.dart';
+import '../../front/custom_app_bar.dart';
+import '../../front/custom_bottom_nav.dart';
 
 class MesProduitsPage extends StatefulWidget {
   const MesProduitsPage({super.key});
@@ -15,455 +14,382 @@ class MesProduitsPage extends StatefulWidget {
   State<MesProduitsPage> createState() => _MesProduitsPageState();
 }
 
-
 class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final user = FirebaseAuth.instance.currentUser;
-  // Add this variable
-  final int _selectedIndex = 3; // My Products tab is index 3
+  // Update the selected index to marketplace (index 2)
+  final int _selectedIndex = 2; 
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Changed to 3 for the new tab
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
+  // Stream to get user's posts
+  Stream<QuerySnapshot> _getUserPosts() {
+    if (user == null) {
+      // Return an empty stream
+      return Stream.empty();
+    }
+    
+    return FirebaseFirestore.instance
+        .collection('marketplace')
+        .where('userId', isEqualTo: user!.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     if (user == null) {
-      return const Center(child: Text('Vous devez être connecté'));
-    }
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Mes Produits',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black38 : Colors.white38,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.arrow_back),
-          ),
-          onPressed: () => context.go('/clientHome/marketplace'),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Theme.of(context).colorScheme.primary,
-          labelColor: Theme.of(context).colorScheme.primary,
-          unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
-          tabs: const [
-            Tab(text: 'Posts Publiés'),
-            Tab(text: 'En Attente'),
-            Tab(text: 'Refusés'), // Added the third tab
-          ],
-        ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              Theme.of(context).scaffoldBackgroundColor,
+      return Scaffold(
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        appBar: const CustomAppBar(title: 'Mes Produits'),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: isDarkMode ? Colors.white54 : Colors.black38,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Vous devez être connecté',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                ),
+              ),
             ],
           ),
         ),
-        child: TabBarView(
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: AppBar(
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios,
+            color: isDarkMode ? Colors.white : Colors.black,
+            size: 20,
+          ),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Mes Publications',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        bottom: TabBar(
           controller: _tabController,
-          children: [
-            _PostsList(type: PostListType.published),
-            _PostsList(type: PostListType.pending),
-            _RejectedPostsList(),
+          labelColor: isDarkMode ? Colors.white : Colors.black,
+          unselectedLabelColor: isDarkMode ? Colors.white60 : Colors.black54,
+          indicatorColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+          tabs: const [
+            Tab(text: 'Tous'),
+            Tab(text: 'En attente'),
+            Tab(text: 'Validés'),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/clientHome/marketplace/add'),
-        icon: const Icon(Icons.add),
-        label: const Text('Nouveau Produit'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+      body: Column(
+        children: [
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Rechercher dans mes publications...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+            ),
+          ),
+          
+          // Posts list
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // All posts
+                _buildPostsList(context, false, null),
+                
+                // Pending posts
+                _buildPostsList(context, true, false),
+                
+                // Validated posts
+                _buildPostsList(context, true, true),
+              ],
+            ),
+          ),
+        ],
       ),
-      // Add this at the bottom of the Scaffold
-      bottomNavigationBar: MarketplaceBottomNav(
-        selectedIndex: _selectedIndex,
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _selectedIndex,
+        // Remove the onTap handler since CustomBottomNav now handles navigation internally
       ),
     );
   }
-}
 
-class _PostsList extends StatelessWidget {
-  final PostListType type;
-
-  const _PostsList({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isValidated = type == PostListType.published;
-
+  Widget _buildPostsList(BuildContext context, bool filterByValidation, bool? isValidated) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('marketplace')
-          .where('userId', isEqualTo: user?.uid)
-          .where('isValidated', isEqualTo: isValidated)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _getUserPosts(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Erreur: ${snapshot.error}'));
-        }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (snapshot.hasError) {
           return Center(
-            child: CircularProgressIndicator(
-              color: Theme.of(context).colorScheme.primary,
+            child: Text(
+              'Erreur: ${snapshot.error}',
+              style: GoogleFonts.poppins(color: Colors.red),
             ),
           );
         }
-
-        final posts = snapshot.data?.docs ?? [];
-
-        if (posts.isEmpty) {
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isValidated ? Icons.inventory_2_outlined : Icons.pending_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 64,
+                  color: isDarkMode ? Colors.white38 : Colors.black26,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Text(
-                  isValidated ? "Aucun produit publié" : "Aucun produit en attente",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+                  'Aucune publication trouvée',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.white70 : Colors.black54,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  isValidated 
-                      ? "Commencez à vendre en ajoutant\nvotre premier produit"
-                      : "Vos produits en attente de validation\napparaîtront ici",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            final data = post.data() as Map<String, dynamic>;
-            final images = List<String>.from(data['images'] ?? []);
-            final imageUrl = images.isNotEmpty ? images[0] : '';
-
-            return CustomCard(
-              title: '',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Stack(
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: GestureDetector(
-                            onTap: () => context.push(
-                              '/clientHome/marketplace/details/${post.id}',
-                              extra: post,
-                            ),
-                            child: Hero(
-                              tag: 'product_${post.id}',
-                              child: ZoomProduct(
-                                imageUrl: imageUrl,
-                                title: data['title'] ?? '',
-                                price: data['price'] != null 
-                                    ? double.tryParse(data['price'].toString()) ?? 0 
-                                    : 0,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isValidated 
-                                ? Colors.green.withOpacity(0.9)
-                                : Colors.orange.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isValidated ? Icons.check_circle : Icons.pending,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isValidated ? 'Publié' : 'En attente',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          data['title'] ?? '',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          data['description'] ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: isDark ? Colors.white70 : Colors.black87,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${data['price']} DT',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            CustomButton(
-                              onPressed: () => context.push(
-                                '/clientHome/marketplace/details/${post.id}',
-                                extra: post,
-                              ),
-                              text: 'Voir détails',
-                            ),
-                          ],
-                        ),
-                      ],
+                ElevatedButton(
+                  onPressed: () {
+                    context.push('/clientHome/marketplace/add');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-enum PostListType { published, pending, rejected }
-
-class _RejectedPostsList extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('marketplace_rejections')
-          .where('userId', isEqualTo: user?.uid)
-          .orderBy('rejectedAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Erreur: ${snapshot.error}'));
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          );
-        }
-
-        final rejectedPosts = snapshot.data?.docs ?? [];
-
-        if (rejectedPosts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.block_outlined,
-                    size: 64,
-                    color: Colors.red[700],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  "Aucune publication refusée",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red[700],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Les publications refusées\napparaîtront ici",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+                  child: Text(
+                    'Ajouter une publication',
+                    style: GoogleFonts.poppins(),
                   ),
                 ),
               ],
             ),
           );
         }
-
-        return ListView.builder(
+        
+        // Filter posts based on tab and search query
+        var filteredDocs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final title = data['title'] as String? ?? '';
+          final description = data['description'] as String? ?? '';
+          final matchesSearch = _searchQuery.isEmpty || 
+              title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              description.toLowerCase().contains(_searchQuery.toLowerCase());
+          
+          if (filterByValidation) {
+            final docIsValidated = data['isValidated'] as bool? ?? false;
+            return matchesSearch && docIsValidated == isValidated;
+          }
+          
+          return matchesSearch;
+        }).toList();
+        
+        if (filteredDocs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.search_off,
+                  size: 64,
+                  color: isDarkMode ? Colors.white38 : Colors.black26,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Aucun résultat trouvé',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        return GridView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: rejectedPosts.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.75,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: filteredDocs.length,
           itemBuilder: (context, index) {
-            final rejection = rejectedPosts[index].data() as Map<String, dynamic>;
-
-            return CustomCard(
-              title: '',
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+            final doc = filteredDocs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final String title = data['title'] ?? 'Sans titre';
+            final double price = (data['price'] is num) 
+                ? (data['price'] as num).toDouble() 
+                : 0.0;
+            final List<dynamic> images = data['images'] ?? [];
+            final bool isValidated = data['isValidated'] ?? false;
+            
+            return GestureDetector(
+              onTap: () {
+                context.push('/clientHome/marketplace/details/${doc.id}');
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.cancel_outlined,
-                          color: Colors.red[700],
-                          size: 24,
+                    // Status badge
+                    if (!isValidated)
+                      Container(
+                        margin: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Publication Refusée',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red[700],
+                        child: Text(
+                          'En attente',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      rejection['postTitle'] ?? 'Sans titre',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.red[200]!,
-                          width: 1,
                         ),
                       ),
+                    
+                    // Product image
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      child: SizedBox(
+                        height: 120,
+                        width: double.infinity,
+                        child: images.isNotEmpty
+                            ? Image.network(
+                                images[0],
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      color: isDarkMode ? Colors.white38 : Colors.black26,
+                                      size: 40,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: isDarkMode ? Colors.white38 : Colors.black26,
+                                  size: 40,
+                                ),
+                              ),
+                      ),
+                    ),
+                    
+                    // Product info
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Raison du refus:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red[700],
+                            title,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.white : Colors.black87,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            rejection['rejectionReason'] ?? 'Aucune raison fournie',
-                            style: TextStyle(
-                              color: Colors.red[900],
+                            '$price DT',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Refusé le ${_formatDate(rejection['rejectedAt'])}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: isDark ? Colors.white60 : Colors.black54,
-                          ),
                     ),
                   ],
                 ),
@@ -473,11 +399,5 @@ class _RejectedPostsList extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _formatDate(Timestamp? timestamp) {
-    if (timestamp == null) return 'Date inconnue';
-    final date = timestamp.toDate();
-    return '${date.day}/${date.month}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }

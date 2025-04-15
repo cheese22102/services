@@ -6,7 +6,7 @@ import 'app_colors.dart';
 class LoadingOverlay {
   static OverlayEntry? _overlayEntry;
   
-  static void show(BuildContext context, {String message = 'Chargement...'}) {
+  static void show(BuildContext context, {String message = 'Chargement'}) {
     // First hide any existing overlay to prevent multiple overlays
     hide();
     
@@ -126,7 +126,6 @@ class _HomeTransformationAnimationState extends State<_HomeTransformationAnimati
   late AnimationController _mainController;
   late AnimationController _toolsController;
   late AnimationController _fillController;
-  late Animation<double> _fillAnimation;
   
   // Service tools that will fall from top to bottom
   final List<IconData> _toolIcons = [
@@ -161,13 +160,6 @@ class _HomeTransformationAnimationState extends State<_HomeTransformationAnimati
     )..repeat();
     
     // House fill animation
-    _fillAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fillController,
-      curve: Curves.easeInOut,
-    ));
   }
   
   @override

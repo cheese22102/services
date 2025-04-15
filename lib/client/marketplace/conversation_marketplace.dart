@@ -8,12 +8,14 @@ class ChatScreenPage extends StatefulWidget {
   final String otherUserId; // ID of the other user (post owner or message sender)
   final String postId; // ID of the post
   final String otherUserName; // Name of the other user for display
+  final String? chatId; // Optional chat ID for direct access
 
   const ChatScreenPage({
     super.key,
-    required this.otherUserId,
-    required this.postId,
-    required this.otherUserName,
+    this.otherUserId = '',
+    this.postId = '',
+    this.otherUserName = '',
+    this.chatId,
   });
 
   @override
@@ -30,33 +32,83 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
   String? _errorMessage;
   final bool _isChatArchived = false;
   final ScrollController _scrollController = ScrollController();
+  String _otherUserId = '';
+  String _postId = '';
 
   @override
   void initState() {
     super.initState();
     _currentUser = FirebaseAuth.instance.currentUser!;
-    _initializeChat();
+    
+    if (widget.chatId != null && widget.chatId!.isNotEmpty) {
+      // If chatId is provided, use it directly and fetch other details
+      _chatroomId = widget.chatId!;
+      _fetchChatDetails();
+    } else {
+      // Otherwise use the provided user and post IDs
+      _otherUserId = widget.otherUserId;
+      _postId = widget.postId;
+      _initializeChat();
+    }
+  }
+
+  Future<void> _fetchChatDetails() async {
+    try {
+      final chatDoc = await _firestore.collection('conversations').doc(_chatroomId).get();
+      
+      if (!chatDoc.exists) {
+        setState(() {
+          _errorMessage = 'Conversation introuvable';
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      final chatData = chatDoc.data() as Map<String, dynamic>;
+      final participants = List<String>.from(chatData['participants'] ?? []);
+      
+      // Determine the other user ID
+      _otherUserId = participants.firstWhere(
+        (id) => id != _currentUser.uid,
+        orElse: () => '',
+      );
+      
+      // Get post ID
+      _postId = chatData['postId'] ?? '';
+      
+      // Mark messages as read for current user
+      await _firestore.collection('conversations').doc(_chatroomId).update({
+        'unreadCount.${_currentUser.uid}': 0,
+      });
+      
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur lors du chargement: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _initializeChat() async {
     try {
-      final userIds = [_currentUser.uid, widget.otherUserId]..sort();
-      _chatroomId = '${userIds[0]}_${userIds[1]}_${widget.postId}';
+      final userIds = [_currentUser.uid, _otherUserId]..sort();
+      _chatroomId = '${userIds[0]}_${userIds[1]}_$_postId';
       
       // Make sure we're using 'conversations' collection
       final chatRef = _firestore.collection('conversations').doc(_chatroomId);
       
       // Initialize or update chat
       await chatRef.set({
-        'participants': [_currentUser.uid, widget.otherUserId],
-        'postId': widget.postId,
+        'participants': [_currentUser.uid, _otherUserId],
+        'postId': _postId,
         'lastMessage': '',
         'lastMessageTime': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': _currentUser.uid,
         'unreadCount': {
           _currentUser.uid: 0,
-          widget.otherUserId: 0,
+          _otherUserId: 0,
         },
       }, SetOptions(merge: true));
 
@@ -204,23 +256,30 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
     if (_errorMessage != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Error')),
         body: Center(child: Text(_errorMessage!)),
       );
     }
+    
     return Scaffold(
       appBar: AppBar(
         title: FutureBuilder<DocumentSnapshot>(
-          future: _firestore.collection('marketplace').doc(widget.postId).get(),
+          // Use _postId instead of widget.postId since we set it in initState
+          future: _postId.isNotEmpty 
+              ? _firestore.collection('marketplace').doc(_postId).get()
+              : null,
           builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Text('Error loading post');
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Text('Chargement...');
             }
-            if (!snapshot.hasData || !snapshot.data!.exists) {
+            
+            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
               return const Text('Chat');
             }
+            
             final postData = snapshot.data!.data() as Map<String, dynamic>;
             final postTitle = postData['title'] ?? 'Chat';
             return Text(
