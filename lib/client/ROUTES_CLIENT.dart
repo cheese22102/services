@@ -13,15 +13,37 @@ import '../profile_edit_page.dart';
 import 'page_notifications.dart';
 import 'marketplace/liste_conversations.dart';
 import 'marketplace/conversation_marketplace.dart';
-import 'my_requests_page.dart'; // Make sure this import is present
 import '../chat/conversation_service_page.dart';  // Add this import
 import 'request_service_page.dart';
 import 'provider_profile_page.dart';
+import 'all_services_page.dart'; // Add this import
+import 'chatbot_page.dart';
+
 
 final clientRoutes = GoRoute(
   path: '/clientHome',
   builder: (context, state) => const ClientHomePage(),
   routes: [
+    // Add the all-services route
+    GoRoute(
+      path: 'all-services',
+      builder: (context, state) => const AllServicesPage(),
+    ),
+    
+    // Update the service-providers route to handle parameters
+    GoRoute(
+      path: 'service-providers/:serviceName',
+      builder: (context, state) {
+        final serviceName = state.pathParameters['serviceName'] ?? '';
+        return ServiceProvidersPage(serviceName: serviceName);
+      },
+    ),
+    GoRoute(
+  path: 'chatbot',
+  builder: (context, state) => const ChatbotPage(),
+),
+    
+    // Existing routes
     GoRoute(
       path: 'marketplace',
       builder: (context, state) => const MarketplacePage(),
@@ -114,13 +136,6 @@ final clientRoutes = GoRoute(
       path: 'request-service',
       builder: (context, state) => const RequestServicePage(),
     ),
-    GoRoute(
-      path: 'my-requests',
-      builder: (context, state) => const MyRequestsPage(),
-    ),
-    
-    // Provider profile route moved out of marketplace nesting
-    // Provider profile route
     GoRoute(
       path: 'provider/:providerId',
       builder: (context, state) {

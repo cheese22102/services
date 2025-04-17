@@ -8,6 +8,7 @@ import '../../front/marketplace_filter.dart';
 import '../../front/marketplace_search.dart'; 
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_bottom_nav.dart';
+import '../../front/sidebar.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -29,7 +30,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
   
   // Scroll controller for hiding search bar
   final ScrollController _scrollController = ScrollController();
-  bool _isSearchBarVisible = true;
 
   // Categories with added "Autre" category
   final List<Map<String, dynamic>> _categories = [
@@ -171,51 +171,73 @@ class _MarketplacePageState extends State<MarketplacePage> {
     
     return WillPopScope(
       onWillPop: () async {
-        return false; // Simplement retourner false sans appeler _scrollToTop
+        // Navigate to home page when back button is pressed
+        context.go('/clientHome');
+        return false;
       },
       child: Scaffold(
         backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        drawer: const Sidebar(), // Add the Sidebar widget as the drawer
         appBar: CustomAppBar(
           title: 'Marketplace',
           showBackButton: false,
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.add_circle_outline,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-              onPressed: () {
-                // Navigate to add new marketplace item using the correct route
-                context.push('/clientHome/marketplace/add');
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                _isFilterVisible ? Icons.filter_list_off : Icons.filter_list,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-              onPressed: _toggleFilterVisibility,
-            ),
-          ],
+          showSidebar: true,
+          showNotifications: true,
+          currentIndex: 2, // Marketplace index
+          backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
         ),
         body: Column(
           children: [
-            // Search bar and categories (always visible)
+            // Search bar with filter button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  // Search bar (takes most of the width)
+                  Expanded(
+                    flex: 5,
+                    child: MarketplaceSearch(
+                      controller: _searchController,
+                      hintText: 'Rechercher...',
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                      onClear: () {
+                        _searchController.clear();
+                        setState(() {
+                          _searchQuery = '';
+                        });
+                      },
+                    ),
+                  ),
+                  // Small gap
+                  const SizedBox(width: 8),
+                  // Filter button
+                  Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        _isFilterVisible ? Icons.filter_list_off : Icons.filter_list,
+                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                      ),
+                      onPressed: _toggleFilterVisibility,
+                      tooltip: 'Filtrer',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Categories (always visible)
             Column(
               children: [
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: MarketplaceSearch(
-                    controller: _searchController,
-                    onClear: () {
-                      _searchController.clear();
-                      setState(() {
-                        _searchQuery = '';
-                      });
-                    },
-                  ),
-                ),
+                // Remove duplicate search bar
                 
                 // Categories
                 SizedBox(
@@ -588,7 +610,10 @@ class _MarketplacePageState extends State<MarketplacePage> {
           ),
         ],
       ),
-      // Pas de floatingActionButton pour éviter les interférences
+      // Remove the floating action button
+      floatingActionButton: null,
+      floatingActionButtonLocation: null,
+      // Update the bottom navigation bar without centerButton parameter
       bottomNavigationBar: CustomBottomNav(
         currentIndex: _selectedIndex,
       ),

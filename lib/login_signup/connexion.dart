@@ -320,21 +320,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         }
       }
       
-      // If sign-in was canceled or failed
-      if (userCredential == null) {
-        LoadingOverlay.hide();
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          CustomSnackbar.showError(
-            context: context,
-            message: 'La connexion avec Google a échoué',
-          );
-        }
-        return;
-      }
-      
       // Check if this is a new user
       final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
       
@@ -348,7 +333,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         // Create new user document
         await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
           'email': userCredential.user!.email,
-          'displayName': userCredential.user!.displayName,
           'photoURL': userCredential.user!.photoURL,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLogin': FieldValue.serverTimestamp(),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
@@ -47,20 +46,6 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
     }
   }
 
-  Future<void> _logout(BuildContext context) async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      await GoogleSignIn().signOut();
-  
-      if (!mounted) return;
-      context.go('/');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erreur lors de la déconnexion")),
-      );
-    }
-  }
 
   Widget _buildProviderStatus() {
     return StreamBuilder<DocumentSnapshot>(

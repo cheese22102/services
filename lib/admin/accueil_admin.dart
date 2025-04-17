@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/auth_helper.dart';
-import '../../widgets/sidebar.dart';
+import '../front/sidebar.dart';
 import 'gérer_services.dart';
 import 'valider_publications.dart';
 import 'provider_approval_page.dart';

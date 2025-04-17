@@ -234,7 +234,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           // Create new user document
           await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
             'email': userCredential.user!.email,
-            'displayName': userCredential.user!.displayName,
             'photoURL': userCredential.user!.photoURL,
             'createdAt': FieldValue.serverTimestamp(),
             'lastLogin': FieldValue.serverTimestamp(),

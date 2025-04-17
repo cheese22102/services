@@ -414,7 +414,7 @@ class _Signup2PageState extends State<Signup2Page> {
         ),
         SizedBox(height: size.height * 0.03),
         
-        // Phone number field
+        // Phone number field with enhanced Tunisian validation
         CustomTextField(
           controller: _phoneController,
           labelText: 'Numéro de téléphone',
@@ -424,12 +424,58 @@ class _Signup2PageState extends State<Signup2Page> {
             if (value == null || value.isEmpty) {
               return 'Veuillez entrer votre numéro de téléphone';
             }
+            
+            // Check if it's exactly 8 digits
             if (!RegExp(r'^[0-9]{8}$').hasMatch(value)) {
               return 'Le numéro doit contenir 8 chiffres';
             }
+            
+            // Validate Tunisian phone number prefixes
+            final firstDigit = value.substring(0, 1);
+            if (!['2', '3', '4', '5', '9', '7'].contains(firstDigit)) {
+              return 'Numéro invalide. Doit commencer par 2, 3, 4, 5, 7 ou 9';
+            }
+            
+            // Additional validation for specific carrier prefixes
+            final prefix = value.substring(0, 2);
+            
+            // Ooredoo: 5x, 9x
+            // Tunisie Telecom: 2x, 4x, 7x
+            // Orange: 3x
+            final validPrefixes = [
+              // Tunisie Telecom
+              '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
+              '40', '41', '42', '43', '44', '45', '46', '47', '48', '49',
+              '70', '71', '72', '73', '74', '75', '76', '77', '78', '79',
+              // Ooredoo
+              '50', '51', '52', '53', '54', '55', '56', '57', '58', '59',
+              '90', '91', '92', '93', '94', '95', '96', '97', '98', '99',
+              // Orange
+              '30', '31', '32', '33', '34', '35', '36', '37', '38', '39',
+            ];
+            
+            if (!validPrefixes.contains(prefix)) {
+              return 'Préfixe de numéro invalide';
+            }
+            
             return null;
           },
+          prefixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(width: 12),
+              const Icon(Icons.phone),
+              const SizedBox(width: 8),
+              // Tunisia flag emoji
+              Text(
+                '🇹🇳',
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
         ),
+        // Removed the carrier explanation text
       ],
     );
   }

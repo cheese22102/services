@@ -6,8 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
-import '../../widgets/zoom_product.dart';
-import '../../widgets/bottom_navbar.dart';
+import '../../front/marketplace_card.dart';  // Changed from zoom_product to marketplace_card
 import '../../front/marketplace_search.dart';
 import '../../front/custom_bottom_nav.dart';
 
@@ -169,33 +168,51 @@ class _FavorisPageState extends State<FavorisPage> {
                   );
                 }
 
+                // Changed from GridView to match the marketplace page style
                 return GridView.builder(
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.75,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.8,  // Match the aspect ratio from marketplace page
                   ),
                   itemCount: posts.length,
                   itemBuilder: (context, index) {
                     final post = posts[index];
                     final data = post.data() as Map<String, dynamic>;
-                    final images = List<String>.from(data['images'] ?? []);
-                    final imageUrl = images.isNotEmpty ? images[0] : '';
+                    
+                    // Extract data safely
+                    final String title = data['title'] as String? ?? 'Sans titre';
+                    final double price = (data['price'] is num) 
+                        ? (data['price'] as num).toDouble() 
+                        : 0.0;
+                    final String location = data['location'] as String? ?? 'Emplacement inconnu';
+                    final String condition = data['condition'] as String? ?? 'État inconnu';
+                    
+                    // Safely extract the image URL
+                    String imageUrl = 'https://via.placeholder.com/300';
+                    if (data['images'] is List && (data['images'] as List).isNotEmpty) {
+                      final firstImage = (data['images'] as List).first;
+                      if (firstImage is String) {
+                        imageUrl = firstImage;
+                      }
+                    }
 
-                    return InkWell(
-                      onTap: () => context.push(
-                        '/clientHome/marketplace/details/${post.id}',
-                        extra: post,
-                      ),
-                      child: ZoomProduct(
-                        imageUrl: imageUrl,
-                        title: data['title'] ?? 'Sans titre',
-                        price: data['price'] != null 
-                            ? double.tryParse(data['price'].toString()) ?? 0 
-                            : 0,
-                      ),
+                    // Use MarketplaceCard instead of ZoomProduct
+                    return MarketplaceCard(
+                      id: post.id,
+                      title: title,
+                      price: price,
+                      location: location,
+                      imageUrl: imageUrl,
+                      condition: condition,
+                      onTap: () {
+                        context.push(
+                          '/clientHome/marketplace/details/${post.id}',
+                          extra: post,
+                        );
+                      },
                     );
                   },
                 );
@@ -204,10 +221,9 @@ class _FavorisPageState extends State<FavorisPage> {
           ),
         ],
       ),
-       bottomNavigationBar: CustomBottomNav(
-          currentIndex: _selectedIndex,
-          // Remove the onTap handler since CustomBottomNav now handles navigation internally
-        ),
-      );
-    }
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _selectedIndex,
+      ),
+    );
   }
+}

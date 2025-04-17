@@ -137,7 +137,7 @@ class _PrestataireSidebarState extends State<PrestataireSidebar> {
 class _UserHeader extends StatelessWidget {
   final Map<String, dynamic>? data;
 
-  const _UserHeader({super.key, required this.data});
+  const _UserHeader({required this.data});
 
   @override
   Widget build(BuildContext context) {

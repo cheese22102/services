@@ -8,6 +8,10 @@ import 'providers/theme_provider.dart';
 import 'notifications_service.dart';
 import 'router.dart';
 import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 var cloudinary = Cloudinary.fromStringUrl('cloudinary://385591396375353:xLsaxwieO44_tPNLulzCNrweET8@dfk7mskxv');
@@ -19,6 +23,30 @@ Future<bool> checkFirstLaunch() async {
     await prefs.setBool('is_first_launch', false);
   }
   return isFirstLaunch;
+}
+
+Future<void> updateFcmTokenIfNeeded() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'fcmToken': fcmToken});
+      }
+      // Listen for token refresh and update Firestore
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'fcmToken': newToken});
+      });
+    } catch (e) {
+      print('Failed to update FCM token: $e');
+    }
+  }
 }
 
 Future<void> main() async {
@@ -55,6 +83,7 @@ Future<void> main() async {
     // Only initialize notifications on non-web platforms
     if (!kIsWeb) {
       await NotificationsService.initialize();
+      await updateFcmTokenIfNeeded(); // <-- Add this line
     }
     
     final isFirstLaunch = await checkFirstLaunch();

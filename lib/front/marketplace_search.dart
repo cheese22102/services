@@ -6,12 +6,14 @@ class MarketplaceSearch extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onClear;
   final String hintText;
+  final ValueChanged<String>? onChanged; // <-- Add this line
 
   const MarketplaceSearch({
     super.key,
     required this.controller,
     required this.onClear,
     this.hintText = 'Rechercher un article...',
+    this.onChanged, // <-- Add this line
   });
 
   @override
@@ -73,6 +75,7 @@ class MarketplaceSearch extends StatelessWidget {
           ),
           cursorColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
           textAlignVertical: TextAlignVertical.center,
+          onChanged: onChanged, // <-- Add this line
         ),
       ),
     );

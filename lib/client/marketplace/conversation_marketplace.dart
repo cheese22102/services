@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:plateforme_services/notifications_service.dart';
-import '../../widgets/message_bubble.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../front/message_bubble.dart';
+import '../../front/custom_app_bar.dart';
+import '../../front/app_colors.dart';
+import 'package:go_router/go_router.dart';
 
 class ChatScreenPage extends StatefulWidget {
   final String otherUserId; // ID of the other user (post owner or message sender)
@@ -29,26 +33,47 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FocusNode _textFieldFocus = FocusNode();
   bool _isLoading = true;
-  String? _errorMessage;
   final bool _isChatArchived = false;
   final ScrollController _scrollController = ScrollController();
   String _otherUserId = '';
   String _postId = '';
+  String _productTitle = '';
 
   @override
   void initState() {
     super.initState();
     _currentUser = FirebaseAuth.instance.currentUser!;
-    
     if (widget.chatId != null && widget.chatId!.isNotEmpty) {
-      // If chatId is provided, use it directly and fetch other details
       _chatroomId = widget.chatId!;
       _fetchChatDetails();
     } else {
-      // Otherwise use the provided user and post IDs
       _otherUserId = widget.otherUserId;
       _postId = widget.postId;
       _initializeChat();
+    }
+    _fetchProductTitle();
+    
+    // Add listener to text controller to rebuild UI when text changes
+    _messageController.addListener(() {
+      setState(() {});
+    });
+  }
+  
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _textFieldFocus.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchProductTitle() async {
+    if (_postId.isEmpty) return;
+    final doc = await FirebaseFirestore.instance.collection('marketplace').doc(_postId).get();
+    if (doc.exists) {
+      setState(() {
+        _productTitle = doc.data()?['title'] ?? '';
+      });
     }
   }
 
@@ -58,7 +83,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       
       if (!chatDoc.exists) {
         setState(() {
-          _errorMessage = 'Conversation introuvable';
           _isLoading = false;
         });
         return;
@@ -84,7 +108,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
-        _errorMessage = 'Erreur lors du chargement: $e';
         _isLoading = false;
       });
     }
@@ -115,7 +138,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
-        _errorMessage = 'Chat initialization error: $e';
         _isLoading = false;
       });
     }
@@ -145,12 +167,12 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       await _firestore.collection('conversations').doc(_chatroomId).update({
         'lastMessage': messageText,
         'lastMessageTime': timestamp,
-        'unreadCount.${widget.otherUserId}': FieldValue.increment(1),
+        'unreadCount.$_otherUserId': FieldValue.increment(1), // Changed from widget.otherUserId to _otherUserId
       });
 
       // Send notification
       await NotificationsService.sendMessageNotification(
-        receiverId: widget.otherUserId,
+        receiverId: _otherUserId, // Changed from widget.otherUserId to _otherUserId
         messageText: messageText,
         senderName: _currentUser.displayName ?? 'Un utilisateur',
         chatroomId: _chatroomId,
@@ -255,94 +277,163 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    
-    if (_errorMessage != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Error')),
-        body: Center(child: Text(_errorMessage!)),
-      );
-    }
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      appBar: AppBar(
-        title: FutureBuilder<DocumentSnapshot>(
-          // Use _postId instead of widget.postId since we set it in initState
-          future: _postId.isNotEmpty 
-              ? _firestore.collection('marketplace').doc(_postId).get()
-              : null,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Text('Chargement...');
-            }
-            
-            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-              return const Text('Chat');
-            }
-            
-            final postData = snapshot.data!.data() as Map<String, dynamic>;
-            final postTitle = postData['title'] ?? 'Chat';
-            return Text(
-              'Chat: $postTitle',
-              style: const TextStyle(color: Colors.white),
-              overflow: TextOverflow.ellipsis,
-            );
-          },
-        ),
-        backgroundColor: Colors.deepPurple,
-      ),
-      body: Column(
-        children: [
-          Expanded(child: _buildChatMessages()),
-          // Remove typing indicator widget
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    focusNode: _textFieldFocus,
-                    controller: _messageController,
-                    enabled: !_isChatArchived,
-                    decoration: InputDecoration(
-                      hintText: _isChatArchived ? 'This conversation is archived' : 'Type a message...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: _isChatArchived ? Colors.grey[100] : Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.emoji_emotions_outlined),
-                        onPressed: () {},
-                      ),
-                    ),
-                    // Remove onChanged typing handler
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: _isChatArchived ? Colors.grey : Colors.deepPurple,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: _isChatArchived ? null : _sendMessage,
-                  ),
-                ),
-              ],
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: CustomAppBar(
+        title: _productTitle.isNotEmpty ? _productTitle : 'Annonce',
+        showBackButton: true,
+        actions: [
+          if (_postId.isNotEmpty)
+            IconButton(
+              icon: Icon(
+                Icons.info_outline,
+                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                size: 24,
+              ),
+              tooltip: 'Voir l\'annonce',
+              onPressed: () {
+                context.go('/clientHome/marketplace/details/$_postId');
+              },
             ),
-          ),
         ],
       ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Chat messages area
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                  // Removed image decoration that was causing errors
+                ),
+                child: _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      )
+                    : _buildChatMessages(),
+              ),
+            ),
+            
+            // Message input area
+            Container(
+              decoration: BoxDecoration(
+                color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, -1),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Attachment button
+                  IconButton(
+                    icon: Icon(
+                      Icons.attach_file_rounded,
+                      color: isDarkMode 
+                          ? AppColors.primaryGreen 
+                          : AppColors.primaryDarkGreen,
+                      size: 24,
+                    ),
+                    onPressed: () {
+                      // TODO: Handle attachment
+                    },
+                  ),
+                  
+                  // Text input field with container
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isDarkMode 
+                              ? Colors.transparent 
+                              : AppColors.lightBorderColor.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: TextField(
+                        focusNode: _textFieldFocus,
+                        controller: _messageController,
+                        enabled: !_isChatArchived,
+                        minLines: 1,
+                        maxLines: 5,
+                        style: GoogleFonts.poppins(
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                          fontSize: 15,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: _isChatArchived
+                              ? 'Cette conversation est archivée'
+                              : 'Écrivez un message...',
+                          hintStyle: GoogleFonts.poppins(
+                            color: isDarkMode ? Colors.white38 : Colors.black38,
+                            fontSize: 15,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          isDense: true,
+                          // Add these lines to fix the background color issue
+                          filled: true,
+                          fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                  ),
+                  
+                  // Send button
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: (_messageController.text.trim().isNotEmpty && !_isChatArchived)
+                            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                            : (isDarkMode ? Colors.grey[700] : Colors.grey[300]),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          if (_messageController.text.trim().isNotEmpty && !_isChatArchived)
+                            BoxShadow(
+                              color: (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                  .withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: (_messageController.text.trim().isEmpty || _isChatArchived) 
+                            ? null 
+                            : () => _sendMessage(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-  }
-
-  @override
-  void dispose() {
-    _textFieldFocus.dispose();
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }

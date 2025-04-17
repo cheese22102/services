@@ -80,6 +80,12 @@ service cloud.firestore {
     match /provider_requests/{userId} {
       allow read, list: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Add rules for notifications subcollection
+      match /notifications/{notificationId} {
+        allow read, list: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated();
+      }
     }
 
     match /providers/{userId} {
