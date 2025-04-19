@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../notifications_service.dart';
+import 'package:go_router/go_router.dart'; // Add this import
 
 class PostsValidationPage extends StatefulWidget {
   const PostsValidationPage({super.key});
@@ -80,6 +81,10 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Validation des Posts'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin'), // Update navigation to use GoRouter
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance

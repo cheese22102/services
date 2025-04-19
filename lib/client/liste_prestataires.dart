@@ -3,7 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../chat/conversation_service_page.dart';
+import '../front/app_colors.dart';
+import '../front/custom_app_bar.dart';
+import '../front/custom_button.dart';
 
 class ServiceProvidersPage extends StatefulWidget {
   final String serviceName;
@@ -60,8 +64,9 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
         return;
       }
 
-      _currentPosition = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition();
       setState(() {
+        _currentPosition = position;
         _isLoading = false;
       });
     } catch (e) {
@@ -71,123 +76,44 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
     }
   }
 
-  double _calculateDistance(Map<String, dynamic> providerData) {
-    if (_currentPosition == null || 
-        providerData['exactLocation'] == null ||
-        providerData['exactLocation']['latitude'] == null ||
-        providerData['exactLocation']['longitude'] == null) {
-      return double.infinity;
-    }
-
-    return Geolocator.distanceBetween(
-      _currentPosition!.latitude,
-      _currentPosition!.longitude,
-      providerData['exactLocation']['latitude'],
-      providerData['exactLocation']['longitude'],
-    ) / 1000; // Convert to kilometers
-  }
-
-  Future<List<Map<String, dynamic>>> _getProviders(List<DocumentSnapshot> providers) async {
-    List<Map<String, dynamic>> result = [];
-
-    for (var provider in providers) {
-      final providerData = provider.data() as Map<String, dynamic>;
-      final providerId = providerData['userId'] as String? ?? provider.id;
-
-      // Get user data
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(providerId)
-          .get();
-      
-      if (!userDoc.exists) continue;
-      
-      final userData = userDoc.data() as Map<String, dynamic>;
-      
-      // Get reviews and calculate average rating
-      final reviewsSnapshot = await FirebaseFirestore.instance
-          .collection('provider_reviews')
-          .where('providerId', isEqualTo: providerId)
-          .get();
-      
-      double totalRating = 0;
-      final reviews = reviewsSnapshot.docs;
-      for (var review in reviews) {
-        totalRating += (review.data()['rating'] as num?)?.toDouble() ?? 0.0;
-      }
-      
-      final averageRating = reviews.isEmpty ? 0.0 : totalRating / reviews.length;
-      final distance = _calculateDistance(providerData);
-      
-      result.add({
-        'providerId': providerId,
-        'providerData': providerData,
-        'userData': userData,
-        'rating': averageRating,
-        'reviewCount': reviews.length,
-        'distance': distance,
-      });
-    }
+  double _calculateDistance(GeoPoint providerLocation) {
+    if (_currentPosition == null) return double.infinity;
     
-    return result;
-  }
-
-  List<Map<String, dynamic>> _sortProviders(List<Map<String, dynamic>> providers) {
-    switch (_sortBy) {
-      case 'rating':
-        providers.sort((a, b) => _isAscending 
-            ? (a['rating'] as double).compareTo(b['rating'] as double)
-            : (b['rating'] as double).compareTo(a['rating'] as double));
-        break;
-      case 'distance':
-        providers.sort((a, b) => _isAscending 
-            ? (b['distance'] as double).compareTo(a['distance'] as double)
-            : (a['distance'] as double).compareTo(b['distance'] as double));
-        break;
-      case 'reviews':
-        providers.sort((a, b) => _isAscending 
-            ? (a['reviewCount'] as int).compareTo(b['reviewCount'] as int)
-            : (b['reviewCount'] as int).compareTo(a['reviewCount'] as int));
-        break;
-      case 'price':
-        providers.sort((a, b) {
-          final aMin = (a['providerData']['rateRange']['min'] as num?)?.toDouble() ?? 0.0;
-          final bMin = (b['providerData']['rateRange']['min'] as num?)?.toDouble() ?? 0.0;
-          return _isAscending ? aMin.compareTo(bMin) : bMin.compareTo(aMin);
-        });
-        break;
-    }
-    return providers;
-  }
-
-  List<Map<String, dynamic>> _filterProviders(List<Map<String, dynamic>> providers) {
-    if (_searchQuery.isEmpty) return providers;
+    final double lat1 = _currentPosition!.latitude;
+    final double lon1 = _currentPosition!.longitude;
+    final double lat2 = providerLocation.latitude;
+    final double lon2 = providerLocation.longitude;
     
-    final query = _searchQuery.toLowerCase();
-    return providers.where((provider) {
-      final userData = provider['userData'] as Map<String, dynamic>;
-      final providerData = provider['providerData'] as Map<String, dynamic>;
-      
-      final name = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.toLowerCase();
-      final bio = (providerData['bio'] as String? ?? '').toLowerCase();
-      final area = (providerData['workingArea'] as String? ?? '').toLowerCase();
-      
-      return name.contains(query) || bio.contains(query) || area.contains(query);
-    }).toList();
+    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000; // Convert to km
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Prestataires - ${widget.serviceName}'),
+      appBar: CustomAppBar(
+        title: 'Prestataires de ${widget.serviceName}',
+        showBackButton: true,
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        titleColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+        iconColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
       ),
       body: Column(
         children: [
-          // Search and filter bar
+          // Search and filter section
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Theme.of(context).primaryColor.withOpacity(0.1),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            decoration: BoxDecoration(
+              color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Column(
               children: [
                 // Search bar
@@ -195,327 +121,537 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Rechercher un prestataire...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                    hintStyle: GoogleFonts.poppins(
+                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                     ),
                     filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    fillColor: isDarkMode ? AppColors.darkInputBackground.withOpacity(0.7) : Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor,
+                        width: 1,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  ),
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    fontSize: 14,
                   ),
                   onChanged: (value) {
                     setState(() {
-                      _searchQuery = value;
+                      _searchQuery = value.toLowerCase();
                     });
                   },
                 ),
                 
                 const SizedBox(height: 12),
                 
-                // Sorting options
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildSortChip('Note', 'rating'),
-                      _buildSortChip('Distance', 'distance'),
-                      _buildSortChip('Avis', 'reviews'),
-                      _buildSortChip('Prix', 'price'),
-                      const SizedBox(width: 8),
-                      // Order toggle
-                      ActionChip(
-                        avatar: Icon(
-                          _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                          size: 18,
-                        ),
-                        label: Text(_isAscending ? 'Croissant' : 'Décroissant'),
-                        onPressed: () {
-                          setState(() {
-                            _isAscending = !_isAscending;
-                          });
-                        },
+                // Sort options
+                Row(
+                  children: [
+                    Text(
+                      'Trier par:',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSortChip('Note', 'rating', isDarkMode),
+                    const SizedBox(width: 8),
+                    _buildSortChip('Distance', 'distance', isDarkMode),
+                    const Spacer(),
+                    // Order toggle
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isAscending = !_isAscending;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Icon(
+                          _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: 20,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           
-          // Provider list
+          // Providers list
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('provider_requests')
-                  .where('status', isEqualTo: 'approved')
-                  .where('services', arrayContains: widget.serviceName)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Une erreur est survenue'));
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final providers = snapshot.data?.docs ?? [];
-
-                if (providers.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.person_off, size: 64, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucun prestataire disponible pour ${widget.serviceName}',
-                          style: const TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                      ],
+            child: _isLoading
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                     ),
-                  );
-                }
-
-                return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _getProviders(providers),
-                  builder: (context, providersSnapshot) {
-                    if (!providersSnapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final allProviders = providersSnapshot.data!;
-                    final filteredProviders = _filterProviders(allProviders);
-                    final sortedProviders = _sortProviders(filteredProviders);
-
-                    if (sortedProviders.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.search_off, size: 64, color: Colors.grey),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Aucun résultat pour cette recherche',
-                              style: TextStyle(fontSize: 18, color: Colors.grey),
+                  )
+                : StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('providers')
+                        .where('status', isEqualTo: 'approved')
+                        .where('services', arrayContains: widget.serviceName)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Une erreur est survenue: ${snapshot.error}',
+                            style: GoogleFonts.poppins(
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      itemCount: sortedProviders.length,
-                      itemBuilder: (context, index) {
-                        final provider = sortedProviders[index];
-                        final providerData = provider['providerData'] as Map<String, dynamic>;
-                        final userData = provider['userData'] as Map<String, dynamic>;
-                        final providerId = provider['providerId'] as String;
-                        final rating = provider['rating'] as double;
-                        final reviewCount = provider['reviewCount'] as int;
-                        final distance = provider['distance'] as double;
-
-                        return _buildProviderCard(
-                          context,
-                          providerId,
-                          providerData,
-                          userData,
-                          rating,
-                          reviewCount,
-                          distance,
+                          ),
                         );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                      }
+
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(
+                          child: CircularProgressIndicator(
+                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                          ),
+                        );
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.search_off_rounded,
+                                size: 64,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Aucun prestataire disponible pour ce service',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Essayez un autre service ou revenez plus tard',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // Filter providers by distance (less than 50km)
+                      var providersWithinRange = snapshot.data!.docs.where((doc) {
+                        if (_currentPosition == null) return true; // If no location, show all
+                        
+                        final data = doc.data() as Map<String, dynamic>;
+                        if (data['exactLocation'] == null) return false;
+                        
+                        final lat = data['exactLocation']['latitude'];
+                        final lng = data['exactLocation']['longitude'];
+                        
+                        if (lat == null || lng == null) return false;
+                        
+                        final location = GeoPoint(lat, lng);
+                        final distance = _calculateDistance(location);
+                        
+                        return distance <= 50; // Only providers within 50km
+                      }).toList();
+
+                      if (providersWithinRange.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.location_off,
+                                size: 64,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Aucun prestataire disponible dans un rayon de 50km',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Essayez un autre service ou élargissez votre zone de recherche',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // Filter by search query
+                      var filteredDocs = providersWithinRange.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        
+                        // Use provider data directly since there's no userData field
+                        final name = data['userId']?.toString().toLowerCase() ?? '';
+                        final bio = data['bio']?.toString().toLowerCase() ?? '';
+                        
+                        return name.contains(_searchQuery) || bio.contains(_searchQuery);
+                      }).toList();
+
+                      // Sort the providers
+                      filteredDocs.sort((a, b) {
+                        final dataA = a.data() as Map<String, dynamic>;
+                        final dataB = b.data() as Map<String, dynamic>;
+                        
+                        if (_sortBy == 'rating') {
+                          // Get rating from ratings.overall or default to 0
+                          final ratingA = dataA['ratings']?['overall'] ?? 0.0;
+                          final ratingB = dataB['ratings']?['overall'] ?? 0.0;
+                          return _isAscending ? ratingA.compareTo(ratingB) : ratingB.compareTo(ratingA);
+                        } else if (_sortBy == 'distance' && _currentPosition != null) {
+                          // Get location from exactLocation
+                          GeoPoint? locationA;
+                          GeoPoint? locationB;
+                          
+                          if (dataA['exactLocation'] != null) {
+                            final lat = dataA['exactLocation']['latitude'];
+                            final lng = dataA['exactLocation']['longitude'];
+                            if (lat != null && lng != null) {
+                              locationA = GeoPoint(lat, lng);
+                            }
+                          }
+                          
+                          if (dataB['exactLocation'] != null) {
+                            final lat = dataB['exactLocation']['latitude'];
+                            final lng = dataB['exactLocation']['longitude'];
+                            if (lat != null && lng != null) {
+                              locationB = GeoPoint(lat, lng);
+                            }
+                          }
+                          
+                          if (locationA == null || locationB == null) return 0;
+                          
+                          final distanceA = _calculateDistance(locationA);
+                          final distanceB = _calculateDistance(locationB);
+                          
+                          return _isAscending ? distanceA.compareTo(distanceB) : distanceB.compareTo(distanceA);
+                        }
+                        
+                        return 0;
+                      });
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final doc = filteredDocs[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          
+                          final providerId = doc.id;
+                          
+                          // Get provider name from userId - in a real app, you'd fetch the user's name
+                          // from the users collection using the userId
+                          final userId = data['userId'] ?? 'Unknown';
+                          
+                          // Fetch user data for this provider
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                            builder: (context, userSnapshot) {
+                              // Default values
+                              String name = 'Prestataire';
+                              String photoUrl = '';
+                              
+                              // If user data is available, use it
+                              if (userSnapshot.hasData && userSnapshot.data != null) {
+                                final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                                if (userData != null) {
+                                  name = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}';
+                                  photoUrl = userData['photoURL'] ?? '';
+                                }
+                              }
+                              
+                              final bio = data['bio'] ?? 'Aucune description disponible';
+                              final rating = data['ratings']?['overall'] ?? 0.0;
+                              final reviewCount = data['reviewCount'] ?? 0;
+                              
+                              // Calculate distance if location is available
+                              String distanceText = 'Distance inconnue';
+                              if (_currentPosition != null && data['exactLocation'] != null) {
+                                final lat = data['exactLocation']['latitude'];
+                                final lng = data['exactLocation']['longitude'];
+                                if (lat != null && lng != null) {
+                                  final location = GeoPoint(lat, lng);
+                                  final distance = _calculateDistance(location);
+                                  distanceText = '${distance.toStringAsFixed(1)} km';
+                                }
+                              }
+                              
+                              return _buildProviderCard(
+                                context,
+                                isDarkMode,
+                                providerId,
+                                name,
+                                photoUrl,
+                                bio,
+                                rating,
+                                reviewCount,
+                                distanceText,
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
-        ],
-      ),
-    );
+    ],
+    
+    ));
   }
 
-  Widget _buildSortChip(String label, String value) {
+  Widget _buildSortChip(String label, String value, bool isDarkMode) {
     final isSelected = _sortBy == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (selected) {
-          if (selected) {
-            setState(() {
-              _sortBy = value;
-            });
-          }
-        },
-        backgroundColor: Colors.white,
-        selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _sortBy = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+              : (isDarkMode ? AppColors.darkInputBackground : Colors.white),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                : (isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3)),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            color: isSelected
+                ? (isDarkMode ? Colors.white : Colors.white)
+                : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildProviderCard(
     BuildContext context,
+    bool isDarkMode,
     String providerId,
-    Map<String, dynamic> providerData,
-    Map<String, dynamic> userData,
+    String name,
+    String photoUrl,
+    String bio,
     double rating,
     int reviewCount,
-    double distance,
+    String distance,
   ) {
-    // Create a function to navigate to provider profile to avoid duplication
-    void navigateToProviderProfile() {
-      // Use the correct route format and ensure all required data is passed
-      context.push('/clientHome/provider/$providerId', extra: {
-        'providerData': providerData,
-        'userData': userData,
-        'serviceName': widget.serviceName,
-      });
-    }
-
     return Card(
-      margin: const EdgeInsets.all(8),
-      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
+      color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
       child: InkWell(
-        onTap: navigateToProviderProfile, // Use the function here
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          // Fix: Pass the actual providerId instead of the string 'providerId'
+          context.go('/clientHome/provider-details/$providerId');
+        },
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Provider avatar
                   CircleAvatar(
-                    radius: 30,
-                    backgroundImage: userData['avatarUrl'] != null
-                        ? NetworkImage(userData['avatarUrl'])
-                        : null,
-                    child: userData['avatarUrl'] == null
-                        ? Text(
-                            (userData['firstname'] ?? '?')[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 24),
+                    radius: 32,
+                    backgroundColor: isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor,
+                    backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                    child: photoUrl.isEmpty
+                        ? Icon(
+                            Icons.person,
+                            size: 32,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
                           )
                         : null,
                   ),
                   const SizedBox(width: 16),
+                  
+                  // Provider info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${userData['firstname']} ${userData['lastname']}',
-                          style: const TextStyle(
+                          name,
+                          style: GoogleFonts.poppins(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
+                        
+                        // Rating
                         Row(
                           children: [
-                            Icon(Icons.star, color: Colors.amber, size: 16),
+                            Icon(
+                              Icons.star,
+                              size: 18,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              ' ${rating.toStringAsFixed(1)}',
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontWeight: FontWeight.bold,
+                              rating.toStringAsFixed(1),
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                               ),
                             ),
+                            const SizedBox(width: 4),
                             Text(
-                              ' ($reviewCount avis)',
-                              style: TextStyle(
-                                color: Colors.grey[600],
+                              '($reviewCount avis)',
+                              style: GoogleFonts.poppins(
                                 fontSize: 12,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            if (distance != double.infinity) ...[
-                              Icon(Icons.location_on, color: Colors.red, size: 16),
-                              Text(
-                                ' ${distance.toStringAsFixed(1)} km',
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                            ],
                           ],
                         ),
-                        Text(
-                          'Zone: ${providerData['workingArea']}',
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        Text(
-                          'Tarif: ${providerData['rateRange']['min']} - ${providerData['rateRange']['max']} DT/h',
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                          ),
+                        
+                        const SizedBox(height: 4),
+                        
+                        // Distance
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 16,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              distance,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-              if (providerData['bio'] != null && providerData['bio'].toString().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Bio:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                Text(
-                  providerData['bio'],
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
+              
               const SizedBox(height: 12),
+              
+              // Bio
+              Text(
+                bio,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Action buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.person),
-                    label: const Text('Voir profil'),
-                    onPressed: navigateToProviderProfile, // Use the same function here
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.chat),
-                    label: const Text('Contacter'),
+                  // Message button
+                  CustomButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ConversationServicePage(
-                            otherUserId: providerId,
-                            otherUserName: '${userData['firstname']} ${userData['lastname']}', // Add the name
-                            serviceName: widget.serviceName,
-                          ),
-                        ),
-                      );
+                      // Start a conversation with this provider
+                      _startConversation(context, providerId, name);
                     },
+                    text: 'Contacter',
+                    backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    textColor: Colors.white,
+                    height: 36,
+                    width: 120,
+                  ),
+                  
+                  const SizedBox(width: 12),
+                  
+                  // View profile button
+                  CustomButton(
+                    onPressed: () {
+                      print('Provider ID being passed: $providerId');
+                      // Fix: Use context.go instead of context.push and ensure proper string interpolation
+                      context.go('/clientHome/provider-details/$providerId');
+                    },
+                    text: 'Voir profil',
+                    backgroundColor: Colors.transparent,
+                    textColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    height: 36,
+                    width: 120,
                   ),
                 ],
               ),
@@ -524,5 +660,67 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
         ),
       ),
     );
+  }
+
+  void _startConversation(BuildContext context, String providerId, String providerName) async {
+    if (currentUserId == null) return;
+    
+    try {
+      // Check if a conversation already exists
+      final conversationsQuery = await FirebaseFirestore.instance
+          .collection('conversations')
+          .where('participants', arrayContains: currentUserId)
+          .get();
+      
+      String? existingConversationId;
+      
+      for (var doc in conversationsQuery.docs) {
+        final participants = List<String>.from(doc['participants']);
+        if (participants.contains(providerId)) {
+          existingConversationId = doc.id;
+          break;
+        }
+      }
+      
+      if (existingConversationId != null) {
+        // Navigate to existing conversation
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ConversationServicePage(
+              otherUserId: providerId,
+              otherUserName: providerName,
+            ),
+          ),
+        );
+      } else {
+        // Create a new conversation
+        final newConversationRef = FirebaseFirestore.instance.collection('conversations').doc();
+        
+        await newConversationRef.set({
+          'participants': [currentUserId, providerId],
+          'lastMessage': null,
+          'lastMessageTime': null,
+          'createdAt': FieldValue.serverTimestamp(),
+          'serviceId': widget.serviceName,
+        });
+        
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ConversationServicePage(
+              otherUserId: providerId,
+              otherUserName: providerName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e')),
+      );
+    }
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'accueil_client.dart';
@@ -136,105 +135,16 @@ final clientRoutes = GoRoute(
       path: 'request-service',
       builder: (context, state) => const RequestServicePage(),
     ),
+    // Add provider-details route
     GoRoute(
-      path: 'provider/:providerId',
+      path: 'provider-details/:providerId',
       builder: (context, state) {
-        final providerId = state.pathParameters['providerId']!;
-        final extra = state.extra as Map<String, dynamic>?;
-        
-        // If we have extra data, use it directly
-        if (extra != null && 
-            extra.containsKey('providerData') && 
-            extra.containsKey('userData')) {
-          return ProviderProfilePage(
-            providerId: providerId,
-            providerData: extra['providerData'],
-            userData: extra['userData'],
-            serviceName: extra['serviceName'] ?? '',
-          );
-        }
-        
-        // Otherwise, fetch the data
-        return FutureBuilder<Map<String, dynamic>>(
-          future: _fetchProviderData(providerId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            
-            if (snapshot.hasError || !snapshot.hasData) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Erreur')),
-                body: Center(child: Text('Erreur: ${snapshot.error ?? "Données non disponibles"}')),
-              );
-            }
-            
-            final data = snapshot.data!;
-            return ProviderProfilePage(
-              providerId: providerId,
-              providerData: data['providerData'],
-              userData: data['userData'],
-              serviceName: data['serviceName'] ?? '',
-            );
-          },
-        );
+        // Debug the parameter value
+        final providerId = state.pathParameters['providerId'] ?? '';
+        return ProviderProfilePage(providerId: providerId);
       },
     ),
   ],
 );
 
 // Add this function at the end of the file
-Future<Map<String, dynamic>> _fetchProviderData(String providerId) async {
-  // First, try to get provider data from provider_requests collection
-  final providerDoc = await FirebaseFirestore.instance
-      .collection('provider_requests')
-      .where('userId', isEqualTo: providerId)
-      .limit(1)
-      .get();
-  
-  Map<String, dynamic> providerData;
-  
-  // If not found in provider_requests, try the providers collection
-  if (providerDoc.docs.isEmpty) {
-    final directProviderDoc = await FirebaseFirestore.instance
-        .collection('providers')
-        .doc(providerId)
-        .get();
-    
-    if (!directProviderDoc.exists) {
-      throw Exception('Provider not found');
-    }
-    
-    providerData = directProviderDoc.data() ?? {};
-  } else {
-    providerData = providerDoc.docs.first.data();
-  }
-  
-  // Get user data
-  final userDoc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(providerId)
-      .get();
-  
-  if (!userDoc.exists) {
-    throw Exception('User not found');
-  }
-  
-  final userData = userDoc.data() ?? {};
-  
-  // Determine service name if possible
-  String serviceName = '';
-  if (providerData.containsKey('services') && 
-      providerData['services'] is List && 
-      (providerData['services'] as List).isNotEmpty) {
-    serviceName = (providerData['services'] as List).first.toString();
-  }
-  
-  return {
-    'providerData': providerData,
-    'userData': userData,
-    'serviceName': serviceName,
-  };
-}

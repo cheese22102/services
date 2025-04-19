@@ -3,8 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'prestataire_sidebar.dart';
 import 'provider_notifications_page.dart';
+import '../front/app_colors.dart';
+import '../front/custom_button.dart';
 
 class PrestataireHomePage extends StatefulWidget {
   const PrestataireHomePage({super.key});
@@ -21,10 +24,25 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
     super.initState();
     final userId = FirebaseAuth.instance.currentUser?.uid;
     _providerRequestStream = FirebaseFirestore.instance
-        .collection('provider_requests')
+        .collection('providers')
         .doc(userId)
         .snapshots();
     _saveFCMToken();
+    
+    // Debug: Check if the provider request document exists
+    if (userId != null) {
+      FirebaseFirestore.instance
+          .collection('providers')
+          .doc(userId)
+          .get()
+          .then((doc) {
+        if (doc.exists) {
+          print('Provider request exists: ${doc.data()}');
+        } else {
+          print('Provider request does not exist for user: $userId');
+        }
+      });
+    }
   }
 
   Future<void> _saveFCMToken() async {
@@ -46,127 +64,347 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
     }
   }
 
-
   Widget _buildProviderStatus() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return StreamBuilder<DocumentSnapshot>(
       stream: _providerRequestStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const CircularProgressIndicator();
-        }
-
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        
-        if (data == null) {
-          return ElevatedButton.icon(
-            onPressed: () => context.go('/prestataireHome/registration'),
-            icon: const Icon(Icons.app_registration),
-            label: const Text('Compléter mon profil prestataire'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
+          return Center(
+            child: CircularProgressIndicator(
+              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
             ),
           );
         }
 
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        
+        // No application submitted yet
+        if (data == null) {
+          return _buildNoApplicationView(isDarkMode);
+        }
+
         final status = data['status'] as String?;
+        final rejectionReason = data['rejectionReason'] as String?;
         
         switch (status) {
           case 'pending':
-            return const Column(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text(
-                  'Votre demande est en cours d\'examen',
-                  style: TextStyle(fontSize: 16),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Vous serez notifié dès qu\'une décision sera prise',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            );
-            
+            return _buildPendingApplicationView(isDarkMode);
           case 'rejected':
-            return Column(
-              children: [
-                const Text(
-                  'Votre demande précédente a été refusée',
-                  style: TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => context.go('/prestataireHome/registration'),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Soumettre une nouvelle demande'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            );
-            
+            return _buildRejectedApplicationView(isDarkMode, rejectionReason);
           case 'approved':
-            return const Text(
-              'Votre compte prestataire est actif',
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            );
-            
+            return _buildApprovedApplicationView(isDarkMode);
           default:
-            return ElevatedButton.icon(
-              onPressed: () => context.go('/prestataireHome/registration'),
-              icon: const Icon(Icons.app_registration),
-              label: const Text('Compléter mon profil prestataire'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-            );
+            return _buildNoApplicationView(isDarkMode);
         }
       },
     );
   }
 
+  Widget _buildNoApplicationView(bool isDarkMode) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isDarkMode ? Colors.grey.shade800 : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.person_add,
+              size: 64,
+              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Devenez prestataire de services',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Complétez votre profil prestataire pour commencer à offrir vos services sur notre plateforme.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            CustomButton(
+              text: 'Compléter mon profil prestataire',
+              onPressed: () => context.go('/prestataireHome/registration'),
+              backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+              textColor: Colors.white,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingApplicationView(bool isDarkMode) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isDarkMode ? Colors.grey.shade800 : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                  ? Colors.amber.shade900.withOpacity(0.3) 
+                  : Colors.amber.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.hourglass_top,
+                size: 60,
+                color: Colors.amber.shade600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Demande en cours d\'examen',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Votre demande est en cours d\'examen par notre équipe. Vous recevrez une notification dès qu\'une décision sera prise.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            LinearProgressIndicator(
+              backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRejectedApplicationView(bool isDarkMode, String? rejectionReason) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isDarkMode ? Colors.grey.shade800 : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                  ? Colors.red.shade900.withOpacity(0.3) 
+                  : Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 60,
+                color: Colors.red.shade400,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Demande refusée',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (rejectionReason != null && rejectionReason.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.red.shade900.withOpacity(0.2) : Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Motif du refus:',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      rejectionReason,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: isDarkMode ? Colors.red.shade200 : Colors.red.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 24),
+            CustomButton(
+              text: 'Soumettre une nouvelle demande',
+              onPressed: () => context.go('/prestataireHome/registration'),
+              backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+              textColor: Colors.white,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApprovedApplicationView(bool isDarkMode) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isDarkMode ? Colors.grey.shade800 : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                  ? Colors.green.shade900.withOpacity(0.3) 
+                  : Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_circle_outline,
+                size: 60,
+                color: Colors.green.shade400,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Compte prestataire actif',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Félicitations ! Votre compte prestataire est maintenant actif. Vous pouvez commencer à recevoir des demandes de service.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    text: 'Voir mon profil',
+                    onPressed: () => _viewProviderProfile(),
+                    backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    textColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CustomButton(
+                    text: 'Voir les demandes',
+                    onPressed: () => context.push('/prestataireHome/requests'),
+                    backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+                    textColor: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            CustomButton(
+              text: 'Messages',
+              onPressed: () => context.push('/prestataireHome/messages'),
+              backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+              textColor: isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _viewProviderProfile() {
+    // Navigate to provider profile view
+    context.push('/prestataireHome/profile');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Accueil Prestataire'),
+        title: Text(
+          'Espace Prestataire',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
+        foregroundColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         actions: [
-          // Add notifications button
-          StreamBuilder<int>(
-            stream: ProviderNotificationsPage.getUnreadNotificationsCount(),
-            builder: (context, snapshot) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications),
-                    onPressed: () => context.push('/prestataireHome/notifications'),
-                    tooltip: 'Notifications',
-                  ),
-                  if (snapshot.hasData && snapshot.data! > 0)
-                    Positioned(
+          // Notifications icon with badge
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications),
+                  onPressed: () {
+                    context.push('/prestataireHome/notifications');
+                  },
+                ),
+                StreamBuilder<int>(
+                  stream: ProviderNotificationsPage.getUnreadNotificationsCount(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || snapshot.data == 0) {
+                      return const SizedBox.shrink();
+                    }
+                    
+                    return Positioned(
                       top: 8,
                       right: 8,
                       child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
                           color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
+                          shape: BoxShape.circle,
                         ),
                         constraints: const BoxConstraints(
                           minWidth: 16,
@@ -181,152 +419,43 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
                           textAlign: TextAlign.center,
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
       drawer: const PrestataireSidebar(),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Provider status card
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Statut de votre compte prestataire',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildProviderStatus(),
-                  ],
-                ),
+            Text(
+              'Bienvenue dans votre espace prestataire',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
               ),
             ),
-            
-            const SizedBox(height: 20),
-            
-            // View Profile button
-            StreamBuilder<DocumentSnapshot>(
-              stream: _providerRequestStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox.shrink();
-                }
-                
-                final data = snapshot.data?.data() as Map<String, dynamic>?;
-                final status = data?['status'] as String?;
-                
-                // Only show the button if the provider is approved
-                if (status == 'approved') {
-                  return ElevatedButton.icon(
-                    onPressed: () => _viewProviderProfile(context),
-                    icon: const Icon(Icons.visibility),
-                    label: const Text('Voir mon profil prestataire'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            
-            const SizedBox(height: 12),
-            
-            // Service Requests button
-            ElevatedButton.icon(
-              onPressed: () => context.push('/prestataireHome/requests'),
-              icon: const Icon(Icons.assignment),
-              label: const Text('Voir les demandes de service'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
+            const SizedBox(height: 8),
+            Text(
+              'Gérez vos services et suivez vos demandes',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
               ),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // Messages button
-            ElevatedButton.icon(
-              onPressed: () => context.push('/prestataireHome/messages'),
-              icon: const Icon(Icons.message),
-              label: const Text('Messages'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            
             const SizedBox(height: 24),
+            
+            // Provider status section
+            _buildProviderStatus(),
           ],
         ),
       ),
     );
-  }
-  
-  // Add this method to view the provider's own profile
-  Future<void> _viewProviderProfile(BuildContext context) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-    
-    try {
-      // Get provider data
-      final providerData = await FirebaseFirestore.instance
-          .collection('provider_requests')
-          .doc(userId)
-          .get();
-          
-      // Get user data
-      final userData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-      
-      if (!mounted) return;
-      
-      // Get service name
-      final serviceId = providerData.data()?['serviceId'];
-      final serviceDoc = await FirebaseFirestore.instance
-          .collection('services')
-          .doc(serviceId)
-          .get();
-      final serviceName = serviceDoc.data()?['name'] ?? 'Service inconnu';
-      
-      if (!mounted) return;
-      
-      // Navigate to provider profile page with isOwnProfile flag using GoRouter
-      context.push('/prestataireHome/providerProfile', extra: {
-        'providerId': userId,
-        'providerData': providerData.data() ?? {},
-        'userData': userData.data() ?? {},
-        'serviceName': serviceName,
-        'isOwnProfile': true, // This flag will hide contact buttons and review options
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
-    }
   }
 }

@@ -8,6 +8,7 @@ import '../config/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/app_colors.dart';
 import '../front/custom_button.dart';
+import 'package:go_router/go_router.dart'; // Add this import
 
 
 // Service Model integrated in the same file
@@ -179,6 +180,10 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
         elevation: 2,
         iconTheme: IconThemeData(
           color: isDarkMode ? Colors.white : Colors.black87,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin'), // Update navigation to use GoRouter
         ),
       ),
       body: SingleChildScrollView(

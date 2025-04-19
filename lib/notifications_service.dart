@@ -170,50 +170,6 @@ class NotificationsService {
     await _saveNotificationToFirestore(message);
   }
 
-  static Future<void> _saveFCMToken(String token) async {
-    // Skip for web platforms
-    if (kIsWeb) {
-      print('Skipping FCM token save on web platform');
-      return;
-    }
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      print('Cannot save FCM token: User not logged in');
-      return;
-    }
-    
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-
-      if (!userDoc.exists) {
-        // For new users, create the document with the token
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .set({
-              'fcmToken': token,
-              'tokenLastUpdated': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-      } else {
-        // For existing users, update the token
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .update({
-              'fcmToken': token,
-              'tokenLastUpdated': FieldValue.serverTimestamp(),
-            });
-      }
-      print('FCM token saved successfully for user: $uid');
-    } catch (e) {
-      print('Error in _saveFCMToken: $e');
-      throw e; // Re-throw to handle in the calling method
-    }
-  }
 
   static Future<void> sendMessageNotification({
     required String receiverId,

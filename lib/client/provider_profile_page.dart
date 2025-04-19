@@ -1,142 +1,230 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../front/app_colors.dart';
+import '../front/custom_app_bar.dart';
+import '../front/custom_button.dart';
+import '../chat/conversation_service_page.dart';
 
 class ProviderProfilePage extends StatefulWidget {
   final String providerId;
-  final Map<String, dynamic> providerData;
-  final Map<String, dynamic> userData;
-  final String serviceName;
-  final bool isOwnProfile;
 
   const ProviderProfilePage({
     super.key,
     required this.providerId,
-    required this.providerData,
-    required this.userData,
-    required this.serviceName,
-    this.isOwnProfile = false, // Default to false
   });
 
   @override
   State<ProviderProfilePage> createState() => _ProviderProfilePageState();
 }
 
-class _ProviderProfilePageState extends State<ProviderProfilePage> {
+class _ProviderProfilePageState extends State<ProviderProfilePage> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   List<Map<String, dynamic>> _reviews = [];
   double _averageRating = 0.0;
   bool _isFavorite = false;
+  late TabController _tabController;
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  
+  // Data storage
+  Map<String, dynamic> _providerData = {};
+  Map<String, dynamic> _userData = {};
+  String _serviceName = '';
+
+  // Location data
+  double? _latitude;
+  double? _longitude;
+  String _address = '';
+  MapController _mapController = MapController();
 
   @override
   void initState() {
     super.initState();
-    _loadReviews();
-    _checkIfFavorite();
+    _tabController = TabController(length: 3, vsync: this);
+    _fetchProviderData();
   }
 
-  Future<void> _loadReviews() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchProviderData() async {
     try {
+      print('Fetching provider data for ID: ${widget.providerId}');
+      // Get provider data from providers collection
+      final providerDoc = await FirebaseFirestore.instance
+          .collection('providers')
+          .doc(widget.providerId)
+          .get();
+      
+      if (!providerDoc.exists) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      final providerData = providerDoc.data() ?? {};
+      
+      // Get user data using the userId field from provider data
+      final userId = providerData['userId'] as String?;
+      if (userId == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (!userDoc.exists) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      final userData = userDoc.data() ?? {};
+      
+      // Determine service name if possible
+      String serviceName = '';
+      if (providerData.containsKey('services') && 
+          providerData['services'] is List && 
+          (providerData['services'] as List).isNotEmpty) {
+        serviceName = (providerData['services'] as List).first.toString();
+      }
+      
+      // Extract location data
+      double? latitude;
+      double? longitude;
+      String address = 'Adresse non spécifiée';
+      
+      if (providerData.containsKey('exactLocation') && 
+          providerData['exactLocation'] is Map<String, dynamic>) {
+        final locationData = providerData['exactLocation'] as Map<String, dynamic>;
+        latitude = locationData['latitude'] as double?;
+        longitude = locationData['longitude'] as double?;
+        address = locationData['address'] as String? ?? 'Adresse non spécifiée';
+      }
+      
+      setState(() {
+        _providerData = providerData;
+        _userData = userData;
+        _serviceName = serviceName;
+        _latitude = latitude;
+        _longitude = longitude;
+        _address = address;
+      });
+      
+      // Now load reviews and check favorites
+      await _loadData();
+      
+    } catch (e) {
+      print('Error fetching provider data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadData() async {
+    try {
+      // Check if provider is in favorites
+      if (currentUserId != null) {
+        final favDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserId)
+            .collection('favorites')
+            .doc(widget.providerId)
+            .get();
+        
+        setState(() {
+          _isFavorite = favDoc.exists;
+        });
+      }
+
       // Load reviews
       final reviewsSnapshot = await FirebaseFirestore.instance
-          .collection('provider_reviews')
+          .collection('reviews')
           .where('providerId', isEqualTo: widget.providerId)
           .orderBy('timestamp', descending: true)
           .get();
 
-      final reviews = await Future.wait(
-        reviewsSnapshot.docs.map((doc) async {
-          final data = doc.data();
-          final userId = data['userId'] as String;
-          
-          // Get user info
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .get();
-          
-          final userData = userDoc.data() ?? {};
-          final userName = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}';
-          final userAvatar = userData['avatarUrl'];
-          
-          return {
-            'id': doc.id,
-            'rating': data['rating'] ?? 0.0,
-            'comment': data['comment'] ?? '',
-            'timestamp': data['timestamp'] ?? Timestamp.now(),
-            'userName': userName,
-            'userAvatar': userAvatar,
-          };
-        }),
-      );
+      final reviews = reviewsSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'userId': data['userId'] ?? '',
+          'userName': data['userName'] ?? 'Utilisateur',
+          'rating': (data['rating'] ?? 0).toDouble(),
+          'comment': data['comment'] ?? '',
+          'timestamp': data['timestamp'] ?? Timestamp.now(),
+        };
+      }).toList();
 
       // Calculate average rating
       double totalRating = 0;
-      for (var review in reviews) {
-        totalRating += review['rating'] as double;
+      if (reviews.isNotEmpty) {
+        for (var review in reviews) {
+          totalRating += review['rating'];
+        }
+        _averageRating = totalRating / reviews.length;
+      } else {
+        // Use the rating from provider data if available
+        final ratings = _providerData['ratings'];
+        if (ratings != null && ratings['overall'] != null) {
+          _averageRating = (ratings['overall'] as num).toDouble();
+        }
       }
-      
+
       setState(() {
         _reviews = reviews;
-        _averageRating = reviews.isEmpty ? 0 : totalRating / reviews.length;
         _isLoading = false;
       });
     } catch (e) {
+      print('Error loading data: $e');
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
-    }
-  }
-
-  Future<void> _checkIfFavorite() async {
-    if (currentUserId == null) return;
-    
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('favorite_providers')
-          .doc(widget.providerId)
-          .get();
-      
-      setState(() {
-        _isFavorite = doc.exists;
-      });
-    } catch (e) {
-      // Ignore error
     }
   }
 
   Future<void> _toggleFavorite() async {
     if (currentUserId == null) return;
-    
+
     setState(() {
       _isFavorite = !_isFavorite;
     });
-    
+
     try {
-      final ref = FirebaseFirestore.instance
+      final favRef = FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
-          .collection('favorite_providers')
+          .collection('favorites')
           .doc(widget.providerId);
-      
+
       if (_isFavorite) {
-        await ref.set({
+        // Add to favorites
+        await favRef.set({
           'providerId': widget.providerId,
-          'timestamp': FieldValue.serverTimestamp(),
+          'addedAt': FieldValue.serverTimestamp(),
+          'serviceName': _serviceName,
         });
       } else {
-        await ref.delete();
+        // Remove from favorites
+        await favRef.delete();
       }
     } catch (e) {
-      // Revert state on error
+      // Revert state if operation fails
       setState(() {
         _isFavorite = !_isFavorite;
       });
@@ -146,812 +234,850 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     }
   }
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    // Make sure the phone number is properly formatted
-    final String formattedNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
-    final Uri phoneUri = Uri.parse('tel:$formattedNumber');
-    
-    try {
-      if (!await launchUrl(phoneUri)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Impossible d\'appeler $formattedNumber')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
-      }
-    }
-  }
-
-  // Add the missing _showReviewDialog method
-  // Update the _showReviewDialog method to use GoRouter
-  void _showReviewDialog() {
-    final _commentController = TextEditingController();
-    double _rating = 0;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ajouter un avis'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Note'),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  return IconButton(
-                    icon: Icon(
-                      index < _rating ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _rating = index + 1;
-                      });
-                    },
-                  );
-                }),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _commentController,
-                decoration: const InputDecoration(
-                  labelText: 'Commentaire',
-                  hintText: 'Partagez votre expérience...',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(), // Replace Navigator.pop with context.pop
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (_rating == 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Veuillez donner une note')),
-                );
-                return;
-              }
-
-              try {
-                await FirebaseFirestore.instance
-                    .collection('provider_reviews')
-                    .add({
-                  'providerId': widget.providerId,
-                  'userId': currentUserId,
-                  'rating': _rating,
-                  'comment': _commentController.text,
-                  'timestamp': FieldValue.serverTimestamp(),
-                });
-
-                if (mounted) {
-                  context.pop(); // Replace Navigator.pop with context.pop
-                  _loadReviews(); // Reload reviews
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Avis ajouté avec succès')),
-                  );
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Erreur: $e')),
-                );
-              }
-            },
-            child: const Text('Soumettre'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Update the _showRequestServiceDialog method to use GoRouter
-  void _showRequestServiceDialog() {
-    final _descriptionController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Demander un service'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description du service',
-                  hintText: 'Décrivez le service dont vous avez besoin...',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 5,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(), // Replace Navigator.pop with context.pop
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (_descriptionController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Veuillez décrire votre demande')),
-                );
-                return;
-              }
-
-              try {
-                // Create a new service request
-                
-                // Create a conversation for this service
-                
-                if (mounted) {
-                  context.pop(); // Replace Navigator.pop with context.pop
-                  
-                  // Navigate to the conversation using GoRouter
-                  context.push('/client/chat/conversation/${widget.providerId}', extra: {
-                    'otherUserId': widget.providerId,
-                    'otherUserName': '${widget.userData['firstname']} ${widget.userData['lastname']}',
-                    'serviceName': widget.serviceName,
-                  });
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Demande envoyée avec succès')),
-                  );
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Erreur: $e')),
-                );
-              }
-            },
-            child: const Text('Envoyer'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final firstName = widget.userData['firstname'] as String;
-    final lastName = widget.userData['lastname'] as String;
-    final avatarUrl = widget.userData['avatarUrl'] as String?;
-    final bio = widget.providerData['bio'] as String?;
-    final phoneNumber = widget.providerData['professionalPhone'] as String?;
-    final email = widget.providerData['professionalEmail'] as String?;
-    final minRate = widget.providerData['rateRange']['min'];
-    final maxRate = widget.providerData['rateRange']['max'];
-    final workingArea = widget.providerData['workingArea'] as String?;
-    
-    // Get experiences from provider data
-    final experiences = widget.providerData['experiences'] as List<dynamic>?;
-    
-    // Get certifications from provider data
-    final certifications = widget.providerData['certifications'] as List<dynamic>?;
-    
-    // Get working hours from provider data
-    final workingHours = widget.providerData['workingHours'] as Map<String, dynamic>?;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: widget.isOwnProfile 
-            ? const Text('Mon profil prestataire')
-            : const Text('Profil du prestataire'),
-        actions: [
-          // Only show favorite button if not viewing own profile
-          if (!widget.isOwnProfile)
-            IconButton(
-              icon: Icon(
-                _isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: _isFavorite ? Colors.red : null,
-              ),
-              onPressed: _toggleFavorite,
-            ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Provider header
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 40,
-                                backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                                child: avatarUrl == null ? Text(firstName[0], style: const TextStyle(fontSize: 30)) : null,
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '$firstName $lastName',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.star,
-                                          color: Colors.amber,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _averageRating.toStringAsFixed(1),
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          ' (${_reviews.length} avis)',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          
-                          // Only show contact buttons if not viewing own profile
-                          if (!widget.isOwnProfile) ...[
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.chat),
-                                    label: const Text('Contacter'),
-                                    onPressed: _navigateToConversation,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                if (phoneNumber != null)
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.phone),
-                                      label: const Text('Appeler'),
-                                      onPressed: () => _makePhoneCall(phoneNumber),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Provider info
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Informations',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Divider(),
-                          if (bio != null && bio.isNotEmpty) ...[
-                            const Text(
-                              'À propos',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(bio),
-                            const SizedBox(height: 16),
-                          ],
-                          
-                          Row(
-                            children: [
-                              const Icon(Icons.attach_money, color: Colors.green),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Tarif: $minRate - $maxRate DT/h',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 12),
-                          
-                          if (email != null && email.isNotEmpty)
-                            Row(
-                              children: [
-                                const Icon(Icons.email, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Email: $email',
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          
-                          if (email != null && email.isNotEmpty)
-                            const SizedBox(height: 12),
-                          
-                          if (workingArea != null && workingArea.isNotEmpty)
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on, color: Colors.red),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Zone de travail: $workingArea',
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            
-                          const SizedBox(height: 12),
-                          
-                          Row(
-                            children: [
-                              const Icon(Icons.home_repair_service, color: Colors.purple),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Service: ${widget.serviceName}',
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  // Experience section
-                  if (experiences != null && experiences.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Expériences',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Divider(),
-                            ...experiences.map((exp) {
-                              final service = exp['service'] as String;
-                              final years = exp['years'] as int;
-                              final description = exp['description'] as String;
-                              
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.work, color: Colors.blue),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            '$service - $years ${years > 1 ? 'ans' : 'an'} d\'expérience',
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 32.0),
-                                      child: Text(description),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  
-                  // Certifications section
-                  if (certifications != null && certifications.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Certifications',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Divider(),
-                            ...certifications.map((cert) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.verified, color: Colors.green),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        cert.toString(),
-                                        style: const TextStyle(fontSize: 16),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  
-                  // Working hours section
-                  if (workingHours != null) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Horaires de travail',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Divider(),
-                            ...workingHours.entries.map((entry) {
-                              final day = entry.key;
-                              final hours = entry.value as Map<String, dynamic>;
-                              final isWorking = hours['isWorking'] ?? true;
-                              
-                              if (!isWorking) {
-                                return const SizedBox.shrink();
-                              }
-                              
-                              String dayName;
-                              switch (day) {
-                                case 'monday': dayName = 'Lundi'; break;
-                                case 'tuesday': dayName = 'Mardi'; break;
-                                case 'wednesday': dayName = 'Mercredi'; break;
-                                case 'thursday': dayName = 'Jeudi'; break;
-                                case 'friday': dayName = 'Vendredi'; break;
-                                case 'saturday': dayName = 'Samedi'; break;
-                                case 'sunday': dayName = 'Dimanche'; break;
-                                default: dayName = day;
-                              }
-                              
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.access_time, color: Colors.orange),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      dayName,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.left,
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      '${hours['start']} - ${hours['end']}',
-                                      style: const TextStyle(fontSize: 16),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Reviews
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Avis (${_reviews.length})',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              // Only show "Add Review" button if not viewing own profile
-                              if (!widget.isOwnProfile)
-                                TextButton.icon(
-                                  icon: const Icon(Icons.rate_review),
-                                  label: const Text('Ajouter un avis'),
-                                  onPressed: () {
-                                    _showReviewDialog();
-                                  },
-                                ),
-                            ],
-                          ),
-                          const Divider(),
-                          _reviews.isEmpty
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16.0),
-                                    child: Text('Aucun avis pour le moment'),
-                                  ),
-                                )
-                              : Column(
-                                  children: _reviews.map((review) {
-                                    final timestamp = review['timestamp'] as Timestamp;
-                                    final date = timestamp.toDate();
-                                    final formattedDate = '${date.day}/${date.month}/${date.year}';
-                                    
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 16.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 20,
-                                                backgroundImage: review['userAvatar'] != null
-                                                    ? NetworkImage(review['userAvatar'])
-                                                    : null,
-                                                child: review['userAvatar'] == null
-                                                    ? Text((review['userName'] as String).isNotEmpty
-                                                        ? (review['userName'] as String)[0]
-                                                        : '?')
-                                                    : null,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      review['userName'] as String,
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      formattedDate,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              Row(
-                                                children: [
-                                                  const Icon(
-                                                    Icons.star,
-                                                    color: Colors.amber,
-                                                    size: 16,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    (review['rating'] as double).toStringAsFixed(1),
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          if (review['comment'] != null && (review['comment'] as String).isNotEmpty) ...[
-                                            const SizedBox(height: 8),
-                                            Text(review['comment'] as String),
-                                          ],
-                                          if (_reviews.indexOf(review) < _reviews.length - 1) 
-                                            const Divider(height: 24),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-      bottomNavigationBar: widget.isOwnProfile 
-          ? Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.edit),
-                label: const Text('Modifier mon profil', style: TextStyle(fontSize: 16)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                onPressed: () {
-                  // Navigate to profile edit page using GoRouter
-                  context.push('/prestataireHome/editProfile', extra: {
-                    'providerId': widget.providerId,
-                    'providerData': widget.providerData,
-                    'userData': widget.userData,
-                  });
-                },
-              )
-            )
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton(
-                onPressed: () {
-                  _showRequestServiceDialog();
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Demander un service',
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-          );
-        }
-      
-
-// Add this method to your _ProviderProfilePageState class
-  Future<void> _navigateToConversation() async {
+  void _startConversation() async {
     if (currentUserId == null) return;
     
     try {
       // Check if a conversation already exists
       final conversationsQuery = await FirebaseFirestore.instance
-          .collection('service_conversations')
+          .collection('conversations')
           .where('participants', arrayContains: currentUserId)
           .get();
       
       String? existingConversationId;
       
       for (var doc in conversationsQuery.docs) {
-        final participants = List<String>.from(doc['participants'] ?? []);
+        final participants = List<String>.from(doc['participants']);
         if (participants.contains(widget.providerId)) {
           existingConversationId = doc.id;
           break;
         }
       }
       
+      final providerName = '${_userData['firstname'] ?? ''} ${_userData['lastname'] ?? ''}';
+      
       if (existingConversationId != null) {
         // Navigate to existing conversation
-        if (mounted) {
-          context.push('/clientHome/chat/service/$existingConversationId', extra: {
-            'otherUserId': widget.providerId,
-            'otherUserName': '${widget.userData['firstname']} ${widget.userData['lastname']}',
-            'serviceName': widget.serviceName,
-          });
-        }
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ConversationServicePage(
+              otherUserId: widget.providerId,
+              otherUserName: providerName,
+            ),
+          ),
+        );
       } else {
         // Create a new conversation
-        final conversationRef = await FirebaseFirestore.instance
-            .collection('service_conversations')
-            .add({
-              'participants': [currentUserId, widget.providerId],
-              'lastMessage': 'Nouvelle conversation',
-              'lastMessageTimestamp': FieldValue.serverTimestamp(),
-              'createdAt': FieldValue.serverTimestamp(),
-              'serviceName': widget.serviceName,
-            });
+        final newConversationRef = FirebaseFirestore.instance.collection('conversations').doc();
         
-        if (mounted) {
-          context.push('/clientHome/chat/service/${conversationRef.id}', extra: {
-            'otherUserId': widget.providerId,
-            'otherUserName': '${widget.userData['firstname']} ${widget.userData['lastname']}',
-            'serviceName': widget.serviceName,
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+        await newConversationRef.set({
+          'participants': [currentUserId, widget.providerId],
+          'lastMessage': null,
+          'lastMessageTime': null,
+          'createdAt': FieldValue.serverTimestamp(),
+          'serviceId': _serviceName,
+        });
+        
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ConversationServicePage(
+              otherUserId: widget.providerId,
+              otherUserName: providerName,
+            ),
+          ),
         );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e')),
+      );
     }
+  }
+
+  Future<void> _makePhoneCall() async {
+    final phoneNumber = _userData['phone'];
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Numéro de téléphone non disponible')),
+      );
+      return;
+    }
+
+    final Uri uri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'appeler ce numéro')),
+      );
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    
+    final providerName = '${_userData['firstname'] ?? ''} ${_userData['lastname'] ?? ''}';
+    final photoUrl = _userData['photoURL'] ?? '';
+    
+    return Scaffold(
+      appBar: CustomAppBar(
+        title: 'Profil Prestataire',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: _isFavorite ? Colors.red : (isDarkMode ? Colors.white : Colors.black87),
+            ),
+            onPressed: _toggleFavorite,
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                color: primaryColor,
+              ),
+            )
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Provider header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // Avatar
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor,
+                          backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                          child: photoUrl.isEmpty
+                              ? Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Name
+                        Text(
+                          providerName,
+                          style: GoogleFonts.poppins(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        
+                        // Service
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            _serviceName,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Rating
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.star,
+                              size: 24,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _averageRating.toStringAsFixed(1),
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '(${_reviews.length} avis)',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        // Contact buttons - always show them
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Message button
+                            CustomButton(
+                              onPressed: _startConversation,
+                              text: 'Message',
+                              backgroundColor: primaryColor,
+                              textColor: Colors.white,
+                              height: 44,
+                              width: 120,
+                            ),
+                            const SizedBox(width: 16),
+                            
+                            // Call button
+                            CustomButton(
+                              onPressed: _makePhoneCall,
+                              text: 'Appeler',
+                              backgroundColor: Colors.transparent,
+                              textColor: primaryColor,
+                              height: 44,
+                              width: 120,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Tabs
+                  Container(
+                    color: isDarkMode ? Colors.black : Colors.grey.shade50,
+                    child: TabBar(
+                      controller: _tabController,
+                      labelColor: primaryColor,
+                      unselectedLabelColor: isDarkMode ? Colors.white70 : Colors.grey.shade700,
+                      indicatorColor: primaryColor,
+                      tabs: [
+                        Tab(text: 'À propos'),
+                        Tab(text: 'Expérience'),
+                        Tab(text: 'Avis'),
+                      ],
+                      labelStyle: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      unselectedLabelStyle: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  
+                  // Tab content
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        // About tab
+                        _buildAboutTab(isDarkMode),
+                        
+                        // Experience tab
+                        _buildExperienceTab(isDarkMode),
+                        
+                        // Reviews tab
+                        _buildReviewsTab(isDarkMode),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildAboutTab(bool isDarkMode) {
+    final workingDays = _providerData['workingDays'] as Map<String, dynamic>? ?? {};
+    final workingHours = _providerData['workingHours'] as Map<String, dynamic>? ?? {};
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Bio section
+          Text(
+            'Bio',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _providerData['bio'] ?? 'Aucune description disponible',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Working area with map
+          Text(
+            'Zone de travail',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          // Address text
+          Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 20,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _address,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Map with 15km radius
+          if (_latitude != null && _longitude != null)
+            Container(
+              height: 250,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    center: LatLng(_latitude!, _longitude!),
+                    zoom: 10.0,
+                    interactiveFlags: InteractiveFlag.all,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.app',
+                    ),
+                    CircleLayer(
+                      circles: [
+                        CircleMarker(
+                          point: LatLng(_latitude!, _longitude!),
+                          radius: 15000, // 15km in meters
+                          color: AppColors.primaryGreen.withOpacity(0.3), // Increased opacity
+                          borderColor: AppColors.primaryGreen,
+                          borderStrokeWidth: 3, // Increased stroke width
+                          useRadiusInMeter: true, // Important: ensure radius is interpreted as meters
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(_latitude!, _longitude!),
+                          width: 40,
+                          height: 40,
+                          builder: (context) => Icon(
+                            Icons.location_on,
+                            color: AppColors.primaryGreen,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 100,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Localisation non disponible',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: 24),
+          
+          // Working hours
+          Text(
+            'Horaires de travail',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // Days and hours
+          _buildWorkingHoursTable(isDarkMode, workingDays, workingHours),
+          
+          const SizedBox(height: 24),
+          
+          // Services
+          Text(
+            'Services',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // Services list
+          _buildServicesList(isDarkMode),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkingHoursTable(
+    bool isDarkMode, 
+    Map<String, dynamic> workingDays, 
+    Map<String, dynamic> workingHours
+  ) {
+    final daysTranslation = {
+      'monday': 'Lundi',
+      'tuesday': 'Mardi',
+      'wednesday': 'Mercredi',
+      'thursday': 'Jeudi',
+      'friday': 'Vendredi',
+      'saturday': 'Samedi',
+      'sunday': 'Dimanche',
+    };
+    
+    return Table(
+      border: TableBorder.all(
+        color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+        width: 1,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      columnWidths: const {
+        0: FlexColumnWidth(2),
+        1: FlexColumnWidth(3),
+      },
+      children: daysTranslation.entries.map((entry) {
+        final day = entry.key;
+        final dayName = entry.value;
+        final isWorking = workingDays[day] == true;
+        
+        String hoursText = 'Fermé';
+        if (isWorking && workingHours.containsKey(day)) {
+          final dayHours = workingHours[day] as Map<String, dynamic>?;
+          if (dayHours != null) {
+            final start = dayHours['start'] ?? '00:00';
+            final end = dayHours['end'] ?? '00:00';
+            if (start != '00:00' || end != '00:00') {
+              hoursText = '$start - $end';
+            } else {
+              hoursText = 'Horaires non spécifiés';
+            }
+          }
+        }
+        
+        return TableRow(
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.transparent : Colors.white,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                dayName,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                hoursText,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: isWorking 
+                      ? (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)
+                      : (isDarkMode ? Colors.grey.shade600 : Colors.grey.shade500),
+                ),
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildServicesList(bool isDarkMode) {
+    final services = _providerData['services'] as List<dynamic>? ?? [];
+    
+    if (services.isEmpty) {
+      return Text(
+        'Aucun service spécifié',
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+        ),
+      );
+    }
+    
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: services.map((service) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDarkMode 
+                  ? AppColors.darkBorderColor.withOpacity(0.3) 
+                  : AppColors.lightBorderColor.withOpacity(0.3),
+            ),
+          ),
+          child: Text(
+            service.toString(),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildExperienceTab(bool isDarkMode) {
+    final experiences = _providerData['experiences'] as List<dynamic>? ?? [];
+    final certifications = _providerData['certifications'] as List<dynamic>? ?? [];
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Experience section
+          Text(
+            'Expérience professionnelle',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          if (experiences.isEmpty)
+            Text(
+              'Aucune expérience professionnelle spécifiée',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: experiences.length,
+              itemBuilder: (context, index) {
+                final experience = experiences[index] as Map<String, dynamic>? ?? {};
+                final service = experience['service'] ?? 'Non spécifié';
+                final years = experience['years'] ?? 0;
+                final description = experience['description'] ?? 'Aucune description';
+                
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.work_outline,
+                              size: 20,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                service,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isDarkMode ? AppColors.primaryGreen.withOpacity(0.1) : AppColors.primaryDarkGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$years ${years > 1 ? 'ans' : 'an'}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          description,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          
+          const SizedBox(height: 24),
+          
+          // Certifications section
+          Text(
+            'Certifications',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          if (certifications.isEmpty)
+            Text(
+              'Aucune certification spécifiée',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: certifications.map((certification) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDarkMode 
+                          ? AppColors.darkBorderColor.withOpacity(0.3) 
+                          : AppColors.lightBorderColor.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.verified_outlined,
+                        size: 16,
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        certification.toString(),
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewsTab(bool isDarkMode) {
+    return _reviews.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.rate_review_outlined,
+                  size: 64,
+                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Aucun avis pour le moment',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Soyez le premier à donner votre avis',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                                  ),
+              ],
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _reviews.length,
+            itemBuilder: (context, index) {
+              final review = _reviews[index];
+              final userName = review['userName'];
+              final rating = review['rating'];
+              final comment = review['comment'];
+              final timestamp = review['timestamp'] as Timestamp;
+              final date = timestamp.toDate();
+              
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                            child: Icon(
+                              Icons.person,
+                              size: 20,
+                              color: isDarkMode ? Colors.white70 : Colors.black54,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            userName,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${date.day}/${date.month}/${date.year}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      
+                      // Rating stars
+                      Row(
+                        children: List.generate(5, (index) {
+                          return Icon(
+                            index < rating ? Icons.star : Icons.star_border,
+                            size: 18,
+                            color: Colors.amber,
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      
+                      // Comment
+                      Text(
+                        comment,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
   }
 }

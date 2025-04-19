@@ -47,7 +47,6 @@ class ConversationCard extends StatelessWidget {
         : AppColors.lightInputBackground;
 
     // Use a higher elevation and a darker shadow if there are unread messages
-    final double cardElevation = currentUserUnreadCount > 0 ? 8 : 2;
     final List<BoxShadow> cardShadow = currentUserUnreadCount > 0
         ? [
             BoxShadow(

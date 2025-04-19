@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart'; // Add this import
 import '../../utils/auth_helper.dart';
 import '../front/sidebar.dart';
-import 'gérer_services.dart';
-import 'valider_publications.dart';
-import 'provider_approval_page.dart';
+
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -38,12 +37,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
           children: [
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ServicesManagementPage(),
-                  ),
-                );
+                // Use GoRouter for navigation
+                context.push('/admin/services');
               },
               icon: const Icon(Icons.build),
               label: const Text('Gérer les Services'),
@@ -57,12 +52,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProviderApprovalPage(),
-                  ),
-                );
+                // Use GoRouter for navigation
+                context.push('/admin/providers');
               },
               icon: const Icon(Icons.person_add),
               label: const Text('Valider les Prestataires'),
@@ -76,12 +67,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PostsValidationPage(),
-                  ),
-                );
+                // Use GoRouter for navigation
+                context.push('/admin/posts');
               },
               icon: const Icon(Icons.check_circle),
               label: const Text('Valider les Posts'),

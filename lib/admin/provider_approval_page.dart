@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../notifications_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../notifications_service.dart';
+import 'package:go_router/go_router.dart'; // Add this import
 
-// Move VerificationItem class outside
+// VerificationItem class
 class VerificationItem {
   final String title;
   final String description;
@@ -17,18 +18,24 @@ class VerificationItem {
   });
 }
 
-// Change to StatefulWidget
-class ProviderApprovalPage extends StatefulWidget {
-  const ProviderApprovalPage({super.key});
+class ProviderApprovalDetailsPage extends StatefulWidget {
+  final String providerId;
+  
+  const ProviderApprovalDetailsPage({
+    super.key,
+    required this.providerId,
+  });
 
   @override
-  State<ProviderApprovalPage> createState() => _ProviderApprovalPageState();
+  State<ProviderApprovalDetailsPage> createState() => _ProviderApprovalDetailsPageState();
 }
 
-class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
-  final TextEditingController _searchController = TextEditingController();
+class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPage> {
   final TextEditingController _commentController = TextEditingController();
-  String _searchQuery = '';
+  bool _isLoading = true;
+  Map<String, dynamic>? _providerData;
+  String? _errorMessage;
+  
   final List<VerificationItem> _checkList = [
     VerificationItem(
       title: 'Identité',
@@ -53,218 +60,102 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadProviderData();
+  }
+
+  Future<void> _loadProviderData() async {
+    try {
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('providers')
+          .doc(widget.providerId)
+          .get();
+      
+      if (!docSnapshot.exists) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Prestataire non trouvé';
+        });
+        return;
+      }
+      
+      setState(() {
+        _providerData = docSnapshot.data();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Erreur lors du chargement des données: $e';
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Validation des Prestataires'),
-      ),
-      body: Column(
-        children: [
-          // Add search bar
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Rechercher par nom ou prénom...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
-            ),
-          ),
-          // List of requests
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('provider_requests')
-                  .where('status', isEqualTo: 'pending')  // Only show pending requests
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Une erreur est survenue'));
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.data == null || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('Aucune demande en attente'));
-                }
-
-                final requests = snapshot.data!.docs;
-                
-                // Filter by search query if needed
-                final filteredRequests = _searchQuery.isEmpty
-                    ? requests
-                    : requests.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        // Add more fields to search as needed
-                        return data['professionalEmail'].toString().toLowerCase().contains(_searchQuery) ||
-                               data['professionalPhone'].toString().toLowerCase().contains(_searchQuery);
-                      }).toList();
-
-                return ListView.builder(
-                  itemCount: filteredRequests.length,
-                  itemBuilder: (context, index) {
-                    final requestData = filteredRequests[index].data() as Map<String, dynamic>;
-                    final requestId = filteredRequests[index].id;
-                    
-                    return Card(
-                      margin: const EdgeInsets.all(8.0),
-                      child: ListTile(
-                        title: Text('Demande de ${requestData['professionalEmail'] ?? 'Inconnu'}'),
-                        subtitle: Text('Téléphone: ${requestData['professionalPhone'] ?? 'Non spécifié'}'),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () {
-                          _showRequestDetails(context, requestId, requestData);
-                        },
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRequestDetails(BuildContext context, String requestId, Map<String, dynamic> requestData) {
-    // Reset checklist
-    for (var item in _checkList) {
-      item.isVerified = false;
-    }
-    
-    _commentController.clear();
-    
-    // Create a StatefulBuilder dialog to manage state within the dialog
-    showDialog(
-      context: context,
-      builder: (context) => Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Détails de la demande'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text('Fermer'),
-              ),
-            ],
-          ),
-          body: StatefulBuilder(
-            builder: (context, setDialogState) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Services section
-                    _buildSectionTitle('Services proposés'),
-                    _buildServicesList(requestData),
-                    
-                    const Divider(height: 32),
-                    
-                    // Documents section
-                    _buildSectionTitle('Pièce d\'identité'),
-                    _buildIdCard(requestData),
-                    
-                    const SizedBox(height: 16),
-                    _buildSectionTitle('Certifications'),
-                    _buildCertifications(requestData),
-                    
-                    const Divider(height: 32),
-                    
-                    // Professional info section
-                    _buildSectionTitle('Informations professionnelles'),
-                    _buildProfessionalInfo(requestData),
-                    
-                    const Divider(height: 32),
-                    
-                    // Location section
-                    _buildSectionTitle('Localisation'),
-                    _buildLocationInfo(requestData),
-                    
-                    const Divider(height: 32),
-                    
-                    // Working hours section
-                    _buildSectionTitle('Horaires de travail'),
-                    _buildWorkingHours(requestData),
-                    
-                    const Divider(height: 32),
-                    
-                    // Verification checklist
-                    _buildSectionTitle('Liste de vérification'),
-                    ...(_checkList.map((item) => CheckboxListTile(
-                      title: Text(item.title),
-                      subtitle: Text(item.description),
-                      value: item.isVerified,
-                      onChanged: (value) {
-                        // Use setDialogState instead of setState
-                        setDialogState(() {
-                          item.isVerified = value ?? false;
-                        });
-                      },
-                    ))),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Admin comment
-                    TextField(
-                      controller: _commentController,
-                      decoration: const InputDecoration(
-                        labelText: 'Commentaire (optionnel)',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => _rejectRequest(requestId),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Rejeter'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => _approveRequest(requestId, requestData),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Approuver'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }
-          ),
+        title: const Text('Détails du prestataire'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin/providers'), // Update navigation to use GoRouter
         ),
       ),
+      body: _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(child: Text(_errorMessage!))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Services section
+                      _buildSectionTitle('Services proposés'),
+                      _buildServicesList(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Documents section
+                      _buildSectionTitle('Pièce d\'identité'),
+                      _buildIdCard(_providerData!),
+                      
+                      const SizedBox(height: 16),
+                      _buildSectionTitle('Certifications'),
+                      _buildCertifications(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Professional info section
+                      _buildSectionTitle('Informations professionnelles'),
+                      _buildProfessionalInfo(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Location section
+                      _buildSectionTitle('Localisation'),
+                      _buildLocationInfo(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Working hours section
+                      _buildSectionTitle('Horaires de travail'),
+                      _buildWorkingHours(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Action section
+                      _buildSectionTitle('Action'),
+                      _buildActionButtons(widget.providerId, _providerData!, isDarkMode),
+                    ],
+                  ),
+                ),
     );
   }
-  
+
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -530,8 +421,194 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
     );
   }
   
-  
-  Future<void> _approveRequest(String requestId, Map<String, dynamic> requestData) async {
+  // Action buttons for provider approval/rejection
+  Widget _buildActionButtons(String providerId, Map<String, dynamic> data, bool isDarkMode) {
+    final status = data['status'] as String? ?? 'pending';
+    
+    if (status != 'pending') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: status == 'approved'
+              ? (isDarkMode ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50)
+              : (isDarkMode ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: status == 'approved'
+                ? (isDarkMode ? Colors.green.shade700 : Colors.green.shade200)
+                : (isDarkMode ? Colors.red.shade700 : Colors.red.shade200),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  status == 'approved' ? Icons.check_circle : Icons.cancel,
+                  color: status == 'approved'
+                      ? (isDarkMode ? Colors.green.shade300 : Colors.green.shade700)
+                      : (isDarkMode ? Colors.red.shade300 : Colors.red.shade700),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  status == 'approved' ? 'Demande approuvée' : 'Demande rejetée',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: status == 'approved'
+                        ? (isDarkMode ? Colors.green.shade300 : Colors.green.shade700)
+                        : (isDarkMode ? Colors.red.shade300 : Colors.red.shade700),
+                  ),
+                ),
+              ],
+            ),
+            if (status == 'rejected' && data['rejectionReason'] != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Motif: ${data['rejectionReason']}',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: isDarkMode ? Colors.red.shade200 : Colors.red.shade800,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Verification checklist
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Liste de vérification',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...(_checkList.map((item) => CheckboxListTile(
+                      title: Text(
+                        item.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      subtitle: Text(
+                        item.description,
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                        ),
+                      ),
+                      value: item.isVerified,
+                      activeColor: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                      checkColor: Colors.white,
+                      onChanged: (value) {
+                        setState(() {
+                          item.isVerified = value ?? false;
+                        });
+                      },
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ))),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Rejection reason field
+        TextField(
+          controller: _commentController,
+          decoration: InputDecoration(
+            labelText: 'Motif de rejet (obligatoire en cas de rejet)',
+            labelStyle: TextStyle(
+              color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade50,
+          ),
+          style: TextStyle(
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 24),
+
+        // Action buttons
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _rejectProvider(providerId),
+                icon: const Icon(Icons.cancel),
+                label: const Text('Rejeter'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDarkMode ? Colors.red.shade800 : Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _approveProvider(providerId),
+                icon: const Icon(Icons.check_circle),
+                label: const Text('Approuver'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDarkMode ? Colors.green.shade800 : Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Function to approve a provider
+  Future<void> _approveProvider(String providerId) async {
     // Check if all items are verified
     if (!_checkList.every((item) => item.isVerified)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -541,40 +618,53 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
     }
     
     try {
-      // Update request status
+      // Update the status to approved
       await FirebaseFirestore.instance
-          .collection('provider_requests')
-          .doc(requestId)
+          .collection('providers')
+          .doc(providerId)
           .update({
         'status': 'approved',
         'approvalDate': FieldValue.serverTimestamp(),
         'adminComment': _commentController.text,
+        // Initialize rating fields
+        'ratings': {
+          'quality': {
+            'total': 0,      // Sum of all quality ratings
+            'count': 0,      // Number of quality ratings
+            'average': 0.0,  // Average quality rating
+          },
+          'timeliness': {
+            'total': 0,
+            'count': 0,
+            'average': 0.0,
+          },
+          'price': {
+            'total': 0,
+            'count': 0,
+            'average': 0.0,
+          },
+          'overall': 0.0,    // Overall average of the three rating categories
+          'reviewCount': 0,  // Total number of reviews
+        },
       });
-      
-      // Create provider document
-      await FirebaseFirestore.instance
-          .collection('providers')
-          .doc(requestId)
-          .set({
-        ...requestData,
-        'isVerified': true,
-        'status': 'active',
-        'approvalDate': FieldValue.serverTimestamp(),
-      });
-      
-      // Send notification to user - Fix: Use static method through class
-      await NotificationsService.sendNotification(
-        userId: requestId,
-        title: 'Demande approuvée',
-        body: 'Votre demande de prestataire a été approuvée. Vous pouvez maintenant proposer vos services.',
-        data: {'type': 'provider_approval'},
-      );
-      
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Demande approuvée avec succès')),
+  
+      // Send notification to the provider
+      final userId = _providerData?['userId'];
+      if (userId != null) {
+        await NotificationsService.sendNotification(
+          userId: userId,
+          title: 'Demande approuvée',
+          body: 'Votre demande pour devenir prestataire a été approuvée!',
+          data: {'status': 'approved'},
         );
+      }
+  
+      // Show success message and navigate back
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prestataire approuvé avec succès')),
+        );
+        context.go('/admin/providers'); // Update navigation to use GoRouter
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -583,38 +673,46 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
     }
   }
   
-  Future<void> _rejectRequest(String requestId) async {
+  // Function to reject a provider
+  Future<void> _rejectProvider(String providerId) async {
     if (_commentController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez fournir un commentaire expliquant le rejet')),
+        const SnackBar(content: Text('Veuillez fournir un motif de rejet')),
       );
       return;
     }
-    
+  
     try {
-      // Update request status
+      // Update the status to rejected and add rejection reason
       await FirebaseFirestore.instance
-          .collection('provider_requests')
-          .doc(requestId)
+          .collection('providers')
+          .doc(providerId)
           .update({
         'status': 'rejected',
         'rejectionDate': FieldValue.serverTimestamp(),
-        'adminComment': _commentController.text,
+        'rejectionReason': _commentController.text,
       });
-      
-      // Send notification to user 
-      await NotificationsService.sendNotification(
-        userId: requestId,
-        title: 'Demande rejetée',
-        body: 'Votre demande de prestataire a été rejetée. Consultez les commentaires pour plus d\'informations.',
-        data: {'type': 'provider_rejection'},
-      );
-      
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Demande rejetée')),
+  
+      // Send notification to the provider
+      final userId = _providerData?['userId'];
+      if (userId != null) {
+        await NotificationsService.sendNotification(
+          userId: userId,
+          title: 'Demande rejetée',
+          body: 'Votre demande pour devenir prestataire a été rejetée.',
+          data: {
+            'status': 'rejected',
+            'reason': _commentController.text,
+          },
         );
+      }
+  
+      // Show success message and navigate back
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prestataire rejeté avec succès')),
+        );
+        context.go('/admin/providers'); // Update navigation to use GoRouter
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -624,17 +722,24 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
   }
   
   void _showFullScreenImage(BuildContext context, String imageUrl) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Visualisation'),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
+            title: const Text('Visualisation du document'),
+            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            foregroundColor: isDarkMode ? Colors.white : Colors.black87,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
           ),
+          backgroundColor: isDarkMode ? Colors.black : Colors.white,
           body: Center(
             child: InteractiveViewer(
               panEnabled: true,
@@ -648,22 +753,31 @@ class _ProviderApprovalPageState extends State<ProviderApprovalPage> {
                   return Center(
                     child: CircularProgressIndicator(
                       value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded / 
+                          ? loadingProgress.cumulativeBytesLoaded /
                               (loadingProgress.expectedTotalBytes ?? 1)
                           : null,
+                      color: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
                     ),
                   );
                 },
                 errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error, color: Colors.red, size: 48),
-                        SizedBox(height: 16),
-                        Text('Impossible de charger l\'image'),
-                      ],
-                    ),
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.broken_image_outlined,
+                        size: 64,
+                        color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Impossible de charger l\'image',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),

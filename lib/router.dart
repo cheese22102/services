@@ -2,7 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'login_signup/ROUTES_CONNEXION.dart';
 import 'tutorial_screen.dart';
-import 'admin/accueil_admin.dart';
+import 'admin/ROUTES_ADMIN.dart'; // Import the admin routes
 import 'client/ROUTES_CLIENT.dart';
 import 'prestataire/ROUTES_PRESTATAIRE.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,9 +26,6 @@ final GoRouter router = GoRouter(
       path: '/tutorial',
       builder: (BuildContext context, GoRouterState state) => const TutorialScreen(),
     ),
-    GoRoute(
-      path: '/admin',
-      builder: (BuildContext context, GoRouterState state) => const AdminHomePage(),
-    ),
+    adminRoutes, // Add the admin routes
   ],
 );
