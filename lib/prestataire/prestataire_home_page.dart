@@ -281,6 +281,10 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
   }
 
   Widget _buildApprovedApplicationView(bool isDarkMode) {
+    // Get screen width to make buttons responsive
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -323,9 +327,14 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
+            // Use Wrap for responsive button layout
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
               children: [
-                Expanded(
+                SizedBox(
+                  width: isSmallScreen ? double.infinity : (screenWidth - 80) / 2,
                   child: CustomButton(
                     text: 'Voir mon profil',
                     onPressed: () => _viewProviderProfile(),
@@ -333,11 +342,11 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
                     textColor: Colors.white,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+                SizedBox(
+                  width: isSmallScreen ? double.infinity : (screenWidth - 80) / 2,
                   child: CustomButton(
                     text: 'Voir les demandes',
-                    onPressed: () => context.push('/prestataireHome/requests'),
+                    onPressed: () => context.push('/prestataireHome/reservations'),
                     backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
                     textColor: isDarkMode ? Colors.white : Colors.black87,
                   ),
@@ -345,11 +354,14 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
               ],
             ),
             const SizedBox(height: 12),
-            CustomButton(
-              text: 'Messages',
-              onPressed: () => context.push('/prestataireHome/messages'),
-              backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
-              textColor: isDarkMode ? Colors.white : Colors.black87,
+            SizedBox(
+              width: double.infinity,
+              child: CustomButton(
+                text: 'Messages',
+                onPressed: () => context.go('/prestataireHome/chat'),
+                backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+                textColor: isDarkMode ? Colors.white : Colors.black87,
+              ),
             ),
           ],
         ),

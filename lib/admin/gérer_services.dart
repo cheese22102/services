@@ -1,14 +1,12 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import '../config/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/app_colors.dart';
 import '../front/custom_button.dart';
-import 'package:go_router/go_router.dart'; // Add this import
+import 'package:go_router/go_router.dart';
+import '../utils/cloudinary_service.dart';
 
 
 // Service Model integrated in the same file
@@ -89,27 +87,6 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
     }
   }
 
-  Future<String?> _uploadImageToCloudinary(File imageFile) async {
-    final url = "https://api.cloudinary.com/v1_1/${AppConstants.cloudName}/image/upload";
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(url));
-      request.fields['upload_preset'] = AppConstants.uploadPreset;
-      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
-      
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        var responseData = await response.stream.bytesToString();
-        var jsonData = json.decode(responseData);
-        return jsonData['secure_url'];
-      } else {
-        throw Exception("Échec du téléchargement. Code: ${response.statusCode}");
-      }
-    } catch (e) {
-      debugPrint("Erreur d'upload: $e");
-      return null;
-    }
-  }
-
   void _addService() async {
     if (_formKey.currentState?.validate() ?? false) {
       if (_selectedImage == null) {
@@ -125,8 +102,8 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
       setState(() => _isUploading = true);
       
       try {
-        // Upload image
-        final imageUrl = await _uploadImageToCloudinary(_selectedImage!);
+        // Upload image using CloudinaryService
+        final imageUrl = await CloudinaryService.uploadImage(_selectedImage!);
         if (imageUrl == null) throw Exception("Échec du téléchargement de l'image");
 
         // Removed price parsing
@@ -617,101 +594,94 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
             ),
           ),
           content: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: _nameController,
-                    style: GoogleFonts.poppins(
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Nom du service',
-                      labelStyle: GoogleFonts.poppins(
-                        color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: primaryColor,
-                          width: 2,
-                        ),
-                      ),
-                      filled: true,
-                      fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
-                    ),
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Ce champ est requis' : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? Colors.white : Colors.black87,
                   ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
+                  decoration: InputDecoration(
+                    labelText: 'Nom du service',
+                    labelStyle: GoogleFonts.poppins(
+                      color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: primaryColor,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 100,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
                           ),
-                          child: _isImageUploading
-                              ? Center(child: CircularProgressIndicator(color: primaryColor))
-                              : _selectedImage != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(
-                                        _selectedImage!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        service.imageUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) =>
-                                            Icon(Icons.error, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                      ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: _selectedImage != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  _selectedImage!,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : service.imageUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      service.imageUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          const Icon(Icons.error),
                                     ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: 150, // Fixed width to prevent overflow
-                          child: CustomButton(
-                            text: 'Changer',
-                            icon: const Icon(Icons.image, size: 16),
-                            onPressed: _isImageUploading ? null : _pickImage,
-                            height: 40,
-                            isPrimary: false,
-                            borderRadius: 12,
-                          ),
-                        ),
-                      ],
+                                  )
+                                : Center(
+                                    child: Icon(
+                                      Icons.image,
+                                      color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.add_photo_alternate),
+                      color: primaryColor,
+                      tooltip: 'Changer l\'image',
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
                 _nameController.clear();
-                setState(() => _selectedImage = null);
+                Navigator.of(context).pop();
               },
               child: Text(
                 'Annuler',
@@ -720,50 +690,70 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
                 ),
               ),
             ),
-            CustomButton(
-              text: 'Modifier',
+            ElevatedButton(
               onPressed: () async {
-                if (_formKey.currentState?.validate() ?? false) {
-                  setState(() => _isUploading = true);
-                  try {
-                    String imageUrl = service.imageUrl;
-                    if (_selectedImage != null) {
-                      final newImageUrl = await _uploadImageToCloudinary(_selectedImage!);
-                      if (newImageUrl == null) throw Exception("Échec du téléchargement de l'image");
-                      imageUrl = newImageUrl;
-                    }
+                if (_nameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Le nom du service est requis'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
 
-                    await FirebaseFirestore.instance
-                        .collection('services')
-                        .doc(service.id)
-                        .update({
-                      'name': _nameController.text.trim(),
-                      'imageUrl': imageUrl,
-                    });
+                setState(() => _isUploading = true);
+                Navigator.of(context).pop();
 
-                    if (mounted) {
-                      Navigator.pop(context);
-                      _nameController.clear();
-                      setState(() => _selectedImage = null);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Service modifié avec succès')),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Erreur: ${e.toString()}')),
-                      );
-                    }
-                  } finally {
-                    setState(() => _isUploading = false);
+                try {
+                  final updatedData = <String, dynamic>{
+                    'name': _nameController.text.trim(),
+                    'updatedAt': Timestamp.now(),
+                  };
+
+                  // Use CloudinaryService instead of _uploadImageToCloudinary
+                  if (_selectedImage != null) {
+                    final imageUrl = await CloudinaryService.uploadImage(_selectedImage!);
+                    if (imageUrl == null) throw Exception("Échec du téléchargement de l'image");
+                    updatedData['imageUrl'] = imageUrl;
                   }
+
+                  await FirebaseFirestore.instance
+                      .collection('services')
+                      .doc(service.id)
+                      .update(updatedData);
+
+                  _nameController.clear();
+                  setState(() => _selectedImage = null);
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Service mis à jour avec succès')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur: ${e.toString()}')),
+                    );
+                  }
+                } finally {
+                  setState(() => _isUploading = false);
                 }
               },
-              isLoading: _isUploading,
-              height: 40,
-              isPrimary: true,
-              borderRadius: 12,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Enregistrer',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         );

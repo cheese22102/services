@@ -9,6 +9,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBackButton;
   final List<Widget>? actions;
+  final Widget? bottom;
   final VoidCallback? onBackPressed;
   final double height;
   final Color? backgroundColor;
@@ -16,13 +17,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Color? iconColor;
   final bool showSidebar;
   final bool showNotifications;
-  final int? currentIndex; // Add this parameter to match with bottom nav
+  final int? currentIndex;
 
   const CustomAppBar({
     super.key,
     required this.title,
     this.showBackButton = true,
     this.actions,
+    this.bottom, // Add initialization
     this.onBackPressed,
     this.height = 56.0,
     this.backgroundColor,
@@ -30,7 +32,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.iconColor,
     this.showSidebar = false,
     this.showNotifications = false,
-    this.currentIndex, // Initialize the parameter
+    this.currentIndex,
   });
 
   @override
@@ -60,6 +62,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       actions: _buildActions(context, defaultIconColor, isDarkMode),
+      bottom: bottom != null ? PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: bottom!,
+      ) : null,
     );
   }
 
@@ -167,5 +173,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => Size.fromHeight(height);
+  Size get preferredSize => bottom != null 
+      ? Size.fromHeight(height + 48) // Adjust height when bottom is provided
+      : Size.fromHeight(height);
 }

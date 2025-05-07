@@ -3,23 +3,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:plateforme_services/notifications_service.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../front/message_bubble.dart';
-import '../../front/custom_app_bar.dart';
-import '../../front/app_colors.dart';
-import 'package:go_router/go_router.dart';
+import '../front/message_bubble.dart';
+import '../front/app_colors.dart';
 
 class ChatScreenPage extends StatefulWidget {
   final String otherUserId; // ID of the other user (post owner or message sender)
-  final String postId; // ID of the post
   final String otherUserName; // Name of the other user for display
   final String? chatId; // Optional chat ID for direct access
+  final String? postId; // Optional post ID (now optional)
 
   const ChatScreenPage({
     super.key,
     this.otherUserId = '',
-    this.postId = '',
     this.otherUserName = '',
     this.chatId,
+    this.postId,
   });
 
   @override
@@ -36,44 +34,20 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
   final bool _isChatArchived = false;
   final ScrollController _scrollController = ScrollController();
   String _otherUserId = '';
-  String _postId = '';
-  String _productTitle = '';
 
   @override
   void initState() {
     super.initState();
     _currentUser = FirebaseAuth.instance.currentUser!;
+    
     if (widget.chatId != null && widget.chatId!.isNotEmpty) {
+      // If chatId is provided, use it directly
       _chatroomId = widget.chatId!;
       _fetchChatDetails();
     } else {
+      // Otherwise create a new chat ID from user IDs
       _otherUserId = widget.otherUserId;
-      _postId = widget.postId;
       _initializeChat();
-    }
-    _fetchProductTitle();
-    
-    // Add listener to text controller to rebuild UI when text changes
-    _messageController.addListener(() {
-      setState(() {});
-    });
-  }
-  
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _textFieldFocus.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchProductTitle() async {
-    if (_postId.isEmpty) return;
-    final doc = await FirebaseFirestore.instance.collection('marketplace').doc(_postId).get();
-    if (doc.exists) {
-      setState(() {
-        _productTitle = doc.data()?['title'] ?? '';
-      });
     }
   }
 
@@ -97,9 +71,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
         orElse: () => '',
       );
       
-      // Get post ID
-      _postId = chatData['postId'] ?? '';
-      
       // Mark messages as read for current user
       await _firestore.collection('conversations').doc(_chatroomId).update({
         'unreadCount.${_currentUser.uid}': 0,
@@ -115,25 +86,32 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
 
   Future<void> _initializeChat() async {
     try {
+      // Create chat ID from user IDs only (no post ID)
       final userIds = [_currentUser.uid, _otherUserId]..sort();
-      _chatroomId = '${userIds[0]}_${userIds[1]}_$_postId';
+      _chatroomId = '${userIds[0]}_${userIds[1]}';
       
-      // Make sure we're using 'conversations' collection
-      final chatRef = _firestore.collection('conversations').doc(_chatroomId);
+      // Check if chat already exists
+      final chatDoc = await _firestore.collection('conversations').doc(_chatroomId).get();
       
-      // Initialize or update chat
-      await chatRef.set({
-        'participants': [_currentUser.uid, _otherUserId],
-        'postId': _postId,
-        'lastMessage': '',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdBy': _currentUser.uid,
-        'unreadCount': {
-          _currentUser.uid: 0,
-          _otherUserId: 0,
-        },
-      }, SetOptions(merge: true));
+      if (!chatDoc.exists) {
+        // Initialize a new chat if it doesn't exist
+        await _firestore.collection('conversations').doc(_chatroomId).set({
+          'participants': [_currentUser.uid, _otherUserId],
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'createdBy': _currentUser.uid,
+          'unreadCount': {
+            _currentUser.uid: 0,
+            _otherUserId: 0,
+          },
+        }, SetOptions(merge: true));
+      } else {
+        // Just update the read status
+        await _firestore.collection('conversations').doc(_chatroomId).update({
+          'unreadCount.${_currentUser.uid}': 0,
+        });
+      }
 
       setState(() => _isLoading = false);
     } catch (e) {
@@ -150,8 +128,8 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
       final timestamp = FieldValue.serverTimestamp();
       
       _messageController.clear();
-
-      // Make sure we're using 'conversations' collection
+  
+      // Add message to the conversation
       await _firestore
           .collection('conversations')
           .doc(_chatroomId)
@@ -162,22 +140,23 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
             'timestamp': timestamp,
             'reactions': {},
           });
-
+  
       // Update conversation metadata
       await _firestore.collection('conversations').doc(_chatroomId).update({
         'lastMessage': messageText,
         'lastMessageTime': timestamp,
-        'unreadCount.$_otherUserId': FieldValue.increment(1), // Changed from widget.otherUserId to _otherUserId
+        'lastMessageSenderId': _currentUser.uid,
+        'unreadCount.$_otherUserId': FieldValue.increment(1),
       });
-
+  
       // Send notification
       await NotificationsService.sendMessageNotification(
-        receiverId: _otherUserId, // Changed from widget.otherUserId to _otherUserId
+        receiverId: _otherUserId,
         messageText: messageText,
         senderName: _currentUser.displayName ?? 'Un utilisateur',
         chatroomId: _chatroomId,
       );
-
+  
       if (mounted) {
         _scrollController.animateTo(
           0.0,
@@ -275,28 +254,115 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
     );
   }
 
+  // Add this method to fetch user data
+  Future<Map<String, dynamic>?> _fetchUserData(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        return userDoc.data();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error fetching user data: $e');
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
       backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: CustomAppBar(
-        title: _productTitle.isNotEmpty ? _productTitle : 'Annonce',
-        showBackButton: true,
+      appBar: AppBar(
+        backgroundColor: isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            size: 22,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: FutureBuilder<Map<String, dynamic>?>(
+          future: _fetchUserData(_otherUserId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Text(
+                'Chargement...',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              );
+            }
+            
+            final userData = snapshot.data;
+            final firstName = userData?['firstname'] ?? '';
+            final lastName = userData?['lastname'] ?? '';
+            final photoURL = userData?['avatarUrl'] ?? userData?['photoURL'];
+            
+            return Row(
+              children: [
+                // User avatar
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: isDarkMode
+                      ? AppColors.primaryGreen.withOpacity(0.15)
+                      : AppColors.primaryDarkGreen.withOpacity(0.08),
+                  backgroundImage: photoURL != null && photoURL.toString().isNotEmpty
+                      ? NetworkImage(photoURL.toString())
+                      : null,
+                  child: photoURL == null || photoURL.toString().isEmpty
+                      ? Icon(
+                          Icons.person,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                          size: 20,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                // User name
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$firstName $lastName',
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'En ligne',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.primaryGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
         actions: [
-          if (_postId.isNotEmpty)
-            IconButton(
-              icon: Icon(
-                Icons.info_outline,
-                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                size: 24,
-              ),
-              tooltip: 'Voir l\'annonce',
-              onPressed: () {
-                context.go('/clientHome/marketplace/details/$_postId');
-              },
+          IconButton(
+            icon: Icon(
+              Icons.more_vert,
+              color: isDarkMode ? Colors.white70 : Colors.black54,
             ),
+            onPressed: () {
+              // Show chat options
+            },
+          ),
         ],
       ),
       body: SafeArea(
@@ -306,8 +372,23 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-                  // Removed image decoration that was causing errors
+                  color: isDarkMode ? Colors.black.withOpacity(0.9) : Colors.grey.shade50,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: isDarkMode 
+                        ? [
+                            AppColors.darkBackground.withOpacity(0.95),
+                            AppColors.darkInputBackground.withOpacity(0.9),
+                            AppColors.darkBackground.withOpacity(0.95),
+                          ]
+                        : [
+                            AppColors.lightBackground,
+                            AppColors.lightInputBackground.withOpacity(0.7),
+                            AppColors.lightBackground,
+                          ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
                 ),
                 child: _isLoading
                     ? Center(
@@ -322,7 +403,7 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
             // Message input area
             Container(
               decoration: BoxDecoration(
-                color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                color: isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -331,36 +412,39 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   // Attachment button
-                  IconButton(
-                    icon: Icon(
-                      Icons.attach_file_rounded,
+                  Container(
+                    decoration: BoxDecoration(
                       color: isDarkMode 
-                          ? AppColors.primaryGreen 
-                          : AppColors.primaryDarkGreen,
-                      size: 24,
+                          ? AppColors.darkInputBackground.withOpacity(0.5) 
+                          : Colors.grey.shade100,
+                      shape: BoxShape.circle,
                     ),
-                    onPressed: () {
-                      // TODO: Handle attachment
-                    },
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.add,
+                        color: isDarkMode 
+                            ? AppColors.primaryGreen 
+                            : AppColors.primaryDarkGreen,
+                        size: 22,
+                      ),
+                      onPressed: () {
+                      },
+                    ),
                   ),
-                  
                   // Text input field with container
                   Expanded(
                     child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                        color: isDarkMode 
+                            ? AppColors.darkInputBackground.withOpacity(0.5) 
+                            : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: isDarkMode 
-                              ? Colors.transparent 
-                              : AppColors.lightBorderColor.withOpacity(0.2),
-                          width: 1,
-                        ),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: TextField(
@@ -379,14 +463,15 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
                               : 'Écrivez un message...',
                           hintStyle: GoogleFonts.poppins(
                             color: isDarkMode ? Colors.white38 : Colors.black38,
-                            fontSize: 15,
+                            fontSize: 14,
                           ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 10),
                           isDense: true,
-                          // Add these lines to fix the background color issue
                           filled: true,
-                          fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                          fillColor: isDarkMode 
+                              ? AppColors.darkInputBackground.withOpacity(0.5) 
+                              : Colors.grey.shade100,
                         ),
                         onSubmitted: (_) => _sendMessage(),
                       ),
@@ -394,39 +479,37 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
                   ),
                   
                   // Send button
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: (_messageController.text.trim().isNotEmpty && !_isChatArchived)
-                            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                            : (isDarkMode ? Colors.grey[700] : Colors.grey[300]),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          if (_messageController.text.trim().isNotEmpty && !_isChatArchived)
-                            BoxShadow(
-                              color: (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                  .withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
-                          size: 20,
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _messageController,
+                    builder: (context, value, child) {
+                      final hasText = value.text.trim().isNotEmpty;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: (hasText && !_isChatArchived)
+                              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                              : (isDarkMode 
+                                  ? AppColors.darkInputBackground.withOpacity(0.5) 
+                                  : Colors.grey.shade100),
+                          shape: BoxShape.circle,
                         ),
-                        padding: EdgeInsets.zero,
-                        onPressed: (_messageController.text.trim().isEmpty || _isChatArchived) 
-                            ? null 
-                            : () => _sendMessage(),
-                      ),
-                    ),
+                        child: IconButton(
+                          icon: Icon(
+                            hasText ? Icons.send_rounded : Icons.mic,
+                            color: hasText 
+                                ? Colors.white 
+                                : (isDarkMode 
+                                    ? AppColors.primaryGreen 
+                                    : AppColors.primaryDarkGreen),
+                            size: 20,
+                          ),
+                          onPressed: (hasText && !_isChatArchived) 
+                              ? _sendMessage
+                              : () {
+                                },
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

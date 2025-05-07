@@ -46,7 +46,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         : AppColors.primaryGreen;
     
     final receiverBubbleColor = isDarkMode
-        ? AppColors.darkInputBackground
+        ? Colors.grey.shade800
         : Colors.white;
     
     final senderTextColor = Colors.white;
@@ -81,11 +81,11 @@ class _MessageBubbleState extends State<MessageBubble> {
         });
       },
       onDoubleTap: toggleReaction,
-      onLongPress: toggleReaction, // Added long press gesture with the same reaction function
+      onLongPress: toggleReaction,
       child: Padding(
         padding: EdgeInsets.only(
-          left: widget.isSender ? 60.0 : 8.0,
-          right: widget.isSender ? 8.0 : 60.0,
+          left: widget.isSender ? 60.0 : 16.0,
+          right: widget.isSender ? 16.0 : 60.0,
           top: widget.isGrouped ? 2.0 : 8.0,
           bottom: 4.0,
         ),
@@ -93,20 +93,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           mainAxisAlignment: widget.isSender ? MainAxisAlignment.end : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (!widget.isSender && widget.showAvatar) ...[
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: isDarkMode 
-                    ? AppColors.primaryGreen.withOpacity(0.2)
-                    : AppColors.primaryDarkGreen.withOpacity(0.1),
-                child: Icon(
-                  Icons.person, 
-                  size: 18, 
-                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
+            // Removed the avatar that was here
             Flexible(
               child: Column(
                 crossAxisAlignment: widget.isSender ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -137,7 +124,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           style: GoogleFonts.poppins(
                             color: widget.isSender ? senderTextColor : receiverTextColor,
                             fontSize: 14,
-                            fontWeight: FontWeight.normal,
+                            height: 1.3,
                           ),
                           softWrap: true,
                         ),
@@ -158,7 +145,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                               const SizedBox(width: 4),
                               Icon(
                                 widget.isSeen ? Icons.done_all : Icons.done,
-                                size: 14,
+                                size: 12,
                                 color: widget.isSeen 
                                     ? Colors.white70
                                     : Colors.white38,
@@ -172,9 +159,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                   if (widget.reactions?.isNotEmpty ?? false) ...[
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                        color: isDarkMode ? Colors.grey.shade800 : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
@@ -187,12 +174,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('❤️'),
-                          const SizedBox(width: 4),
+                          const Text('❤️', style: TextStyle(fontSize: 12)),
+                          const SizedBox(width: 2),
                           Text(
                             '${widget.reactions?.length}',
                             style: GoogleFonts.poppins(
-                              fontSize: 12,
+                              fontSize: 11,
                               color: isDarkMode ? Colors.white70 : Colors.grey[600],
                             ),
                           ),
@@ -205,7 +192,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                     Text(
                       widget.isSeen ? 'Vu' : 'Envoyé',
                       style: GoogleFonts.poppins(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: widget.isSeen 
                             ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
                             : (isDarkMode ? Colors.white54 : Colors.grey[600]),

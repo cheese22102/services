@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../front/app_colors.dart';
-import '../front/custom_app_bar.dart';
-import '../front/sidebar.dart';
-import '../front/custom_bottom_nav.dart';
+import '../../front/app_colors.dart';
+import '../../front/custom_app_bar.dart';
+import '../../front/sidebar.dart';
+import '../../front/custom_bottom_nav.dart';
 
 
 

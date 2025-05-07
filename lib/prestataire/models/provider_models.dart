@@ -16,6 +16,7 @@ class Provider {
   final Map<String, bool> workingDays;
   final String status;
   final Timestamp submissionDate;
+  final List<String> projectPhotos; // Added project photos
 
   Provider({
     required this.userId,
@@ -32,6 +33,7 @@ class Provider {
     required this.workingDays,
     required this.status,
     required this.submissionDate,
+    this.projectPhotos = const [], // Default empty list
   });
 
   Map<String, dynamic> toMap() {
@@ -50,6 +52,7 @@ class Provider {
       'workingDays': workingDays,
       'status': status,
       'submissionDate': submissionDate,
+      'projectPhotos': projectPhotos, // Added to map
     };
   }
   
@@ -72,6 +75,7 @@ class Provider {
       workingDays: Map<String, bool>.from(map['workingDays'] ?? {}),
       status: map['status'] ?? 'pending',
       submissionDate: map['submissionDate'] ?? Timestamp.now(),
+      projectPhotos: List<String>.from(map['projectPhotos'] ?? []), // Added from map
     );
   }
 }
@@ -80,19 +84,17 @@ class Provider {
 class Experience {
   final String service;
   final int years;
-  final String description;
+
 
   Experience({
     required this.service,
     required this.years,
-    required this.description,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'service': service,
       'years': years,
-      'description': description,
     };
   }
 
@@ -100,7 +102,7 @@ class Experience {
     return Experience(
       service: map['service'] ?? '',
       years: map['years'] ?? 0,
-      description: map['description'] ?? '',
+
     );
   }
 }

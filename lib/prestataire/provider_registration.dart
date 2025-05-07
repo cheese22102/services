@@ -43,7 +43,8 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
   File? idCardFile;
   File? selfieWithIdFile;
   File? patenteFile;
-  
+  List<File> projectPhotoFiles = [];
+
   bool _isLoading = false;
   List<String> availableServices = [];
   
@@ -83,6 +84,71 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     setState(() {
       availableServices = snapshot.docs.map((doc) => doc['name'] as String).toList();
     });
+  }
+
+  Future<void> _pickProjectPhoto() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        projectPhotoFiles.add(File(image.path));
+      });
+    }
+  }
+
+  // Add method to remove project photo
+  void _removeProjectPhoto(int index) {
+    setState(() {
+      projectPhotoFiles.removeAt(index);
+    });
+  }
+
+  // Add confirmation dialog
+  Future<bool> _showConfirmationDialog() async {
+    bool confirm = false;
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Confirmation',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'En confirmant ces informations, certaines d\'entre elles ne pourront plus être modifiées ultérieurement. Êtes-vous sûr de vouloir continuer?',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Annuler',
+                style: GoogleFonts.poppins(
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                confirm = true;
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Confirmer',
+                style: GoogleFonts.poppins(
+                  color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return confirm;
   }
 
   Future<void> _getCurrentLocation() async {
@@ -345,7 +411,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     );
   }
 
-  bool _validateCurrentPage() {
+    bool _validateCurrentPage() {
     switch (_currentPage) {
       case 0: // Services page
         if (selectedServices.isEmpty) {
@@ -371,7 +437,15 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
           return false;
         }
         return true;
-      case 3: // Location page
+      case 3: // Project photos page
+        if (projectPhotoFiles.length < 2) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ajoutez au moins 2 photos de projets')),
+          );
+          return false;
+        }
+        return true;
+      case 4: // Location page
         if (_selectedLocation == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Veuillez sélectionner votre localisation sur la carte')),
@@ -379,7 +453,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
           return false;
         }
         return _formKey.currentState?.validate() ?? false;
-      case 4: // Working hours page
+      case 5: // Working hours page
         if (!_workingDays.values.any((isWorking) => isWorking)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Sélectionnez au moins un jour de travail')),
@@ -392,8 +466,12 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     }
   }
 
-  Future<void> _submitForm() async {
+    Future<void> _submitForm() async {
     if (!_validateCurrentPage()) return;
+    
+    // Show confirmation dialog
+    bool confirmed = await _showConfirmationDialog();
+    if (!confirmed) return;
     
     setState(() => _isLoading = true);
 
@@ -407,6 +485,17 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       // Upload Selfie with ID
       final selfieWithIdUrl = await ProviderUtils.uploadFileToCloudinary(selfieWithIdFile!);
       if (selfieWithIdUrl == null) throw Exception("Échec upload selfie avec pièce d'identité");
+
+      // Upload project photos
+      List<String> projectPhotoUrls = [];
+      for (var file in projectPhotoFiles) {
+        final url = await ProviderUtils.uploadFileToCloudinary(file);
+        if (url != null) {
+          projectPhotoUrls.add(url);
+        }
+      }
+
+      // ... rest of the method
 
       // Upload Patente (optional)
       String? patenteUrl;
@@ -427,7 +516,6 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
         Experience(
           service: service,
           years: yearsOfExperience,
-          description: _bioController.text,
         )
       ).toList();
 
@@ -444,6 +532,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
         'patenteUrl': patenteUrl,
         'status': 'pending',
         'submissionDate': FieldValue.serverTimestamp(),
+        'projectPhotos': projectPhotoUrls,
         // Add location data
         'exactLocation': {
           'latitude': _selectedLocation!.latitude,
@@ -1209,6 +1298,189 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     );
   }
 
+  // Add this new method for the project photos page
+  Widget _buildProjectPhotosPage() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            'Photos de projets', 
+            'Ajoutez des photos de vos projets ou de votre logo (minimum 2 photos)'
+          ),
+          
+          // Grid of photos
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: projectPhotoFiles.length + 1, // +1 for the add button
+            itemBuilder: (context, index) {
+              if (index == projectPhotoFiles.length) {
+                // Add button
+                return InkWell(
+                  onTap: _pickProjectPhoto,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.add_photo_alternate,
+                        size: 40,
+                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  ),
+                );
+              } else {
+                // Photo preview
+                return Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: FileImage(projectPhotoFiles[index]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () => _removeProjectPhoto(index),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+            },
+          ),
+          
+          // Warning if not enough photos
+          if (projectPhotoFiles.length < 2)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.amber.shade800,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Veuillez ajouter au moins 2 photos',
+                      style: GoogleFonts.poppins(
+                        color: Colors.amber.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          const SizedBox(height: 24),
+          
+          // Tips for good photos
+          Card(
+            elevation: 2,
+            color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.lightbulb,
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Conseils pour de bonnes photos',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildTip('Utilisez une bonne luminosité'),
+                  _buildTip('Montrez clairement vos projets terminés'),
+                  _buildTip('Ajoutez votre logo ou bannière professionnelle'),
+                  _buildTip('Évitez les photos floues ou de mauvaise qualité'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildTip(String text) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.check_circle,
+            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWorkingHoursPage() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return SingleChildScrollView(
@@ -1409,86 +1681,62 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Devenir prestataire',
+          'Inscription Prestataire',
           style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: isDarkMode ?AppColors.darkBackground : AppColors.lightBackground,
-        foregroundColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+        centerTitle: true,
       ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            // Progress indicator
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
               child: Column(
                 children: [
-                  SmoothPageIndicator(
-                    controller: _pageController,
-                    count: 5,
-                    effect: ExpandingDotsEffect(
-                      activeDotColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                      dotColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                      dotHeight: 8,
-                      dotWidth: 8,
-                      expansionFactor: 3,
-                    ),
-                    onDotClicked: (index) {
-                      if (index < _currentPage || _validateCurrentPage()) {
-                        _pageController.animateToPage(
-                          index,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Étape ${_currentPage + 1} sur 5',
-                        style: GoogleFonts.poppins(
-                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                        ),
+                  // Progress indicator
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: SmoothPageIndicator(
+                      controller: _pageController,
+                      count: 6, // Update from 5 to 6 to include project photos page
+                      effect: WormEffect(
+                        dotHeight: 10,
+                        dotWidth: 10,
+                        activeDotColor: AppColors.primaryGreen,
+                        dotColor: Colors.grey.shade300,
                       ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-            
-            // Page content
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildServicesPage(),
-                  _buildProfessionalInfoPage(),
-                  _buildDocumentsPage(),
-                  _buildLocationPage(),
-                  _buildWorkingHoursPage(),
-                ],
-              ),
-            ),
+                  
+                  // Page view
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentPage = index;
+                        });
+                      },
+                      children: [
+                        _buildServicesPage(),
+                        _buildProfessionalInfoPage(),
+                        _buildDocumentsPage(),
+                        _buildProjectPhotosPage(), // Add new page for project photos
+                        _buildLocationPage(),
+                        _buildWorkingHoursPage(),
+                      ],
+                    ),
+                  ),
+                  
+                  // ... rest of the build method
             
             // Navigation buttons
             Container(

@@ -90,7 +90,17 @@ service cloud.firestore {
 
     match /providers/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Allow users to update only the ratings fields
+      allow update: if isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['ratings', 'reviewCount', 'quality', 'price', 'timeliness']);
+      // Allow providers to update their own documents fully
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Allow any authenticated user to read and write to reviews collection
+    match /reviews/{reviewId} {
+      allow read, write: if isAuthenticated();
     }
 
     match /services/{serviceId} {
@@ -109,8 +119,13 @@ service cloud.firestore {
         allow write: if isAuthenticated(); // Allow any authenticated user to write notifications
       }
       
-      // Add rules for favoris subcollection
+      // Add rules for favoris subcollection (for marketplace posts)
       match /favoris/{favorisId} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+      
+      // Add rules for prestataires_favoris subcollection (for service providers)
+      match /prestataires_favoris/{providerId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
     }
@@ -120,6 +135,20 @@ service cloud.firestore {
       allow read, list: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
+    }
+
+    // Add rules for reservations collection
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        request.auth.uid == resource.data.providerId ||
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || isAdmin()
+      );
     }
 
     match /public_data/{document=**} {

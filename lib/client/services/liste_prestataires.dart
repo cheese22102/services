@@ -4,10 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../chat/conversation_service_page.dart';
-import '../front/app_colors.dart';
-import '../front/custom_app_bar.dart';
-import '../front/custom_button.dart';
+import '../../front/app_colors.dart';
+import '../../front/custom_app_bar.dart';
+import '../../front/custom_button.dart';
 
 class ServiceProvidersPage extends StatefulWidget {
   final String serviceName;
@@ -510,9 +509,10 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
       color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
+        // In your provider card's onTap method:
         onTap: () {
-          // Fix: Pass the actual providerId instead of the string 'providerId'
-          context.go('/clientHome/provider-details/$providerId');
+        // Navigate to provider profile
+        context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -643,9 +643,8 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                   // View profile button
                   CustomButton(
                     onPressed: () {
-                      print('Provider ID being passed: $providerId');
-                      // Fix: Use context.go instead of context.push and ensure proper string interpolation
-                      context.go('/clientHome/provider-details/$providerId');
+                      context.go('/clientHome/provider-details/$providerId', 
+                        extra: {'serviceName': widget.serviceName});
                     },
                     text: 'Voir profil',
                     backgroundColor: Colors.transparent,
@@ -685,15 +684,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
       if (existingConversationId != null) {
         // Navigate to existing conversation
         if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ConversationServicePage(
-              otherUserId: providerId,
-              otherUserName: providerName,
-            ),
-          ),
-        );
+    
       } else {
         // Create a new conversation
         final newConversationRef = FirebaseFirestore.instance.collection('conversations').doc();
@@ -707,15 +698,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
         });
         
         if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ConversationServicePage(
-              otherUserId: providerId,
-              otherUserName: providerName,
-            ),
-          ),
-        );
+      
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

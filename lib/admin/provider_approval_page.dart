@@ -54,8 +54,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       description: 'Vérifier la cohérence de la zone d\'intervention',
     ),
     VerificationItem(
-      title: 'Tarifs',
-      description: 'Vérifier la cohérence des tarifs proposés',
+      title: 'Photos de projets',
+      description: 'Vérifier la qualité et la pertinence des photos de projets',
     ),
   ];
 
@@ -65,6 +65,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     _loadProviderData();
   }
 
+  // Update the _loadProviderData method to fetch user information
   Future<void> _loadProviderData() async {
     try {
       final docSnapshot = await FirebaseFirestore.instance
@@ -80,8 +81,23 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         return;
       }
       
+      final providerData = docSnapshot.data()!;
+      
+      // Fetch user data from users collection
+      final userId = providerData['userId'] as String;
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (userDoc.exists) {
+        // Merge user data with provider data
+        final userData = userDoc.data()!;
+        providerData['userData'] = userData;
+      }
+      
       setState(() {
-        _providerData = docSnapshot.data();
+        _providerData = providerData;
         _isLoading = false;
       });
     } catch (e) {
@@ -92,6 +108,190 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     }
   }
 
+  // Add a new method to display user information
+  Widget _buildUserInfoSection(Map<String, dynamic> data) {
+    final userData = data['userData'] as Map<String, dynamic>?;
+    
+    if (userData == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8.0),
+        child: Text('Informations utilisateur non disponibles'),
+      );
+    }
+    
+    final photoURL = userData['photoURL'] as String?;
+    final firstName = userData['firstname'] as String? ?? 'Non spécifié';
+    final lastName = userData['lastname'] as String? ?? 'Non spécifié';
+    final email = userData['email'] as String? ?? 'Non spécifié';
+    final phone = userData['phone'] as String? ?? 'Non spécifié';
+    final gender = userData['gender'] as String? ?? 'Non spécifié';
+    final age = userData['age']?.toString() ?? 'Non spécifié';
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // User photo
+                if (photoURL != null)
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: NetworkImage(photoURL),
+                        fit: BoxFit.cover,
+                      ),
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 2,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade200,
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Colors.grey,
+                    ),
+                  ),
+                const SizedBox(width: 16),
+                
+                // User details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$firstName $lastName',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildUserInfoItem(Icons.email, email),
+                      _buildUserInfoItem(Icons.phone, phone),
+                      _buildUserInfoItem(Icons.person, 'Genre: $gender'),
+                      _buildUserInfoItem(Icons.cake, 'Âge: $age ans'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserInfoItem(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Update the project photos section to use the correct field name
+  Widget _buildProjectPhotosSection(Map<String, dynamic> data) {
+    final projectPhotos = List<String>.from(data['projectPhotos'] ?? []);
+    
+    if (projectPhotos.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8.0),
+        child: Text('Aucune photo de projet fournie'),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.0,
+          ),
+          itemCount: projectPhotos.length,
+          itemBuilder: (context, index) {
+            final photoUrl = projectPhotos[index];
+            return Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      photoUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(child: Text('Erreur de chargement'));
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.fullscreen,
+                        color: Colors.white,
+                        shadows: [Shadow(blurRadius: 3.0, color: Colors.black)],
+                      ),
+                      onPressed: () => _showFullScreenImage(context, photoUrl),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // Update the build method to include the user info section
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -113,6 +313,12 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // User info section
+                      _buildSectionTitle('Informations personnelles'),
+                      _buildUserInfoSection(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
                       // Services section
                       _buildSectionTitle('Services proposés'),
                       _buildServicesList(_providerData!),
@@ -124,8 +330,22 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                       _buildIdCard(_providerData!),
                       
                       const SizedBox(height: 16),
+                      _buildSectionTitle('Selfie avec pièce d\'identité'),
+                      _buildSelfieWithId(_providerData!),
+                      
+                      const SizedBox(height: 16),
+                      _buildSectionTitle('Patente'),
+                      _buildPatente(_providerData!),
+                      
+                      const SizedBox(height: 16),
                       _buildSectionTitle('Certifications'),
                       _buildCertifications(_providerData!),
+                      
+                      const Divider(height: 32),
+                      
+                      // Project Photos section
+                      _buildSectionTitle('Photos de projets'),
+                      _buildProjectPhotosSection(_providerData!),
                       
                       const Divider(height: 32),
                       
@@ -156,6 +376,145 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     );
   }
 
+  // Add methods to display selfie with ID and patente
+  Widget _buildSelfieWithId(Map<String, dynamic> data) {
+    final selfieWithIdUrl = data['selfieWithIdUrl'] as String?;
+    
+    if (selfieWithIdUrl == null || selfieWithIdUrl.isEmpty) {
+      return const Text('Aucun selfie avec pièce d\'identité fourni');
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 200,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Image.network(
+            selfieWithIdUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const Center(child: CircularProgressIndicator());
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(child: Text('Erreur de chargement'));
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: () => _showFullScreenImage(context, selfieWithIdUrl),
+          icon: const Icon(Icons.fullscreen),
+          label: const Text('Voir en plein écran'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPatente(Map<String, dynamic> data) {
+    final patenteUrl = data['patenteUrl'] as String?;
+    
+    if (patenteUrl == null || patenteUrl.isEmpty) {
+      return const Text('Aucune patente fournie (optionnel)');
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 200,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Image.network(
+            patenteUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const Center(child: CircularProgressIndicator());
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(child: Text('Erreur de chargement'));
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: () => _showFullScreenImage(context, patenteUrl),
+          icon: const Icon(Icons.fullscreen),
+          label: const Text('Voir en plein écran'),
+        ),
+      ],
+    );
+  }
+
+  // Update the professional info method to include more details
+  Widget _buildProfessionalInfo(Map<String, dynamic> data) {
+    final experiences = List<Map<String, dynamic>>.from(data['experiences'] ?? []);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInfoItem('Bio', data['bio'] ?? 'Non spécifiée'),
+        
+        const SizedBox(height: 16),
+        const Text(
+          'Expériences',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        
+        if (experiences.isEmpty)
+          const Text('Aucune expérience spécifiée')
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: experiences.length,
+            itemBuilder: (context, index) {
+              final exp = experiences[index];
+              final service = exp['service'] as String? ?? 'Non spécifié';
+              final years = exp['years']?.toString() ?? 'Non spécifié';
+              final description = exp['description'] as String? ?? 'Non spécifiée';
+              
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        service,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('$years ans d\'expérience'),
+                      const SizedBox(height: 4),
+                      Text(description),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+    ],
+  );
+  }
+  
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -290,19 +649,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       },
     );
   }
-  
-  Widget _buildProfessionalInfo(Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildInfoItem('Bio', data['bio'] ?? 'Non spécifiée'),
-        _buildInfoItem('Email', data['professionalEmail'] ?? 'Non spécifié'),
-        _buildInfoItem('Téléphone', data['professionalPhone'] ?? 'Non spécifié'),
-        _buildInfoItem('Tarif minimum', '${data['rateRange']?['min'] ?? 'N/A'} DT/h'),
-        _buildInfoItem('Tarif maximum', '${data['rateRange']?['max'] ?? 'N/A'} DT/h'),
-      ],
-    );
-  }
+
   
   Widget _buildInfoItem(String label, String value) {
     return Padding(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/dark_mode_switch.dart';
 import 'provider_notifications_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -178,14 +177,7 @@ class _UserHeader extends StatelessWidget {
                 color: Colors.green,
               ),
       ),
-      otherAccountsPictures: [
-        Padding(
-          padding: const EdgeInsets.only(right: 16.0),
-          child: Builder(
-            builder: (context) => DarkModeSwitch(),
-          ),
-        ),
-      ],
+     
     );
   }
 }

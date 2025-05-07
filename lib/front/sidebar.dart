@@ -17,6 +17,7 @@ class Sidebar extends StatefulWidget {
 
 class _SidebarState extends State<Sidebar> {
   bool _isMarketplaceExpanded = false;
+  bool _isServicesExpanded = false; // Add this for services section
 
   final Future<DocumentSnapshot> _userDataFuture = FirebaseFirestore.instance
       .collection('users')
@@ -156,6 +157,103 @@ class _SidebarState extends State<Sidebar> {
     );
   }
 
+  Widget _buildServicesItem(String title, IconData icon, VoidCallback onTap) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return ListTile(
+      leading: Icon(
+        icon,
+        size: 20,
+        color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: isDarkMode ? Colors.white : Colors.black87,
+        ),
+      ),
+      contentPadding: const EdgeInsets.only(left: 32.0),
+      onTap: onTap,
+      dense: true,
+    );
+  }
+
+  Widget _buildServicesSection() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(
+            Icons.home_repair_service,
+            color: primaryColor,
+            size: 22,
+          ),
+          title: Text(
+            'Services',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: primaryColor,
+            ),
+          ),
+          trailing: AnimatedRotation(
+            duration: const Duration(milliseconds: 300),
+            turns: _isServicesExpanded ? 0.5 : 0,
+            child: Icon(
+              Icons.arrow_drop_down,
+              color: primaryColor,
+            ),
+          ),
+          onTap: () {
+            setState(() {
+              _isServicesExpanded = !_isServicesExpanded;
+            });
+          },
+        ),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          height: _isServicesExpanded ? 150 : 0, // Adjust height based on content
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildServicesItem(
+                  'Tous les services',
+                  Icons.category_outlined,
+                  () {
+                    Navigator.pop(context);
+                    context.go('/clientHome/all-services');
+                  },
+                ),
+                _buildServicesItem(
+                  'Mes réservations',
+                  Icons.calendar_today_outlined,
+                  () {
+                    Navigator.pop(context);
+                    context.go('/clientHome/my-reservations');
+                  },
+                ),
+                _buildServicesItem(
+                  'Prestataires favoris',
+                  Icons.favorite_border_outlined,
+                  () {
+                    Navigator.pop(context);
+                    context.go('/clientHome/favorite-providers');
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -256,28 +354,12 @@ class _SidebarState extends State<Sidebar> {
                     onTap: _navigateToNotifications,
                   ),
                   
-                  // Add Services button
-                  ListTile(
-                    leading: Icon(
-                      Icons.miscellaneous_services_outlined,
-                      color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                      size: 22,
-                    ),
-                    title: Text(
-                      "Services",
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: isDarkMode ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.go('/clientHome/all-services');
-                    },
-                  ),
+                  // Add Services section before Marketplace
+                  _buildServicesSection(),
                   
-                  // Marketplace section (existing code)
+                  const Divider(),
+                  
+                  // Existing Marketplace section
                   _buildMarketplaceSection(),
                   Divider(
                     thickness: 1.2,

@@ -10,6 +10,8 @@ import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
 import '../../front/custom_snackbar.dart';
 import '../../front/custom_dialog.dart';
+import '../../utils/image_gallery_utils.dart';
+
 
 class PostDetailsPage extends StatefulWidget {
   final String postId;
@@ -180,43 +182,30 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     });
   }
 
-  Future<void> _contactSeller() async {
-  final currentUser = FirebaseAuth.instance.currentUser;
-  if (currentUser == null) {
-    CustomSnackbar.show(
-      context: context,
-      message: "Vous devez être connecté pour contacter le vendeur",
-      isError: true,
-    );
-    return;
-  }
+     Future<void> _contactSeller() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      CustomSnackbar.show(
+        context: context,
+        message: "Vous devez être connecté pour contacter le vendeur",
+        isError: true,
+      );
+      return;
+    }
 
-  if (currentUser.uid == postData['userId']) {
-    CustomSnackbar.show(
-      context: context,
-      message: "Vous ne pouvez pas contacter votre propre annonce",
-      isError: true,
-    );
-    return;
-  }
+    if (currentUser.uid == postData['userId']) {
+      CustomSnackbar.show(
+        context: context,
+        message: "Vous ne pouvez pas contacter votre propre annonce",
+        isError: true,
+      );
+      return;
+    }
 
-  // Show loading indicator
-  setState(() => _isLoading = true);
+    // Show loading indicator
+    setState(() => _isLoading = true);
 
-  try {
-    // Create a deterministic chat ID by sorting user IDs and appending post ID
-    final List<String> userIds = [currentUser.uid, postData['userId']];
-    userIds.sort(); // Sort to ensure consistent ID regardless of who initiates
-    final String chatId = '${userIds[0]}_${userIds[1]}_${widget.postId}';
-    
-    // Check if chat exists
-    final chatDoc = await FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(chatId)
-        .get();
-    
-    // If chat doesn't exist, create it
-    if (!chatDoc.exists) {
+    try {
       // Get seller name for the chat
       String sellerName = 'Vendeur';
       final sellerDoc = await FirebaseFirestore.instance
@@ -226,50 +215,28 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
       
       if (sellerDoc.exists) {
         final sellerData = sellerDoc.data() as Map<String, dynamic>;
-        sellerName = '${sellerData['firstname'] ?? ''} ${sellerData['lastname'] ?? ''}';
+        sellerName = '${sellerData['firstname'] ?? ''} ${sellerData['lastname'] ?? ''}'.trim();
         sellerName = sellerName.trim().isNotEmpty ? sellerName : 'Vendeur';
       }
       
-      // Create the chat document
-      await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(chatId)
-          .set({
-            'participants': [currentUser.uid, postData['userId']],
-            'postId': widget.postId,
-            'postTitle': postData['title'] ?? 'Annonce',
-            'postImage': postData['images']?.isNotEmpty == true ? postData['images'][0] : '',
-            'lastMessage': 'Nouvelle conversation',
-            'lastMessageTime': FieldValue.serverTimestamp(),
-            'createdAt': FieldValue.serverTimestamp(),
-            'createdBy': currentUser.uid,
-            'unreadCount': {
-              currentUser.uid: 0,
-              postData['userId']: 1, // Notify seller of new chat
-            },
-          });
-    }
-    
-    // Hide loading indicator
-    setState(() => _isLoading = false);
-    
-    // Navigate to chat using the chatId route
-    if (mounted) {
-      context.push('/clientHome/marketplace/chat/$chatId');
-    }
-  } catch (e) {
-    // Hide loading indicator
-    setState(() => _isLoading = false);
-    
-    if (mounted) {
-      CustomSnackbar.show(
-        context: context,
-        message: "Erreur lors de la création du chat: $e",
-        isError: true,
-      );
+      // Navigate to chat screen - no need to pass postId anymore
+      if (mounted) {
+        setState(() => _isLoading = false);
+        context.push('/clientHome/marketplace/chat/conversation/${postData['userId']}', extra: {
+          'otherUserName': sellerName,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        CustomSnackbar.show(
+          context: context,
+          message: "Erreur: $e",
+          isError: true,
+        );
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -327,7 +294,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     }
     
     // Extract post data
-    final List<dynamic> images = postData['images'] ?? [];
+    final List<String> images = List<String>.from(postData['images'] ?? []);
     final String title = postData['title'] ?? 'Sans titre';
     final double price = (postData['price'] is num) 
         ? (postData['price'] as num).toDouble() 
@@ -439,73 +406,27 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image carousel
+            // Adaptable image gallery based on number of images
             if (images.isNotEmpty)
-              Stack(
-                children: [
-                  SizedBox(
-                    height: 250,
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: images.length,
-                      onPageChanged: (index) {
-                        _imageIndexNotifier.value = index;
-                      },
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: _toggleFullScreen,
-                          child: CachedNetworkImage(
-                            imageUrl: images[index],
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            placeholder: (context, url) => Container(
-                              color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                              child: const Center(child: CircularProgressIndicator()),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                              child: Center(
-                                child: Icon(
-                                  Icons.error,
-                                  color: isDarkMode ? Colors.white54 : Colors.black38,
-                                  size: 50,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+              GestureDetector(
+                onTap: _toggleFullScreen,
+                child: Container(
+                  // Adjust height based on number of images
+                  height: images.length <= 2 ? 250 : 
+                         images.length <= 4 ? 350 : 
+                         400, // More height for 5+ images
+                  width: double.infinity,
+                  child: ClipRect(
+                    child: ImageGalleryUtils.buildImageGallery(
+                      context,
+                      images,
+                      isDarkMode: isDarkMode,
+                      fixedHeight: images.length <= 2 ? 250 : 
+                                  images.length <= 4 ? 350 : 
+                                  400, // Match the container height
                     ),
                   ),
-                  // Image counter dots
-                  Positioned(
-                    bottom: 10,
-                    left: 0,
-                    right: 0,
-                    child: ValueListenableBuilder<int>(
-                      valueListenable: _imageIndexNotifier,
-                      builder: (context, currentIndex, _) {
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            images.length,
-                            (index) => Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: currentIndex == index
-                                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                    : (isDarkMode ? Colors.white.withOpacity(0.5) : Colors.black.withOpacity(0.3)),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               )
             else
               Container(

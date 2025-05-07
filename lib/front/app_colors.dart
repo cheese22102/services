@@ -54,4 +54,6 @@ class AppColors {
   // Success colors
   static const Color successGreen = Color(0xFF4CAF50);
   static const Color successDarkGreen = Color(0xFF3A523E);
+
+  static var primary;
 }

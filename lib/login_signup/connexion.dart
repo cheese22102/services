@@ -336,7 +336,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           'photoURL': userCredential.user!.photoURL,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLogin': FieldValue.serverTimestamp(),
-          'role': 'client', // Default role
+          'role': 'client',
         });
         
         // Hide loader before navigation

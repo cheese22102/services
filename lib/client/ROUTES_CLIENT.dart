@@ -1,22 +1,24 @@
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'accueil_client.dart';
-import 'liste_prestataires.dart';
+import 'services/liste_prestataires.dart';
 import 'marketplace/accueil_marketplace.dart';
 import 'marketplace/ajouter_publication.dart';
 import 'marketplace/liste_publications.dart';
 import 'marketplace/favoris.dart';
 import 'marketplace/details_publication.dart';
-import 'marketplace/modifier_publication.dart';  // File has ModifierPostPage
+import 'marketplace/modifier_publication.dart';
 import '../profile_edit_page.dart';
 import 'page_notifications.dart';
-import 'marketplace/liste_conversations.dart';
-import 'marketplace/conversation_marketplace.dart';
-import '../chat/conversation_service_page.dart';  // Add this import
-import 'request_service_page.dart';
-import 'provider_profile_page.dart';
-import 'all_services_page.dart'; // Add this import
+import '../chat/liste_conversations.dart';
+import '../chat/conversation_marketplace.dart';
+import 'services/provider_profile_page.dart';
+import 'services/all_services_page.dart';
 import 'chatbot_page.dart';
+import 'services/reservation_page.dart';
+import 'services/client_reservations_page.dart';
+import 'services/favorite_providers_page.dart';
+import 'services/reservation_details_page.dart';
 
 
 final clientRoutes = GoRoute(
@@ -27,6 +29,27 @@ final clientRoutes = GoRoute(
     GoRoute(
       path: 'all-services',
       builder: (context, state) => const AllServicesPage(),
+    ),
+    
+    // Add route for client reservations
+    GoRoute(
+      path: 'my-reservations',
+      builder: (context, state) => const ClientReservationsPage(),
+    ),
+    
+    // Add route for reservation details
+    GoRoute(
+      path: 'reservation-details/:reservationId',
+      builder: (context, state) {
+        final reservationId = state.pathParameters['reservationId'] ?? '';
+        return ReservationDetailsPage(reservationId: reservationId);
+      },
+    ),
+    
+    // Add route for favorite providers
+    GoRoute(
+      path: 'favorite-providers',
+      builder: (context, state) => const FavoriteProvidersPage(),
     ),
     
     // Update the service-providers route to handle parameters
@@ -41,6 +64,20 @@ final clientRoutes = GoRoute(
   path: 'chatbot',
   builder: (context, state) => const ChatbotPage(),
 ),
+    
+    // Add reservation route
+    GoRoute(
+      path: 'reservation/:providerId',
+      builder: (context, state) {
+        final providerId = state.pathParameters['providerId'] ?? '';
+        final params = state.extra as Map<String, dynamic>?;
+        return ReservationPage(
+          providerId: providerId,
+          providerName: params?['providerName'] ?? '',
+          serviceName: params?['serviceName'] ?? '',
+        );
+      },
+    ),
     
     // Existing routes
     GoRoute(
@@ -66,11 +103,10 @@ final clientRoutes = GoRoute(
            GoRoute(
              path: 'conversation/:otherUserId',
              builder: (context, state) {
-               final params = state.extra as Map<String, dynamic>;
+               final params = state.extra as Map<String, dynamic>?;
                return ChatScreenPage(
                  otherUserId: state.pathParameters['otherUserId']!,
-                 postId: params['postId'],
-                 otherUserName: params['otherUserName'],
+                 otherUserName: params?['otherUserName'] ?? '',
                );
              },
            ),
@@ -82,7 +118,6 @@ final clientRoutes = GoRoute(
                return ChatScreenPage(chatId: chatId);
              },
            ),
-           // Remove the duplicate route below
          ],
        ),
         GoRoute(
@@ -101,13 +136,6 @@ final clientRoutes = GoRoute(
         ),
       ],
     ),
-    GoRoute(
-      path: 'services/:serviceName',
-      builder: (context, state) {
-        final serviceName = state.pathParameters['serviceName']!;
-        return ServiceProvidersPage(serviceName: serviceName);
-      },
-    ),
     // Profile and notifications are now properly nested under /clientHome
     GoRoute(
       path: 'profile',
@@ -119,32 +147,19 @@ final clientRoutes = GoRoute(
     ),
     // Make sure this route is properly defined
     // Add a route for chat conversations
-    GoRoute(
-      path: 'chat/conversation/:otherUserId',
-      builder: (context, state) {
-        final params = state.extra as Map<String, dynamic>?;
-        return ConversationServicePage(
-          otherUserId: state.pathParameters['otherUserId'] ?? params?['otherUserId'] ?? '',
-          otherUserName: params?['otherUserName'] ?? '',
-          serviceName: params?['serviceName'] ?? '', // Add this line
-        );
-      },
-    ),
-    // Add a route for request-service if it doesn't exist
-    GoRoute(
-      path: 'request-service',
-      builder: (context, state) => const RequestServicePage(),
-    ),
+  
     // Add provider-details route
+    // Provider details route
     GoRoute(
       path: 'provider-details/:providerId',
       builder: (context, state) {
-        // Debug the parameter value
         final providerId = state.pathParameters['providerId'] ?? '';
-        return ProviderProfilePage(providerId: providerId);
+        final serviceName = state.extra as String? ?? '';
+        return ProviderProfilePage(
+          providerId: providerId,
+          serviceName: serviceName,
+        );
       },
     ),
   ],
 );
-
-// Add this function at the end of the file
