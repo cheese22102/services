@@ -19,6 +19,10 @@ import 'services/reservation_page.dart';
 import 'services/client_reservations_page.dart';
 import 'services/favorite_providers_page.dart';
 import 'services/reservation_details_page.dart';
+// Add imports for reclamation pages
+import 'services/reclamation_form_page.dart';
+import 'services/client_reclamations_page.dart';
+import 'services/client_reclamation_details_page.dart';
 
 
 final clientRoutes = GoRoute(
@@ -76,6 +80,30 @@ final clientRoutes = GoRoute(
           providerName: params?['providerName'] ?? '',
           serviceName: params?['serviceName'] ?? '',
         );
+      },
+    ),
+    
+    // Add route for client reclamations list
+    GoRoute(
+      path: 'reclamations',
+      builder: (context, state) => const ClientReclamationsPage(),
+    ),
+    
+    // Add route for reclamation details
+    GoRoute(
+      path: 'reclamations/details/:reclamationId',
+      builder: (context, state) {
+        final reclamationId = state.pathParameters['reclamationId'] ?? '';
+        return ClientReclamationDetailsPage(reclamationId: reclamationId);
+      },
+    ),
+    
+    // Add route for creating a new reclamation
+    GoRoute(
+      path: 'reclamations/create/:reservationId',
+      builder: (context, state) {
+        final reservationId = state.pathParameters['reservationId'] ?? '';
+        return ReclamationFormPage(reservationId: reservationId);
       },
     ),
     

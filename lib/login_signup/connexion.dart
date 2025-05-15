@@ -338,7 +338,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           'lastLogin': FieldValue.serverTimestamp(),
           'role': 'client',
         });
-        
+      
         // Hide loader before navigation
         LoadingOverlay.hide();
         

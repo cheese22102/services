@@ -5,6 +5,8 @@ import 'gérer_services.dart';
 import 'provider_list_page.dart';
 import 'provider_approval_page.dart';
 import 'valider_publications.dart';
+import 'reclamations_management_page.dart';
+import 'reclamation_details_page.dart';
 
 // Define all admin-related routes
 final adminRoutes = GoRoute(
@@ -39,6 +41,22 @@ final adminRoutes = GoRoute(
       path: 'posts',
       builder: (BuildContext context, GoRouterState state) => 
           const PostsValidationPage(),
+    ),
+    
+    // Reclamations management route
+    GoRoute(
+      path: 'reclamations',
+      builder: (BuildContext context, GoRouterState state) => 
+          const ReclamationsManagementPage(),
+    ),
+    
+    // Reclamation details route
+    GoRoute(
+      path: 'reclamations/details/:reclamationId',
+      builder: (BuildContext context, GoRouterState state) {
+        final reclamationId = state.pathParameters['reclamationId'] ?? '';
+        return ReclamationDetailsPage(reclamationId: reclamationId);
+      },
     ),
   ],
 );

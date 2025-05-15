@@ -88,14 +88,27 @@ service cloud.firestore {
       }
     }
 
-    match /providers/{userId} {
+    match /providers/{providerId} {
       allow read: if isAuthenticated();
       // Allow users to update only the ratings fields
       allow update: if isAuthenticated() && 
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['ratings', 'reviewCount', 'quality', 'price', 'timeliness']);
+          .hasOnly(['rating', 'reviewCount']);
       // Allow providers to update their own documents fully
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == providerId;
+      
+      // More specific rules for ratings subcollection
+      match /ratings/stats {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /ratings/reviews {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /ratings/reviews/items/{reviewId} {
+        allow read, write: if isAuthenticated();
+      }
     }
 
     // Allow any authenticated user to read and write to reviews collection
@@ -149,6 +162,21 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (
         request.auth.uid == resource.data.userId || isAdmin()
       );
+    }
+
+    // Add rules for reclamations collection
+    match /reclamations/{reclamationId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.submitterId || 
+        request.auth.uid == resource.data.targetId ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.submitterId || 
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && isAdmin();
     }
 
     match /public_data/{document=**} {

@@ -7,18 +7,21 @@ class CustomBottomNav extends StatelessWidget {
   final int currentIndex;
   final Function(int)? onTap;
   final Widget? centerButton; // This will be ignored as we'll determine the button based on currentIndex
+  final Color? backgroundColor; // Add this parameter to accept custom background color
 
   const CustomBottomNav({
     super.key,
     required this.currentIndex,
     this.onTap,
     this.centerButton,
+    this.backgroundColor, // Make it optional
   });
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? Colors.grey.shade900 : Colors.white;
+    // Use provided backgroundColor or fall back to default
+    final bgColor = backgroundColor ?? (isDarkMode ? AppColors.darkBackground : AppColors.lightBackground);
     final borderColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
     
     return Stack(
@@ -29,7 +32,7 @@ class CustomBottomNav extends StatelessWidget {
         Container(
           height: 60,
           decoration: BoxDecoration(
-            color: backgroundColor,
+            color: bgColor, // Use the background color here
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -37,10 +40,7 @@ class CustomBottomNav extends StatelessWidget {
                 offset: const Offset(0, -5),
               ),
             ],
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
+            // Remove the borderRadius property to eliminate rounded corners
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

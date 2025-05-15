@@ -9,6 +9,8 @@ import 'reservation_details_page.dart';
 import 'reservation_completion_page.dart';
 import '../chat/conversation_marketplace.dart';
 import '../chat/provider_list_conversations.dart';
+import 'provider_reclamations_page.dart';
+import 'provider_reclamation_details_page.dart';
 
 final prestataireRoutes = GoRoute(
   path: '/prestataireHome',
@@ -89,5 +91,19 @@ final prestataireRoutes = GoRoute(
         );
       },
     ),
+    GoRoute(
+      path: 'reclamation',
+      builder: (BuildContext context, GoRouterState state) {
+        return const ProviderReclamationsPage();
+      },
+    ),
+        GoRoute(
+      path: 'reclamation/details/:reclamationId',
+      builder: (BuildContext context, GoRouterState state) {
+        final reclamationId = state.pathParameters['reclamationId'] ?? '';
+        return ProviderReclamationDetailsPage(reclamationId: reclamationId);
+      },
+    ),
   ],
+  
 );

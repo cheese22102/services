@@ -62,7 +62,7 @@ dependencies:
   url_launcher: ^6.1.10
   smooth_page_indicator: ^1.2.1
   camera: ^0.10.5+4  # Keep at 0.10.x for now to avoid major version jump
-  google_generative_ai: ^0.2.0  # Keep at 0.2.0 for now to avoid major version jump
+  google_generative_ai: ^0.1.0  # Keep at 0.2.0 for now to avoid major version jump
   connectivity_plus: ^5.0.2  # Added for network connectivity checking
 
 # Remove the standalone 'dependencies:' line

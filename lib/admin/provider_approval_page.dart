@@ -973,26 +973,9 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         'status': 'approved',
         'approvalDate': FieldValue.serverTimestamp(),
         'adminComment': _commentController.text,
-        // Initialize rating fields
-        'ratings': {
-          'quality': {
-            'total': 0,      // Sum of all quality ratings
-            'count': 0,      // Number of quality ratings
-            'average': 0.0,  // Average quality rating
-          },
-          'timeliness': {
-            'total': 0,
-            'count': 0,
-            'average': 0.0,
-          },
-          'price': {
-            'total': 0,
-            'count': 0,
-            'average': 0.0,
-          },
-          'overall': 0.0,    // Overall average of the three rating categories
-          'reviewCount': 0,  // Total number of reviews
-        },
+        // Initialize only overall rating in the main document
+        'rating': 0.0,
+        'reviewCount': 0,
       });
   
       // Send notification to the provider

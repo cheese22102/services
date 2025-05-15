@@ -5,6 +5,8 @@ import '../front/app_colors.dart';
 import '../front/custom_bottom_nav.dart';
 import 'package:go_router/go_router.dart';
 import '../services/gemini_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class ChatMessage {
   final String text;
@@ -16,6 +18,24 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
   });
+
+  // Convert ChatMessage to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'text': text,
+      'isUser': isUser,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  // Create ChatMessage from JSON
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      text: json['text'],
+      isUser: json['isUser'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
 }
 
 class ChatbotPage extends StatefulWidget {
@@ -32,15 +52,81 @@ class _ChatbotPageState extends State<ChatbotPage> {
   final ScrollController _scrollController = ScrollController();
   final GeminiService _geminiService = GeminiService();
   bool _isTyping = false;
+  static const String _storageKey = 'chatbot_history';
+  
+  // Maximum age for stored messages (7 days)
+  static const Duration _maxMessageAge = Duration(days: 7);
 
   @override
   void initState() {
     super.initState();
-    // Add welcome message
+    _loadChatHistory();
+  }
+  
+  // Load chat history from SharedPreferences
+  Future<void> _loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? historyJson = prefs.getString(_storageKey);
+      
+      if (historyJson != null) {
+        final List<dynamic> historyList = jsonDecode(historyJson);
+        final now = DateTime.now();
+        
+        final List<ChatMessage> loadedMessages = historyList
+            .map((item) => ChatMessage.fromJson(item))
+            .where((message) {
+              // Filter out messages older than _maxMessageAge
+              return now.difference(message.timestamp) <= _maxMessageAge;
+            })
+            .toList();
+        
+        if (loadedMessages.isNotEmpty) {
+          setState(() {
+            _messages.addAll(loadedMessages);
+          });
+          
+          // Scroll to bottom after loading messages
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        } else {
+          // If all messages were filtered out (too old), add welcome message
+          _addWelcomeMessage();
+        }
+      } else {
+        // No history found, add welcome message
+        _addWelcomeMessage();
+      }
+    } catch (e) {
+      _addWelcomeMessage();
+    }
+  }
+  
+  // Add welcome message
+  void _addWelcomeMessage() {
     _addMessage(
       "Bonjour ! Je suis votre assistant IA. Comment puis-je vous aider aujourd'hui ?",
       false,
     );
+  }
+  
+  // Save chat history to SharedPreferences
+  Future<void> _saveChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> historyList = 
+          _messages.map((message) => message.toJson()).toList();
+      final String historyJson = jsonEncode(historyList);
+      await prefs.setString(_storageKey, historyJson);
+    } catch (e) {
+    }
   }
 
   void _addMessage(String text, bool isUser) {
@@ -53,6 +139,9 @@ class _ChatbotPageState extends State<ChatbotPage> {
         ),
       );
     });
+    
+    // Save chat history after adding a message
+    _saveChatHistory();
     
     // Scroll to bottom after message is added
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -87,6 +176,96 @@ class _ChatbotPageState extends State<ChatbotPage> {
       });
     }
   }
+  
+  // Clear chat history
+  Future<void> _clearChatHistory() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Effacer l\'historique',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Voulez-vous vraiment effacer tout l\'historique de conversation ?',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Annuler',
+              style: GoogleFonts.poppins(),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              setState(() {
+                _messages.clear();
+              });
+              
+              // Clear from storage
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove(_storageKey);
+              
+              // Add welcome message again
+              _addWelcomeMessage();
+            },
+            child: Text(
+              'Effacer',
+              style: GoogleFonts.poppins(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Clear response cache
+  Future<void> _clearResponseCache() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Effacer le cache',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Voulez-vous effacer le cache des réponses ? Cela peut aider si vous recevez des réponses obsolètes.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Annuler',
+              style: GoogleFonts.poppins(),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _geminiService.clearCache();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Cache effacé avec succès',
+                    style: GoogleFonts.poppins(),
+                  ),
+                  backgroundColor: AppColors.primaryDarkGreen,
+                ),
+              );
+            },
+            child: Text(
+              'Effacer',
+              style: GoogleFonts.poppins(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +279,26 @@ class _ChatbotPageState extends State<ChatbotPage> {
         onBackPressed: () {
           context.go('/clientHome');
         },
+        actions: [
+          // Add clear cache button
+          IconButton(
+            icon: Icon(
+              Icons.cached,
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+            onPressed: _clearResponseCache,
+            tooltip: 'Effacer le cache',
+          ),
+          // Add clear history button
+          IconButton(
+            icon: Icon(
+              Icons.delete_outline,
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+            onPressed: _clearChatHistory,
+            tooltip: 'Effacer l\'historique',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -122,6 +321,14 @@ class _ChatbotPageState extends State<ChatbotPage> {
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Propulsé par Gemini 2.0 Flash-Lite',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
                           ),
                         ),
                       ],
@@ -248,6 +455,9 @@ class _ChatbotPageState extends State<ChatbotPage> {
   }
 
   Widget _buildMessageBubble(ChatMessage message, bool isDarkMode) {
+    // Format timestamp
+    final formattedTime = _formatTimestamp(message.timestamp);
+    
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -274,9 +484,37 @@ class _ChatbotPageState extends State<ChatbotPage> {
                     : (isDarkMode ? Colors.white : Colors.black87),
               ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              formattedTime,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                color: message.isUser
+                    ? Colors.white.withOpacity(0.7)
+                    : (isDarkMode ? Colors.white70 : Colors.black54),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+  
+  // Format timestamp for display
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+    
+    if (messageDate == today) {
+      // Today, show time only
+      return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    } else if (messageDate == today.subtract(const Duration(days: 1))) {
+      // Yesterday
+      return 'Hier, ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    } else {
+      // Other days
+      return '${timestamp.day.toString().padLeft(2, '0')}/${timestamp.month.toString().padLeft(2, '0')}/${timestamp.year}, ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    }
   }
 }

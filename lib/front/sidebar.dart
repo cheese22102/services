@@ -217,7 +217,7 @@ class _SidebarState extends State<Sidebar> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
-          height: _isServicesExpanded ? 150 : 0, // Adjust height based on content
+          height: _isServicesExpanded ? 200 : 0, // Adjust height based on content (increased from 150 to 200 to accommodate new button)
           child: SingleChildScrollView(
             physics: const NeverScrollableScrollPhysics(),
             child: Column(
@@ -244,6 +244,23 @@ class _SidebarState extends State<Sidebar> {
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/favorite-providers');
+                  },
+                ),
+                _buildServicesItem(
+                  'Mes réclamations',
+                  Icons.report_problem_outlined,
+                  () {
+                    Navigator.pop(context);
+                    context.go('/clientHome/reclamations');
+                  },
+                ),
+                // Add your new button here, for example:
+                _buildServicesItem(
+                  'Nouvelle réclamation',
+                  Icons.add_circle_outline,
+                  () {
+                    Navigator.pop(context);
+                    context.go('/clientHome/new-reclamation');
                   },
                 ),
               ],

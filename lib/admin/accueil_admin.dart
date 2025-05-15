@@ -79,6 +79,21 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Use GoRouter for navigation
+                context.push('/admin/reclamations');
+              },
+              icon: const Icon(Icons.report_problem),
+              label: const Text('Gérer les Réclamations'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+              ),
+            ),
           ],
         ),
       ),

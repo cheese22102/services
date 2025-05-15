@@ -174,7 +174,7 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
     );
   }
 
-  Widget _buildPostsList(BuildContext context, bool filterByValidation, bool? isValidated) {
+  Widget _buildPostsList(BuildContext context, bool filterByValidation, bool? isValidated, [bool showRejected = false]) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return StreamBuilder<QuerySnapshot>(
@@ -243,11 +243,18 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
               title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
               description.toLowerCase().contains(_searchQuery.toLowerCase());
           
-          if (filterByValidation) {
+          if (showRejected) {
+            // Show only rejected posts
+            final isRejected = data['isRejected'] as bool? ?? false;
+            return matchesSearch && isRejected;
+          } else if (filterByValidation) {
             final docIsValidated = data['isValidated'] as bool? ?? false;
-            return matchesSearch && docIsValidated == isValidated;
+            final isRejected = data['isRejected'] as bool? ?? false;
+            // For validated/pending tabs, exclude rejected posts
+            return matchesSearch && docIsValidated == isValidated && !isRejected;
           }
           
+          // For "All" tab, show everything
           return matchesSearch;
         }).toList();
         
@@ -276,9 +283,9 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
         
         return GridView.builder(
           padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.75,
+            childAspectRatio: MediaQuery.of(context).size.width > 600 ? 0.8 : 0.7, // Adjust aspect ratio based on screen width
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
@@ -292,6 +299,8 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
                 : 0.0;
             final List<dynamic> images = data['images'] ?? [];
             final bool isValidated = data['isValidated'] ?? false;
+            final bool isRejected = data['isRejected'] ?? false;
+            final String rejectionReason = data['rejectionReason'] ?? '';
             
             return GestureDetector(
               onTap: () {
@@ -313,7 +322,24 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Status badge
-                    if (!isValidated)
+                    if (isRejected)
+                      Container(
+                        margin: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Refusé',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    else if (!isValidated)
                       Container(
                         margin: const EdgeInsets.all(8),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -335,7 +361,7 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                       child: SizedBox(
-                        height: 120,
+                        height: MediaQuery.of(context).size.width > 600 ? 140 : 100, // Adjust image height based on screen size
                         width: double.infinity,
                         child: images.isNotEmpty
                             ? Image.network(
@@ -364,31 +390,52 @@ class _MesProduitsPageState extends State<MesProduitsPage> with SingleTickerProv
                     ),
                     
                     // Product info
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black87,
+                    Expanded( // Wrap in Expanded to prevent overflow
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0), // Reduced padding
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min, // Use minimum space needed
+                          children: [
+                            Text(
+                              title,
+                              style: GoogleFonts.poppins(
+                                fontSize: MediaQuery.of(context).size.width > 600 ? 14 : 12, // Smaller font on small screens
+                                fontWeight: FontWeight.w600,
+                                color: isDarkMode ? Colors.white : Colors.black87,
+                              ),
+                              maxLines: 1, // Limit to 1 line to save space
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$price DT',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                            const SizedBox(height: 2), // Reduced spacing
+                            Text(
+                              '$price DT',
+                              style: GoogleFonts.poppins(
+                                fontSize: MediaQuery.of(context).size.width > 600 ? 16 : 14, // Smaller font on small screens
+                                fontWeight: FontWeight.bold,
+                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                              ),
                             ),
-                          ),
-                        ],
+                            
+                            // Show rejection reason if post is rejected
+                            if (isRejected && rejectionReason.isNotEmpty)
+                              Flexible( // Make this flexible to avoid overflow
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 2), // Reduced padding
+                                  child: Text(
+                                    'Raison: ${rejectionReason.length > 20 ? rejectionReason.substring(0, 20) + '...' : rejectionReason}', // Show less text
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9, // Smaller font size
+                                      color: Colors.red.shade300,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

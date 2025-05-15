@@ -40,17 +40,13 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     // Match colors with bottom nav
     final defaultIconColor = iconColor ?? 
-        (isDarkMode ? 
-            (currentIndex != null ? AppColors.primaryGreen : Colors.white) : 
-            (currentIndex != null ? AppColors.primaryDarkGreen : Colors.black87));
+        (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen);
     final defaultTitleColor = titleColor ?? 
-        (isDarkMode ? 
-            AppColors.primaryGreen : 
-            AppColors.primaryDarkGreen);
+        (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen);
     
     return AppBar(
       elevation: 0,
-      backgroundColor: backgroundColor ?? (isDarkMode ? Colors.grey.shade900 : Colors.white),
+      backgroundColor: backgroundColor ?? (isDarkMode ? AppColors.darkBackground : AppColors.lightBackground),
       centerTitle: true,
       leading: _buildLeadingWidget(context, defaultIconColor),
       title: Text(

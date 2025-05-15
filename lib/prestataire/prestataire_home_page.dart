@@ -36,11 +36,6 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
           .doc(userId)
           .get()
           .then((doc) {
-        if (doc.exists) {
-          print('Provider request exists: ${doc.data()}');
-        } else {
-          print('Provider request does not exist for user: $userId');
-        }
       });
     }
   }
@@ -347,6 +342,15 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
                   child: CustomButton(
                     text: 'Voir les demandes',
                     onPressed: () => context.push('/prestataireHome/reservations'),
+                    backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+                    textColor: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+                  SizedBox(
+                  width: isSmallScreen ? double.infinity : (screenWidth - 80) / 2,
+                  child: CustomButton(
+                    text: 'Voir les réclamations',
+                    onPressed: () => context.push('/prestataireHome/reclamation'),
                     backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
                     textColor: isDarkMode ? Colors.white : Colors.black87,
                   ),

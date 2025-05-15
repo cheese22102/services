@@ -121,9 +121,16 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
                   services = List<String>.from(providerData['services']);
                 }
                 
-                // Get provider's rating from the ratings field
+                // Get provider's rating from the new rating field
                 double rating = 0.0;
                 int reviewCount = 0;
+                
+                if (providerData.containsKey('rating')) {
+                  rating = (providerData['rating'] as num?)?.toDouble() ?? 0.0;
+                }
+                if (providerData.containsKey('reviewCount')) {
+                  reviewCount = (providerData['reviewCount'] as num?)?.toInt() ?? 0;
+                }
                 
                 if (providerData.containsKey('ratings') && 
                     providerData['ratings'] is Map<String, dynamic>) {

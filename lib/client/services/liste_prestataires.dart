@@ -348,9 +348,9 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                         final dataB = b.data() as Map<String, dynamic>;
                         
                         if (_sortBy == 'rating') {
-                          // Get rating from ratings.overall or default to 0
-                          final ratingA = dataA['ratings']?['overall'] ?? 0.0;
-                          final ratingB = dataB['ratings']?['overall'] ?? 0.0;
+                          // Get rating from the new rating field or default to 0
+                          final ratingA = dataA['rating'] ?? 0.0;
+                          final ratingB = dataB['rating'] ?? 0.0;
                           return _isAscending ? ratingA.compareTo(ratingB) : ratingB.compareTo(ratingA);
                         } else if (_sortBy == 'distance' && _currentPosition != null) {
                           // Get location from exactLocation
@@ -415,7 +415,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                               }
                               
                               final bio = data['bio'] ?? 'Aucune description disponible';
-                              final rating = data['ratings']?['overall'] ?? 0.0;
+                              final rating = data['rating'] ?? 0.0;
                               final reviewCount = data['reviewCount'] ?? 0;
                               
                               // Calculate distance if location is available
@@ -448,9 +448,28 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                     },
                   ),
           ),
-    ],
-    
-    ));
+        ],
+      ),
+      // Add the "Mes réservations" button at the bottom of the page
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: CustomButton(
+          text: 'Mes réservations',
+          onPressed: () {
+            context.push('/clientHome/my-reservations');
+          },
+          icon: Icon(
+            Icons.calendar_today,
+            color: Colors.white,
+            size: 20,
+          ),
+          width: double.infinity,
+          isPrimary: true,
+          backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+        ),
+      ),
+    );
   }
 
   Widget _buildSortChip(String label, String value, bool isDarkMode) {
@@ -466,7 +485,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+              ? (isDarkMode ? AppColors.primaryGreen.withOpacity(0.2) : AppColors.primaryDarkGreen.withOpacity(0.1))
               : (isDarkMode ? AppColors.darkInputBackground : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -481,7 +500,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
             color: isSelected
-                ? (isDarkMode ? Colors.white : Colors.white)
+                ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
                 : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
           ),
         ),
@@ -498,103 +517,135 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
     String bio,
     double rating,
     int reviewCount,
-    String distance,
+    String distanceText,
   ) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    final isMediumScreen = screenWidth >= 360 && screenWidth < 480;
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        // In your provider card's onTap method:
         onTap: () {
-        // Navigate to provider profile
-        context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);
+          // Navigate to provider profile page
+          context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Provider info row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Provider avatar
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor,
-                    backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                  // Provider photo
+                  Container(
+                    width: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
+                    height: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                      image: photoUrl.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(photoUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
                     child: photoUrl.isEmpty
-                        ? Icon(
-                            Icons.person,
-                            size: 32,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ? Center(
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : 'P',
+                              style: GoogleFonts.poppins(
+                                fontSize: isSmallScreen ? 20 : 24,
+                                fontWeight: FontWeight.bold,
+                                color: isDarkMode ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
                           )
                         : null,
                   ),
-                  const SizedBox(width: 16),
                   
-                  // Provider info
+                  SizedBox(width: isSmallScreen ? 12 : 16),
+                  
+                  // Provider details
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Provider name
                         Text(
                           name,
                           style: GoogleFonts.poppins(
-                            fontSize: 18,
+                            fontSize: isSmallScreen ? 15 : isMediumScreen ? 16 : 18,
                             fontWeight: FontWeight.w600,
                             color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
                         
-                        // Rating
+                        SizedBox(height: isSmallScreen ? 2 : 4),
+                        
+                        // Rating and reviews
                         Row(
                           children: [
+                            // Star icon
                             Icon(
                               Icons.star,
-                              size: 18,
+                              size: isSmallScreen ? 14 : 16,
                               color: Colors.amber,
                             ),
                             const SizedBox(width: 4),
+                            // Rating value
                             Text(
                               rating.toStringAsFixed(1),
                               style: GoogleFonts.poppins(
-                                fontSize: 14,
+                                fontSize: isSmallScreen ? 12 : 14,
                                 fontWeight: FontWeight.w500,
                                 color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                               ),
                             ),
                             const SizedBox(width: 4),
+                            // Review count
                             Text(
                               '($reviewCount avis)',
                               style: GoogleFonts.poppins(
-                                fontSize: 12,
+                                fontSize: isSmallScreen ? 11 : 12,
                                 color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                             ),
                           ],
                         ),
                         
-                        const SizedBox(height: 4),
+                        SizedBox(height: isSmallScreen ? 2 : 4),
                         
                         // Distance
                         Row(
                           children: [
                             Icon(
                               Icons.location_on_outlined,
-                              size: 16,
+                              size: isSmallScreen ? 14 : 16,
                               color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              distance,
+                              distanceText,
                               style: GoogleFonts.poppins(
-                                fontSize: 12,
+                                fontSize: isSmallScreen ? 11 : 12,
                                 color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                             ),
@@ -606,104 +657,22 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                 ],
               ),
               
-              const SizedBox(height: 12),
+              SizedBox(height: isSmallScreen ? 8 : 12),
               
-              // Bio
+              // Bio text
               Text(
                 bio,
                 style: GoogleFonts.poppins(
-                  fontSize: 14,
+                  fontSize: isSmallScreen ? 12 : 14,
                   color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Action buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // Message button
-                  CustomButton(
-                    onPressed: () {
-                      // Start a conversation with this provider
-                      _startConversation(context, providerId, name);
-                    },
-                    text: 'Contacter',
-                    backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                    textColor: Colors.white,
-                    height: 36,
-                    width: 120,
-                  ),
-                  
-                  const SizedBox(width: 12),
-                  
-                  // View profile button
-                  CustomButton(
-                    onPressed: () {
-                      context.go('/clientHome/provider-details/$providerId', 
-                        extra: {'serviceName': widget.serviceName});
-                    },
-                    text: 'Voir profil',
-                    backgroundColor: Colors.transparent,
-                    textColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                    height: 36,
-                    width: 120,
-                  ),
-                ],
               ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  void _startConversation(BuildContext context, String providerId, String providerName) async {
-    if (currentUserId == null) return;
-    
-    try {
-      // Check if a conversation already exists
-      final conversationsQuery = await FirebaseFirestore.instance
-          .collection('conversations')
-          .where('participants', arrayContains: currentUserId)
-          .get();
-      
-      String? existingConversationId;
-      
-      for (var doc in conversationsQuery.docs) {
-        final participants = List<String>.from(doc['participants']);
-        if (participants.contains(providerId)) {
-          existingConversationId = doc.id;
-          break;
-        }
-      }
-      
-      if (existingConversationId != null) {
-        // Navigate to existing conversation
-        if (!mounted) return;
-    
-      } else {
-        // Create a new conversation
-        final newConversationRef = FirebaseFirestore.instance.collection('conversations').doc();
-        
-        await newConversationRef.set({
-          'participants': [currentUserId, providerId],
-          'lastMessage': null,
-          'lastMessageTime': null,
-          'createdAt': FieldValue.serverTimestamp(),
-          'serviceId': widget.serviceName,
-        });
-        
-        if (!mounted) return;
-      
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
-    }
   }
 }

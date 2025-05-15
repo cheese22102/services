@@ -301,7 +301,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         : 0.0;
     final String description = postData['description'] ?? 'Aucune description';
     final String condition = postData['condition'] ?? 'État inconnu';
-    final String category = postData['category'] ?? 'Catégorie inconnue';
+    final String categoryId = postData['category'] ?? '';
     
     // Full screen image view
     if (_isFullScreen && images.isNotEmpty) {
@@ -521,22 +521,47 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isDarkMode 
-                              ? Colors.grey.shade800 
-                              : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          category,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
+                      FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('services')
+                            .doc(categoryId)
+                            .get(),
+                        builder: (context, snapshot) {
+                          String categoryName = 'Catégorie inconnue';
+                          
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            );
+                          }
+                          
+                          if (snapshot.hasData && snapshot.data!.exists) {
+                            final serviceData = snapshot.data!.data() as Map<String, dynamic>?;
+                            if (serviceData != null && serviceData.containsKey('name')) {
+                              categoryName = serviceData['name'];
+                            }
+                          }
+                          
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDarkMode 
+                                  ? Colors.grey.shade800 
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              categoryName,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: isDarkMode ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

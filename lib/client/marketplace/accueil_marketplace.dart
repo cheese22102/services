@@ -25,22 +25,16 @@ class _MarketplacePageState extends State<MarketplacePage> {
   String _searchQuery = '';
   String _filterCondition = 'All';
   bool _sortByDateAsc = false; // Default to newest first
+  final bool _isAscending = false; // Add this line for price sorting
   RangeValues _priceRange = const RangeValues(0, 10000);
   bool _isFilterVisible = false;
   
   // Scroll controller for hiding search bar
   final ScrollController _scrollController = ScrollController();
 
-  // Categories with added "Autre" category
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'Tous', 'icon': Icons.apps, 'isSelected': true},
-    {'name': 'Électronique', 'icon': Icons.phone_android, 'isSelected': false},
-    {'name': 'Vêtements', 'icon': Icons.checkroom, 'isSelected': false},
-    {'name': 'Maison', 'icon': Icons.chair, 'isSelected': false},
-    {'name': 'Sport', 'icon': Icons.sports_soccer, 'isSelected': false},
-    {'name': 'Véhicules', 'icon': Icons.directions_car, 'isSelected': false},
-    {'name': 'Jardinage', 'icon': Icons.grass, 'isSelected': false},
-    {'name': 'Autre', 'icon': Icons.more_horiz, 'isSelected': false}, // Added "Autre" category
+  // Replace static categories with dynamic services
+  List<Map<String, dynamic>> _categories = [
+    {'id': 'all', 'name': 'Tous', 'icon': Icons.apps, 'isSelected': true, 'imageUrl': ''},
   ];
 
   // Controller for search field
@@ -57,6 +51,48 @@ class _MarketplacePageState extends State<MarketplacePage> {
     
     // Add scroll listener to hide/show search bar
     _scrollController.addListener(_scrollListener);
+    
+    // Load services from Firestore
+    _loadServices();
+  }
+  
+  // Load services from Firestore
+  Future<void> _loadServices() async {
+    setState(() {
+    });
+    
+    try {
+      final servicesSnapshot = await FirebaseFirestore.instance
+          .collection('services')
+          .orderBy('name')
+          .get();
+      
+      final List<Map<String, dynamic>> loadedServices = [
+        {'id': 'all', 'name': 'Tous', 'icon': Icons.apps, 'isSelected': true, 'imageUrl': ''},
+      ];
+      
+      for (var doc in servicesSnapshot.docs) {
+        final data = doc.data();
+        loadedServices.add({
+          'id': doc.id,
+          'name': data['name'] ?? 'Service',
+          'icon': Icons.miscellaneous_services,
+          'isSelected': false,
+          'imageUrl': data['imageUrl'] ?? '',
+        });
+      }
+      
+      if (mounted) {
+        setState(() {
+          _categories = loadedServices;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+        });
+      }
+    }
   }
 
   @override
@@ -68,13 +104,19 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
   
   // Scroll listener to hide/show search bar
-  // Modify the _scrollListener method to prevent interfering with normal scrolling
   void _scrollListener() {
-  // Disable the behavior that might be causing the refresh issue
-  // We'll keep this empty to prevent any state changes during scrolling
+    // Disable the behavior that might be causing the refresh issue
+    // We'll keep this empty to prevent any state changes during scrolling
   }
   
-  // Method to scroll to top and show search bar
+  // Method to select a category
+  void _selectCategory(int index) {
+    setState(() {
+      for (int i = 0; i < _categories.length; i++) {
+        _categories[i]['isSelected'] = (i == index);
+      }
+    });
+  }
 
   // Cache pour le stream
   Stream<QuerySnapshot>? _cachedStream;
@@ -88,49 +130,30 @@ class _MarketplacePageState extends State<MarketplacePage> {
     
     // Only show validated posts
     query = query.where('isValidated', isEqualTo: true);
-
-    // Apply condition filter
+    
+    // Apply category filter if not "Tous"
+    final selectedCategory = _categories.firstWhere((cat) => cat['isSelected'], orElse: () => _categories[0]);
+    if (selectedCategory['id'] != 'all') {
+      query = query.where('category', isEqualTo: selectedCategory['id']);
+    }
+    
+    // Apply condition filter if not "All"
     if (_filterCondition != 'All') {
       query = query.where('condition', isEqualTo: _filterCondition);
     }
-
+    
     // Apply price range filter
     query = query.where('price', isGreaterThanOrEqualTo: _priceRange.start);
     query = query.where('price', isLessThanOrEqualTo: _priceRange.end);
-
-    // Apply category filter
-    final selectedCategory = _categories.firstWhere(
-      (category) => category['isSelected'] == true,
-      orElse: () => _categories.first,
-    );
     
-    if (selectedCategory['name'] != 'Tous') {
-      if (selectedCategory['name'] == 'Autre') {
-        // For "Autre" category, we need a different approach
-        // We'll filter in the UI since Firebase doesn't support "not in" queries easily
-      } else {
-        query = query.where('category', isEqualTo: selectedCategory['name']);
-      }
-    }
-
-    // Apply sorting
+    // Apply sort order
+    query = query.orderBy('price', descending: !_isAscending);
     query = query.orderBy('createdAt', descending: !_sortByDateAsc);
-
-    // Cache the stream
+    
     _cachedStream = query.snapshots();
     return _cachedStream!;
   }
-
-  void _selectCategory(int index) {
-    setState(() {
-      for (int i = 0; i < _categories.length; i++) {
-        _categories[i]['isSelected'] = (i == index);
-      }
-      // Reset the cached stream to force a new query with the updated category filter
-      _cachedStream = null;
-    });
-  }
-
+  
   void _toggleFilterVisibility() {
     setState(() {
       _isFilterVisible = !_isFilterVisible;
@@ -241,7 +264,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 
                 // Categories
                 SizedBox(
-                  height: 100,
+                  height: 110, // Increased from 100 to 110 to accommodate content
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -254,38 +277,73 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         child: GestureDetector(
                           onTap: () => _selectCategory(index),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                      : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
-                                  borderRadius: BorderRadius.circular(15),
+                          child: SizedBox(
+                            width: 70, // Fixed width for the entire column
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min, // Use min size
+                              children: [
+                                Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                        : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: index == 0 
+                                    ? Icon(
+                                        category['icon'] as IconData,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : (isDarkMode ? Colors.white70 : Colors.black54),
+                                        size: 30,
+                                      )
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(15),
+                                        child: category['imageUrl'] != null && category['imageUrl'].toString().isNotEmpty
+                                          ? Image.network(
+                                              category['imageUrl'].toString(),
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Icon(
+                                                  Icons.miscellaneous_services,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : (isDarkMode ? Colors.white70 : Colors.black54),
+                                                  size: 30,
+                                                );
+                                              },
+                                            )
+                                          : Icon(
+                                              Icons.miscellaneous_services,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : (isDarkMode ? Colors.white70 : Colors.black54),
+                                              size: 30,
+                                            ),
+                                      ),
                                 ),
-                                child: Icon(
-                                  category['icon'] as IconData,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.white70 : Colors.black54),
-                                  size: 30,
+                                const SizedBox(height: 6), // Reduced from 8 to 6
+                                Flexible( // Added Flexible to handle text overflow
+                                  child: Text(
+                                    category['name'] as String,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected
+                                          ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                          : (isDarkMode ? Colors.white70 : Colors.black54),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                category['name'] as String,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  color: isSelected
-                                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                      : (isDarkMode ? Colors.white70 : Colors.black54),
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );

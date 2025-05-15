@@ -90,6 +90,7 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
         stream: FirebaseFirestore.instance
             .collection('marketplace')
             .where('isValidated', isEqualTo: false)
+            .where('isRejected', isEqualTo: false) // Add this line to filter out rejected posts
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -215,7 +216,6 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
         );
       }
     } catch (e) {
-      print('Erreur lors de la validation: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -227,8 +227,7 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
     }
   }
 
-  // Update the _rejectPost method to include the rejection reason
-  Future<void> _rejectPost(String postId, String rejectionReason) async {
+    Future<void> _rejectPost(String postId, String rejectionReason) async {
     try {
       final postDoc = await FirebaseFirestore.instance
           .collection('marketplace')
@@ -237,6 +236,17 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
       
       final postData = postDoc.data();
       if (postData == null) return;
+
+      // Update post with rejection information instead of deleting it
+      await FirebaseFirestore.instance
+          .collection('marketplace')
+          .doc(postId)
+          .update({
+            'isValidated': false,
+            'isRejected': true,
+            'rejectionReason': rejectionReason,
+            'rejectedAt': FieldValue.serverTimestamp(),
+          });
 
       // Send notification with rejection reason
       await NotificationsService.sendMarketplaceNotification(
@@ -247,33 +257,15 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
         action: 'rejected',
       );
 
-      // Store rejection reason in a separate collection for history
-      await FirebaseFirestore.instance
-          .collection('marketplace_rejections')
-          .add({
-            'postId': postId,
-            'userId': postData['userId'],
-            'postTitle': postData['title'],
-            'rejectionReason': rejectionReason,
-            'rejectedAt': FieldValue.serverTimestamp(),
-          });
-
-      // Delete the post
-      await FirebaseFirestore.instance
-          .collection('marketplace')
-          .doc(postId)
-          .delete();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Publication refusée et supprimée'),
+            content: Text('Publication refusée'),
             duration: Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      print('Erreur lors du refus: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -920,6 +920,88 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                         ),
                       ],
                       
+                      // Reclamation button
+                      if (_reservationData?['status'] == 'approved' || _reservationData?['status'] == 'completed') ...[  
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              context.push('/clientHome/reclamations/create/${widget.reservationId}');
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.report_problem),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Soumettre une réclamation',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      
+                      // View reclamation button if one exists
+                      if (_reservationData?['hasReclamation'] == true) ...[  
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              // Fetch the reclamation ID
+                              final reclamationsSnapshot = await FirebaseFirestore.instance
+                                  .collection('reclamations')
+                                  .where('reservationId', isEqualTo: widget.reservationId)
+                                  .limit(1)
+                                  .get();
+                              
+                              if (reclamationsSnapshot.docs.isNotEmpty) {
+                                final reclamationId = reclamationsSnapshot.docs.first.id;
+                                if (mounted) {
+                                  context.push('/clientHome/reclamations/details/$reclamationId');
+                                }
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.visibility),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Voir ma réclamation',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      
                       // Confirmation button
                       if (_reservationData?['status'] == 'approved' && _reservationData?['providerCompletionStatus'] != 'completed') ...[
                         const SizedBox(height: 20),

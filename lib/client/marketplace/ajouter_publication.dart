@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
+import '../../front/custom_dialog.dart';
 import '../../front/loading_overlay.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -45,16 +46,8 @@ class _AddPostPageState extends State<AddPostPage> {
 LatLng? _selectedLocation;
 final MapController _mapController = MapController();
   
-  // Catégories (identiques à celles de accueil_marketplace.dart)
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'Électronique', 'icon': Icons.phone_android},
-    {'name': 'Vêtements', 'icon': Icons.checkroom},
-    {'name': 'Maison', 'icon': Icons.chair},
-    {'name': 'Sport', 'icon': Icons.sports_soccer},
-    {'name': 'Véhicules', 'icon': Icons.directions_car},
-    {'name': 'Jardinage', 'icon': Icons.grass},
-    {'name': 'Autre', 'icon': Icons.more_horiz},
-  ];
+  // Replace static categories with dynamic services
+  List<Map<String, dynamic>> _services = [];
   
   // Cloudinary config
   final String cloudName = "dfk7mskxv";
@@ -63,8 +56,45 @@ final MapController _mapController = MapController();
   @override
   void initState() {
     super.initState();
-  _getCurrentLocation(); // Add this line
+    _getCurrentLocation();
     _initUserLocation();
+    _loadServices();
+  }
+  
+  // Load services from Firestore
+  Future<void> _loadServices() async {
+    setState(() {
+    });
+    
+    try {
+      final servicesSnapshot = await FirebaseFirestore.instance
+          .collection('services')
+          .orderBy('name')
+          .get();
+      
+      final List<Map<String, dynamic>> loadedServices = [];
+      
+      for (var doc in servicesSnapshot.docs) {
+        final data = doc.data();
+        loadedServices.add({
+          'id': doc.id,
+          'name': data['name'] ?? 'Service',
+          'icon': Icons.miscellaneous_services,
+          'imageUrl': data['imageUrl'] ?? '',
+        });
+      }
+      
+      if (mounted) {
+        setState(() {
+          _services = loadedServices;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+        });
+      }
+    }
   }
   
   Future<void> _initUserLocation() async {
@@ -314,8 +344,14 @@ Future<void> _useCurrentLocation() async {
   }
 
  // Méthode pour publier l'annonce
-  Future<void> _submitPost() async {
+   Future<void> _submitPost() async {
     if (!_validateCurrentStep() || _isUploading) return;
+    
+    // Show confirmation dialog before proceeding
+    final confirmSubmit = await _showConfirmationDialog();
+    if (confirmSubmit != true) {
+      return; // User cancelled the submission
+    }
     
     setState(() => _isUploading = true);
     
@@ -348,7 +384,7 @@ Future<void> _useCurrentLocation() async {
         'description': _descriptionController.text.trim(),
         'price': double.parse(_priceController.text),
         'condition': _condition,
-        'category': _selectedCategory,
+        'category': _selectedCategory, // This now contains the service ID
         'location': _locationController.text.trim(),
         'images': imageUrls,
         'userId': user.uid,
@@ -390,6 +426,56 @@ Future<void> _useCurrentLocation() async {
         setState(() => _isUploading = false);
       }
     }
+  }
+
+  // Add this method to show the confirmation dialog
+  Future<bool?> _showConfirmationDialog() async {
+    // Get the category name from the selected category ID
+    String categoryName = 'Catégorie inconnue';
+    if (_selectedCategory != null) {
+      for (var service in _services) {
+        if (service['id'] == _selectedCategory) {
+          categoryName = service['name'];
+          break;
+        }
+      }
+    }
+    
+    // Format the price with 2 decimal places
+    String formattedPrice = '';
+    try {
+      double price = double.parse(_priceController.text);
+      formattedPrice = price.toStringAsFixed(2);
+    } catch (e) {
+      formattedPrice = _priceController.text;
+    }
+    
+    // Build the confirmation message
+    final message = '''
+Titre: ${_titleController.text}
+
+Description: ${_descriptionController.text}
+
+Prix: $formattedPrice TND
+
+État: $_condition
+
+Catégorie: $categoryName
+
+Localisation: ${_locationController.text}
+
+Images: ${_images.length} image(s)
+
+Veuillez vérifier les informations ci-dessus avant de publier votre annonce.
+''';
+
+    return CustomDialog.showConfirmation(
+      context: context,
+      title: 'Confirmer la publication',
+      message: message,
+      confirmText: 'Publier',
+      cancelText: 'Modifier',
+    );
   }
 
   @override
@@ -502,698 +588,493 @@ Future<void> _useCurrentLocation() async {
   Widget _buildCurrentStepContent(bool isDarkMode) {
     switch (_currentStep) {
       case 0:
-        return _buildCategoryStep(isDarkMode);
+        // Category selection
+        return _buildCategorySelectionStep();
       case 1:
-        return _buildImagesStep(isDarkMode);
+        // Image selection
+        return _buildImageSelectionStep(isDarkMode);
       case 2:
-        return _buildDescriptionStep(isDarkMode);
+        // Title and description
+        return _buildTitleDescriptionStep(isDarkMode);
       case 3:
-        return _buildPriceAndConditionStep(isDarkMode);
+        // Price and condition
+        return _buildPriceConditionStep(isDarkMode);
       case 4:
-        return _buildLocationAndSummaryStep(isDarkMode);
+        // Location selection (without overview)
+        return _buildLocationSelectionStep(isDarkMode);
       default:
         return const SizedBox.shrink();
     }
   }
   
-  // Étape 1: Choix de la catégorie
-  Widget _buildCategoryStep(bool isDarkMode) {
+ // ... existing code ...
+
+  Widget _buildCategorySelectionStep() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('services').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (snapshot.hasError) {
+          return Center(child: Text('Erreur: ${snapshot.error}'));
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('Aucune catégorie disponible'));
+        }
+        
+        final services = snapshot.data!.docs;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sélectionnez une catégorie',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 16),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 1.2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: services.length,
+              itemBuilder: (context, index) {
+                final service = services[index].data() as Map<String, dynamic>;
+                final serviceId = services[index].id;
+                final serviceName = service['name'] ?? 'Catégorie';
+                final imageUrl = service['imageUrl'] ?? '';
+                final isSelected = _selectedCategory == serviceId;
+                
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedCategory = serviceId;
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected 
+                          ? AppColors.primaryGreen.withOpacity(0.2)
+                          : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? AppColors.primaryGreen : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (imageUrl.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              imageUrl,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 60,
+                                  height: 60,
+                                  color: Colors.grey.shade300,
+                                  child: Icon(
+                                    Icons.image_not_supported,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                );
+                              },
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.category,
+                            size: 40,
+                            color: isSelected ? AppColors.primaryGreen : Colors.grey,
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          serviceName,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected 
+                                ? AppColors.primaryGreen 
+                                : (isDarkMode ? Colors.white : Colors.black87),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildImageSelectionStep(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Sélectionnez la catégorie qui correspond le mieux à votre article:',
+          'Ajoutez des photos de votre article (max 5)',
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 16,
             color: isDarkMode ? Colors.white70 : Colors.black87,
           ),
         ),
         const SizedBox(height: 20),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 0.9,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: _categories.length,
-          itemBuilder: (context, index) {
-            final category = _categories[index];
-            final isSelected = _selectedCategory == category['name'];
-            
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedCategory = category['name'] as String;
-                });
-              },
+        if (_images.isEmpty)
+          Center(
+            child: GestureDetector(
+              onTap: _pickImages,
               child: Container(
+                width: double.infinity,
+                height: 200,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? (isDarkMode ? AppColors.primaryGreen.withOpacity(0.2) : AppColors.primaryDarkGreen.withOpacity(0.1))
-                      : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
-                  borderRadius: BorderRadius.circular(15),
-                  border: isSelected
-                      ? Border.all(
-                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                          width: 2,
-                        )
-                      : null,
+                  color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                    width: 2,
+                  ),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      category['icon'] as IconData,
-                      size: 40,
-                      color: isSelected
-                          ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                          : (isDarkMode ? Colors.white70 : Colors.black54),
+                      Icons.add_photo_alternate_outlined,
+                      size: 48,
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Text(
-                      category['name'] as String,
-                      textAlign: TextAlign.center,
+                      'Appuyez pour ajouter des photos',
                       style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected
-                            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                            : (isDarkMode ? Colors.white70 : Colors.black54),
+                        fontSize: 16,
+                        color: isDarkMode ? Colors.white70 : Colors.black87,
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-  
-  // Étape 2: Ajout des images
-  Widget _buildImagesStep(bool isDarkMode) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Ajoutez jusqu\'à 5 photos de votre article:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: isDarkMode ? Colors.white70 : Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'La première photo sera l\'image principale de votre annonce.',
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontStyle: FontStyle.italic,
-            color: isDarkMode ? Colors.white54 : Colors.black54,
-          ),
-        ),
-        const SizedBox(height: 20),
-        
-        // Grille d'images
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 1,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: _images.length + (_images.length < 5 ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == _images.length) {
-              // Bouton d'ajout d'image
-              return GestureDetector(
-                onTap: _pickImages,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                      width: 1,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.add_a_photo,
-                      size: 30,
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                    ),
-                  ),
+            ),
+          )
+        else
+          Column(
+            children: [
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
                 ),
-              );
-            } else {
-              // Image existante
-              return Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      image: DecorationImage(
-                        image: FileImage(_images[index]),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: GestureDetector(
-                      onTap: () => _removeImage(index),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
+                itemCount: _images.length,
+                itemBuilder: (context, index) {
+                  return Stack(
+                    children: [
+                      Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (index == 0)
-                    Positioned(
-                      bottom: 5,
-                      left: 5,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Principale',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10,
-                            color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          image: DecorationImage(
+                            image: FileImage(_images[index]),
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                    ),
-                ],
-              );
-            }
-          },
-        ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => _removeImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              if (_images.length < 5)
+                CustomButton(
+                  text: 'Ajouter plus de photos',
+                  onPressed: _pickImages,
+                  isPrimary: false,
+                  height: 50,
+                ),
+            ],
+          ),
       ],
     );
   }
-  
-  // Étape 3: Titre et description
-  Widget _buildDescriptionStep(bool isDarkMode) {
+
+  Widget _buildTitleDescriptionStep(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Donnez un titre à votre annonce:',
+          'Décrivez votre article',
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 16,
             color: isDarkMode ? Colors.white70 : Colors.black87,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
         TextField(
           controller: _titleController,
-          style: GoogleFonts.poppins(
-            color: isDarkMode ? Colors.white : Colors.black,
-          ),
           decoration: InputDecoration(
-            hintText: 'Ex: iPhone 13 Pro Max 256Go',
-            hintStyle: GoogleFonts.poppins(
-              color: isDarkMode ? Colors.white38 : Colors.black38,
+            labelText: 'Titre',
+            hintText: 'Ex: iPhone 13 Pro Max 256GB',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
             filled: true,
-            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+          ),
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white : Colors.black,
           ),
           maxLength: 50,
         ),
-        const SizedBox(height: 20),
-        Text(
-          'Décrivez votre article en détail:',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: isDarkMode ? Colors.white70 : Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         TextField(
           controller: _descriptionController,
+          decoration: InputDecoration(
+            labelText: 'Description',
+            hintText: 'Décrivez votre article en détail...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+            alignLabelWithHint: true,
+          ),
           style: GoogleFonts.poppins(
             color: isDarkMode ? Colors.white : Colors.black,
           ),
-          decoration: InputDecoration(
-            hintText: 'Décrivez l\'état, les caractéristiques, etc.',
-            hintStyle: GoogleFonts.poppins(
-              color: isDarkMode ? Colors.white38 : Colors.black38,
-            ),
-            filled: true,
-            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.all(16),
-          ),
-          maxLines: 5,
-          maxLength: 500,
+          maxLines: 6,
+          maxLength: 1000,
         ),
       ],
     );
   }
-  
-  // Étape 4: Prix et état
-  Widget _buildPriceAndConditionStep(bool isDarkMode) {
+
+  Widget _buildPriceConditionStep(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Définissez le prix de votre article:',
+          'Définissez le prix et l\'état',
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 16,
             color: isDarkMode ? Colors.white70 : Colors.black87,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
         TextField(
           controller: _priceController,
+          decoration: InputDecoration(
+            labelText: 'Prix (TND)',
+            hintText: 'Ex: 299.99',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+            prefixIcon: const Icon(Icons.wallet),
+          ),
           style: GoogleFonts.poppins(
             color: isDarkMode ? Colors.white : Colors.black,
           ),
-          decoration: InputDecoration(
-            hintText: 'Prix en DT',
-            hintStyle: GoogleFonts.poppins(
-              color: isDarkMode ? Colors.white38 : Colors.black38,
-            ),
-            filled: true,
-            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            prefixIcon: Icon(
-              Icons.price_change,
-              color: isDarkMode ? Colors.white54 : Colors.black54,
-            ),
-          ),
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 24),
         Text(
-          'Quel est l\'état de votre article?',
+          'État du produit',
           style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: isDarkMode ? Colors.white70 : Colors.black87,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        const SizedBox(height: 15),
-        Row(
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
           children: [
-            Expanded(
-              child: _buildConditionOption(
-                'Neuf',
-                'Jamais utilisé, avec emballage d\'origine',
-                Icons.new_releases,
-                isDarkMode,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: _buildConditionOption(
-                'Très bon',
-                'Utilisé quelques fois, comme neuf',
-                Icons.thumb_up,
-                isDarkMode,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 15),
-        Row(
-          children: [
-            Expanded(
-              child: _buildConditionOption(
-                'Bon',
-                'Utilisé mais bien entretenu',
-                Icons.check_circle,
-                isDarkMode,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: _buildConditionOption(
-                'Occasion',
-                'Utilisé avec des signes d\'usure',
-                Icons.handyman,
-                isDarkMode,
-              ),
-            ),
+            _buildConditionChip('Neuf', isDarkMode),
+            _buildConditionChip('Très bon', isDarkMode),
+            _buildConditionChip('Bon', isDarkMode),
+            _buildConditionChip('Satisfaisant', isDarkMode),
           ],
         ),
       ],
     );
   }
-  
-  // Widget pour les options d'état
-  Widget _buildConditionOption(String title, String description, IconData icon, bool isDarkMode) {
-    final isSelected = _condition == title;
+
+  Widget _buildConditionChip(String condition, bool isDarkMode) {
+    final isSelected = _condition == condition;
     
     return GestureDetector(
       onTap: () {
         setState(() {
-          _condition = title;
+          _condition = condition;
         });
       },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDarkMode ? AppColors.primaryGreen.withOpacity(0.2) : AppColors.primaryDarkGreen.withOpacity(0.1))
-              : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
-          borderRadius: BorderRadius.circular(10),
-          border: isSelected
-              ? Border.all(
-                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                  width: 2,
-                )
-              : Border.all(
-                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                  width: 1,
-                ),
+      child: Chip(
+        label: Text(
+          condition,
+          style: GoogleFonts.poppins(
+            color: isSelected
+                ? Colors.white
+                : (isDarkMode ? Colors.white70 : Colors.black87),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 30,
-              color: isSelected
-                  ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                  : (isDarkMode ? Colors.white70 : Colors.black54),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected
-                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                    : (isDarkMode ? Colors.white : Colors.black87),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                color: isDarkMode ? Colors.white54 : Colors.black54,
-              ),
-            ),
-          ],
-        ),
+        backgroundColor: isSelected
+            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+            : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
     );
   }
-  
-    // Étape 5: Localisation et récapitulatif
-  Widget _buildLocationAndSummaryStep(bool isDarkMode) {
-  return SingleChildScrollView(
-    child: Column(
+
+  Widget _buildLocationSelectionStep(bool isDarkMode) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Où se trouve votre article?',
+          'Précisez la localisation',
           style: GoogleFonts.poppins(
             fontSize: 16,
-            fontWeight: FontWeight.bold,
             color: isDarkMode ? Colors.white70 : Colors.black87,
           ),
         ),
-        const SizedBox(height: 16),
-        
-        // Current location button
-        ElevatedButton.icon(
-          onPressed: _useCurrentLocation,
-          icon: const Icon(Icons.my_location),
-          label: const Text('Utiliser ma position actuelle'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
-            foregroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-            elevation: 2,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _locationController,
+          decoration: InputDecoration(
+            labelText: 'Localisation',
+            hintText: 'Ex: Paris, France',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+            prefixIcon: const Icon(Icons.location_on),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.my_location),
+              onPressed: _useCurrentLocation,
+              tooltip: 'Utiliser ma position actuelle',
             ),
           ),
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
         ),
-        
-        const SizedBox(height: 16),
-        
-        // Map
+        const SizedBox(height: 20),
         Container(
-          height: 250,
+          height: 300,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                blurRadius: 4,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              center: _selectedLocation ?? const LatLng(36.8065, 10.1815), // Default to Tunis
-              zoom: 13.0,
-              onTap: (tapPosition, latLng) {
-                setState(() {
-                  _selectedLocation = latLng;
-                  _locationController.text = 'Recherche de l\'Adresse';
-                });
-                
-                // Get address from coordinates
-                placemarkFromCoordinates(latLng.latitude, latLng.longitude)
-                  .then((placemarks) {
-                    if (placemarks.isNotEmpty) {
-                      Placemark place = placemarks[0];
-                      setState(() {
-                        _locationController.text = place.locality ?? '';
-                      });
-                    } else {
-                      setState(() {
-                        _locationController.text = '';
-                      });
-                    }
-                  })
-                  .catchError((e) {
-                    debugPrint('Error during geocoding: $e');
-                    setState(() {
-                      _locationController.text = '';
-                    });
-                  });
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
-              ),
-              if (_selectedLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      width: 40.0,
-                      height: 40.0,
-                      point: _selectedLocation!,
-                      builder: (ctx) => const Icon(
-                        Icons.location_on,
-                        color: Colors.red,
-                        size: 40,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey.shade800.withOpacity(0.5) : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(15),
             border: Border.all(
               color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-              width: 1,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Catégorie
-              Row(
-                children: [
-                  Icon(
-                    _categories.firstWhere((c) => c['name'] == _selectedCategory)['icon'] as IconData,
-                    size: 20,
-                    color: isDarkMode ? Colors.white70 : Colors.black54,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Catégorie: $_selectedCategory',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ],
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                center: _selectedLocation ?? const LatLng(48.8566, 2.3522), // Default to Paris
+                zoom: 13.0,
+                onTap: (tapPosition, latLng) {
+                  setState(() {
+                    _selectedLocation = latLng;
+                  });
+                  _getAddressFromLatLng(latLng);
+                },
               ),
-              const SizedBox(height: 12),
-              
-              // Titre
-              Text(
-                _titleController.text.isEmpty ? 'Titre non défini' : _titleController.text,
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black,
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c'],
                 ),
-              ),
-              const SizedBox(height: 8),
-              
-              // Prix
-              Text(
-                _priceController.text.isEmpty 
-                    ? 'Prix non défini' 
-                    : '${_priceController.text} DT',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // État
-              Row(
-                children: [
-                  Icon(
-                    _getConditionIcon(_condition),
-                    size: 16,
-                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                if (_selectedLocation != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        width: 40.0,
+                        height: 40.0,
+                        point: _selectedLocation!,
+                        builder: (ctx) => const Icon(
+                          Icons.location_pin,
+                          color: Colors.red,
+                          size: 40,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'État: $_condition',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              
-              // Localisation
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: isDarkMode ? Colors.white70 : Colors.black54,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                  child:Text(
-                    _locationController.text.isEmpty 
-                        ? 'Localisation non définie' 
-                        : _locationController.text,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                    ),
-                     overflow: TextOverflow.ellipsis,
-                     maxLines: 2,
-                  ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Nombre d'images
-              Row(
-                children: [
-                  Icon(
-                    Icons.photo_library,
-                    size: 16,
-                    color: isDarkMode ? Colors.white70 : Colors.black54,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${_images.length} image${_images.length > 1 ? 's' : ''}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        
-        const SizedBox(height: 20),
-        Text(
-          'En cliquant sur "Publier", votre annonce sera visible par tous les utilisateurs.',
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontStyle: FontStyle.italic,
-            color: isDarkMode ? Colors.white54 : Colors.black54,
-          ),
-          textAlign: TextAlign.center,
+        const SizedBox(height: 16),
+        CustomButton(
+          text: 'Utiliser ma position actuelle',
+          onPressed: _useCurrentLocation,
+          isPrimary: false,
+          height: 50,
         ),
       ],
-    ));
+    );
   }
-  
-  // Obtenir l'icône correspondant à l'état
-  IconData _getConditionIcon(String condition) {
-    switch (condition) {
-      case 'Neuf':
-        return Icons.new_releases;
-      case 'Très bon':
-        return Icons.thumb_up;
-      case 'Bon':
-        return Icons.check_circle;
-      case 'Occasion':
-        return Icons.handyman;
-      default:
-        return Icons.help_outline;
+                
+  Future<void> _getAddressFromLatLng(LatLng latLng) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        latLng.latitude,
+        latLng.longitude,
+      );
+      
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        setState(() {
+          _locationController.text = _formatAddress(place);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error getting address: $e');
     }
   }
+  // Obtenir l'icône correspondant à l'état
 }
