@@ -6,6 +6,7 @@ import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
 import '../../front/sidebar.dart';
 import '../../front/custom_bottom_nav.dart';
+import '../../front/marketplace_search.dart';
 
 
 
@@ -26,18 +27,35 @@ class _AllServicesPageState extends State<AllServicesPage> {
     super.dispose();
   }
 
+  // Clear search query
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+    });
+  }
+
+  // Handle search query changes
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
 
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       drawer: const Sidebar(),
       appBar: CustomAppBar(
         title: 'Tous les services',
         showBackButton: false, // Change to false since we're showing sidebar
         showSidebar: true, // Add sidebar
         showNotifications: true, // Add notifications
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
       ),
       body: SafeArea(
         child: Padding(
@@ -45,55 +63,11 @@ class _AllServicesPageState extends State<AllServicesPage> {
           child: Column(
             children: [
               // Search bar with updated styling
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.search,
-                      color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Rechercher un service...',
-                          hintStyle: GoogleFonts.poppins(
-                            color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
-                          border: InputBorder.none,
-                        ),
-                        style: GoogleFonts.poppins(
-                          color: isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value.toLowerCase();
-                          });
-                        },
-                      ),
-                    ),
-                    if (_searchController.text.isNotEmpty)
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _searchController.clear();
-                            _searchQuery = '';
-                          });
-                        },
-                        child: Icon(
-                          Icons.clear,
-                          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                      ),
-                  ],
-                ),
+              MarketplaceSearch(
+                controller: _searchController,
+                onClear: _clearSearch,
+                hintText: 'Rechercher un service...',
+                onChanged: _onSearchChanged,
               ),
               
               const SizedBox(height: 24),
@@ -205,28 +179,37 @@ class _AllServicesPageState extends State<AllServicesPage> {
         ),
         child: Column(
           children: [
-            // Service image (not circular)
+            // Service image with improved styling
             Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  color: isDarkMode 
+                      ? AppColors.darkBackground 
+                      : AppColors.lightInputBackground,
+                ),
+                width: double.infinity,
                 child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: primaryColor.withOpacity(0.1),
-                            child: Icon(
-                              icon,
-                              size: 40,
-                              color: primaryColor,
-                            ),
-                          );
-                        },
+                    ? Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Icon(
+                                  icon,
+                                  size: 40,
+                                  color: primaryColor,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       )
-                    : Container(
-                        color: primaryColor.withOpacity(0.1),
+                    : Center(
                         child: Icon(
                           icon,
                           size: 40,
@@ -236,7 +219,7 @@ class _AllServicesPageState extends State<AllServicesPage> {
               ),
             ),
             
-            // Service name
+            // Service name with improved styling
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(

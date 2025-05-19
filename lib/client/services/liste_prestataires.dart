@@ -91,8 +91,9 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       appBar: CustomAppBar(
-        title: 'Prestataires de ${widget.serviceName}',
+        title: widget.serviceName,
         showBackButton: true,
         backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
         titleColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
@@ -104,7 +105,7 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             decoration: BoxDecoration(
-              color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+              color: isDarkMode ? AppColors.darkBackground.withOpacity(0.7) : AppColors.lightBackground.withOpacity(0.9),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
@@ -112,6 +113,10 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                   offset: const Offset(0, 2),
                 ),
               ],
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
             ),
             child: Column(
               children: [
@@ -410,7 +415,8 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                                 final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
                                 if (userData != null) {
                                   name = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}';
-                                  photoUrl = userData['photoURL'] ?? '';
+                                  // Only use avatarUrl, no fallback to photoURL
+                                  photoUrl = userData['avatarUrl'] ?? '';
                                 }
                               }
                               
@@ -519,44 +525,35 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
     int reviewCount,
     String distanceText,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 360;
-    final isMediumScreen = screenWidth >= 360 && screenWidth < 480;
-    
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.2) : AppColors.lightBorderColor.withOpacity(0.2),
+          width: 1,
+        ),
       ),
+      color: isDarkMode ? AppColors.darkBackground.withOpacity(0.7) : Colors.white,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          // Navigate to provider profile page
-          context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);
-        },
+          context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);        },
         child: Padding(
-          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Provider info row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Provider photo
+                  // Provider image with shadow and border
                   Container(
-                    width: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
-                    height: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
+                    width: 70,
+                    height: 70,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                      image: photoUrl.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(photoUrl),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.1),
@@ -565,23 +562,33 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                         ),
                       ],
                     ),
-                    child: photoUrl.isEmpty
-                        ? Center(
-                            child: Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                              style: GoogleFonts.poppins(
-                                fontSize: isSmallScreen ? 20 : 24,
-                                fontWeight: FontWeight.bold,
-                                color: isDarkMode ? Colors.white70 : Colors.black54,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: photoUrl.isNotEmpty
+                          ? Image.network(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                child: Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                              child: Icon(
+                                Icons.person,
+                                size: 40,
+                                color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
                               ),
                             ),
-                          )
-                        : null,
+                    ),
                   ),
-                  
-                  SizedBox(width: isSmallScreen ? 12 : 16),
-                  
-                  // Provider details
+                  const SizedBox(width: 16),
+                  // Provider info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,62 +597,41 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                         Text(
                           name,
                           style: GoogleFonts.poppins(
-                            fontSize: isSmallScreen ? 15 : isMediumScreen ? 16 : 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        
-                        SizedBox(height: isSmallScreen ? 2 : 4),
-                        
-                        // Rating and reviews
+                        const SizedBox(height: 4),
+                        // Rating and distance in a row
                         Row(
                           children: [
-                            // Star icon
+                            // Rating stars
                             Icon(
                               Icons.star,
-                              size: isSmallScreen ? 14 : 16,
+                              size: 16,
                               color: Colors.amber,
                             ),
                             const SizedBox(width: 4),
-                            // Rating value
                             Text(
-                              rating.toStringAsFixed(1),
+                              '${rating.toStringAsFixed(1)} (${reviewCount})',
                               style: GoogleFonts.poppins(
-                                fontSize: isSmallScreen ? 12 : 14,
-                                fontWeight: FontWeight.w500,
-                                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            // Review count
-                            Text(
-                              '($reviewCount avis)',
-                              style: GoogleFonts.poppins(
-                                fontSize: isSmallScreen ? 11 : 12,
+                                fontSize: 12,
                                 color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                             ),
-                          ],
-                        ),
-                        
-                        SizedBox(height: isSmallScreen ? 2 : 4),
-                        
-                        // Distance
-                        Row(
-                          children: [
+                            const SizedBox(width: 12),
+                            // Distance
                             Icon(
-                              Icons.location_on_outlined,
-                              size: isSmallScreen ? 14 : 16,
-                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              Icons.location_on,
+                              size: 16,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               distanceText,
                               style: GoogleFonts.poppins(
-                                fontSize: isSmallScreen ? 11 : 12,
+                                fontSize: 12,
                                 color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                               ),
                             ),
@@ -656,18 +642,93 @@ class _ServiceProvidersPageState extends State<ServiceProvidersPage> {
                   ),
                 ],
               ),
-              
-              SizedBox(height: isSmallScreen ? 8 : 12),
-              
-              // Bio text
-              Text(
-                bio,
-                style: GoogleFonts.poppins(
-                  fontSize: isSmallScreen ? 12 : 14,
-                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              // Bio with padding
+              if (bio.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    bio,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+              ],
+              // Action buttons
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // View profile button
+                  OutlinedButton.icon(
+                    onPressed: () {
+          context.push('/clientHome/provider-details/$providerId', extra: widget.serviceName);                    
+          },
+                    icon: Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    ),
+                    label: Text(
+                      'Voir profil',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Contact button (replacing Reserve button)
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Navigate to chat conversation with this provider
+                      context.push(
+                        '/clientHome/marketplace/chat/conversation/$providerId',
+                        extra: {'otherUserName': name},
+                      );
+                    },
+                    icon: Icon(
+                      Icons.chat_outlined,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      'Contacter',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDarkMode ? Colors.blue : Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

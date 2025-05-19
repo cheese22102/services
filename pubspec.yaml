@@ -64,6 +64,7 @@ dependencies:
   camera: ^0.10.5+4  # Keep at 0.10.x for now to avoid major version jump
   google_generative_ai: ^0.1.0  # Keep at 0.2.0 for now to avoid major version jump
   connectivity_plus: ^5.0.2  # Added for network connectivity checking
+  uuid: ^4.5.1
 
 # Remove the standalone 'dependencies:' line
 dev_dependencies:

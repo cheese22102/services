@@ -21,7 +21,7 @@ class CustomBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     // Use provided backgroundColor or fall back to default
-    final bgColor = backgroundColor ?? (isDarkMode ? AppColors.darkBackground : AppColors.lightBackground);
+    final bgColor = backgroundColor ?? (isDarkMode ? Colors.grey.shade900 : AppColors.lightBackground);
     final borderColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
     
     return Stack(

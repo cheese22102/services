@@ -429,7 +429,7 @@ void _contactProvider() {
     final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
     
     final providerName = '${_userData['firstname'] ?? ''} ${_userData['lastname'] ?? ''}';
-    final photoUrl = _userData['photoURL'] ?? '';
+    final photoUrl = _userData['avatarUrl'] ?? '';
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1282,14 +1282,15 @@ void _contactProvider() {
     final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       appBar: CustomAppBar(
-        title: 'Profil du prestataire',
+        title: 'Profil Prestataire',
         showBackButton: true,
         backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
         titleColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         iconColor: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         actions: [
+          // Favorite button
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -1307,34 +1308,28 @@ void _contactProvider() {
             )
           : Column(
               children: [
-                // Enhanced provider header with contact icons
+                // Provider header with contact buttons
                 _buildEnhancedProviderHeader(),
                 
-                // Custom tab bar with equal divisions and shadows
+                // Tab bar with improved styling
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(25),
+                    color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: TabBar(
                     controller: _tabController,
-                    indicator: BoxDecoration(
-                      color: primaryColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withOpacity(0.3),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    dividerColor: Colors.transparent, // Remove divider
-                    indicatorSize: TabBarIndicatorSize.tab, // Make indicator size match tab
                     labelColor: primaryColor,
-                    unselectedLabelColor: isDarkMode ? Colors.white70 : Colors.black54,
+                    unselectedLabelColor: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                    indicatorColor: primaryColor,
+                    indicatorWeight: 3,
+                    indicatorSize: TabBarIndicatorSize.label,
                     labelStyle: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1343,10 +1338,39 @@ void _contactProvider() {
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
-                    tabs: const [
-                      Tab(text: 'Information'),
-                      Tab(text: 'Avis'),
-                      Tab(text: 'Projets'),
+                    dividerColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.info_outline, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Infos'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.star_outline, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Avis'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.photo_library_outlined, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Projets'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1356,47 +1380,101 @@ void _contactProvider() {
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // Informations tab (combines services and info)
+                      // Information tab
                       _buildInformationsTab(),
                       
                       // Reviews tab
                       _buildReviewsTab(),
                       
                       // Projects tab
-                     _buildProjectPhotosTab(),
+                      _buildProjectPhotosTab(),
                     ],
                   ),
                 ),
                 
-                // Add reservation button at the bottom
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: _checkingReservation
-                      ? const Center(child: CircularProgressIndicator())
-                      : CustomButton(
-                          text: _hasActiveReservation 
-                              ? 'Vous avez déjà une demande en cours' 
-                              : 'Réserver une intervention',
-                          onPressed: _hasActiveReservation
-                              ? null
-                              : () {
-                                  // Navigate to reservation page
-                                  context.push(
-                                    '/clientHome/reservation/${widget.providerId}',
-                                    extra: {
-                                      'providerName': _userData['firstname'] != null 
-                                          ? '${_userData['firstname']} ${_userData['lastname']}' 
-                                          : 'Prestataire',
-                                      'serviceName': _serviceName.isNotEmpty 
-                                          ? _serviceName 
-                                          : widget.serviceName,
-                                    },
-                                  );
-                                },
-                          isPrimary: true,
-                          width: double.infinity,
+                // Bottom action buttons
+                if (!_checkingReservation && !_hasActiveReservation)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, -2),
                         ),
-                ),
+                      ],
+                    ),
+                    child: CustomButton(
+                      text: 'Réserver',
+                      onPressed: () {
+                        context.push(
+                          '/clientHome/reservation/${widget.providerId}',
+                          extra: {
+                            'providerName': '${_userData['firstname'] ?? ''} ${_userData['lastname'] ?? ''}',
+                            'serviceName': widget.serviceName,
+                          },
+                        );
+                      },
+                      isPrimary: true,
+                      width: double.infinity,
+                    ),
+                  ),
+                
+                // Show message if there's already an active reservation
+                if (!_checkingReservation && _hasActiveReservation)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info,
+                          color: Colors.blue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Vous avez déjà une réservation en attente avec ce prestataire',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            context.push('/clientHome/my-reservations');
+                          },
+                          child: Text(
+                            'Voir',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
+                // Show loading indicator when checking reservation status
+                if (_checkingReservation)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                  ),
               ],
             ),
     );

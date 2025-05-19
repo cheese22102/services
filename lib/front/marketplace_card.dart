@@ -10,9 +10,14 @@ class MarketplaceCard extends StatelessWidget {
   final String condition;
   final String location;
   final VoidCallback onTap;
+  final double cardHeight; // New parameter
+  final double imageHeight; // New parameter
+  final double titleFontSize; // New parameter
+  final double priceFontSize; // New parameter
+  final double detailsFontSize; // New parameter
 
   const MarketplaceCard({
-    super.key,
+    Key? key,
     required this.id,
     required this.title,
     required this.price,
@@ -20,25 +25,30 @@ class MarketplaceCard extends StatelessWidget {
     required this.condition,
     required this.location,
     required this.onTap,
-  });
+    this.cardHeight = 210, // Default value
+    this.imageHeight = 130, // Default value
+    this.titleFontSize = 13, // Default value
+    this.priceFontSize = 15, // Default value
+    this.detailsFontSize = 10, // Default value
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 210, // Reduced height to prevent overflow
+          height: cardHeight, // Use parameter instead of fixed value
           decoration: BoxDecoration(
             color: isDarkMode ? Colors.grey.shade900 : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -48,12 +58,12 @@ class MarketplaceCard extends StatelessWidget {
             children: [
               // Product image with fixed height
               SizedBox(
-                height: 130, // Reduced height for image
+                height: imageHeight, // Use parameter instead of fixed value
                 width: double.infinity,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
                   ),
                   child: imageUrl.isNotEmpty
                       ? Image.network(
@@ -64,24 +74,9 @@ class MarketplaceCard extends StatelessWidget {
                               color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                               child: Center(
                                 child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400,
-                                  size: 40,
-                                ),
-                              ),
-                            );
-                          },
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
-                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                  Icons.image_not_supported_rounded,
+                                  color: isDarkMode ? Colors.white54 : Colors.black38,
+                                  size: 24,
                                 ),
                               ),
                             );
@@ -91,9 +86,9 @@ class MarketplaceCard extends StatelessWidget {
                           color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                           child: Center(
                             child: Icon(
-                              Icons.image_outlined,
-                              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400,
-                              size: 40,
+                              Icons.image_not_supported_rounded,
+                              color: isDarkMode ? Colors.white54 : Colors.black38,
+                              size: 24,
                             ),
                           ),
                         ),
@@ -102,7 +97,7 @@ class MarketplaceCard extends StatelessWidget {
               
               // Product info
               Padding(
-                padding: const EdgeInsets.all(8.0), // Reduced padding
+                padding: const EdgeInsets.all(8.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -110,41 +105,41 @@ class MarketplaceCard extends StatelessWidget {
                     Text(
                       title,
                       style: GoogleFonts.poppins(
-                        fontSize: 13, // Slightly smaller font
+                        fontSize: titleFontSize, // Use parameter instead of fixed value
                         fontWeight: FontWeight.w600,
                         color: isDarkMode ? Colors.white : Colors.black87,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2), // Reduced spacing
+                    const SizedBox(height: 2),
                     
                     // Price
                     Text(
                       '$price DT',
                       style: GoogleFonts.poppins(
-                        fontSize: 15, // Slightly smaller font
+                        fontSize: priceFontSize, // Use parameter instead of fixed value
                         fontWeight: FontWeight.bold,
                         color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                       ),
                     ),
-                    const SizedBox(height: 2), // Reduced spacing
+                    const SizedBox(height: 2),
                     
                     // Condition and location
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                           decoration: BoxDecoration(
                             color: condition == 'Neuf'
                                 ? Colors.green.withOpacity(0.2)
                                 : Colors.orange.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(3),
                           ),
                           child: Text(
                             condition,
                             style: GoogleFonts.poppins(
-                              fontSize: 10,
+                              fontSize: detailsFontSize, // Use parameter instead of fixed value
                               fontWeight: FontWeight.w500,
                               color: condition == 'Neuf'
                                   ? Colors.green.shade800
@@ -152,12 +147,12 @@ class MarketplaceCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             location,
                             style: GoogleFonts.poppins(
-                              fontSize: 10,
+                              fontSize: detailsFontSize, // Use parameter instead of fixed value
                               color: isDarkMode ? Colors.white70 : Colors.black54,
                             ),
                             maxLines: 1,

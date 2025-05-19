@@ -23,16 +23,8 @@ class MarketplaceSearch extends StatelessWidget {
     return Container(
       height: 50,
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey.shade800.withOpacity(0.8) : Colors.white,
+        color: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          ),
-        ],
         border: Border.all(
           color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
           width: 1,
@@ -71,11 +63,11 @@ class MarketplaceSearch extends StatelessWidget {
             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             isDense: true,
             filled: true,
-            fillColor: isDarkMode ? Colors.grey.shade800.withOpacity(0.8) : Colors.white,
+            fillColor: Colors.transparent,
           ),
           cursorColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
           textAlignVertical: TextAlignVertical.center,
-          onChanged: onChanged, // <-- Add this line
+          onChanged: onChanged,
         ),
       ),
     );

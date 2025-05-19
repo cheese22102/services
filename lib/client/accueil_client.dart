@@ -8,8 +8,6 @@ import '../front/custom_bottom_nav.dart';
 import '../front/app_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/custom_app_bar.dart';
-import 'dart:math';
-import '../front/marketplace_card.dart';
 import '../front/marketplace_search.dart';
 
 
@@ -92,7 +90,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
         showBackButton: false,
         showSidebar: true,
         showNotifications: true,
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        backgroundColor: isDarkMode ? Colors.grey.shade900 : AppColors.lightBackground,
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -107,13 +105,8 @@ class _ClientHomePageState extends State<ClientHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Welcome section with personalized greeting
+                  // Welcome section with personalized greeting and quick action buttons
                   _buildWelcomeSection(isDarkMode),
-                  
-                  SizedBox(height: mediaQuery.size.width > 600 ? 32 : 24),
-                  
-                  // Quick actions section
-                  _buildQuickActionsSection(context, isDarkMode, primaryColor),
                   
                   SizedBox(height: mediaQuery.size.width > 600 ? 32 : 24),
                   
@@ -132,7 +125,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
       ),
       bottomNavigationBar: CustomBottomNav(
         currentIndex: _selectedIndex,
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        backgroundColor: isDarkMode ? Colors.grey.shade900 : AppColors.lightBackground,
       ),
     );
   }
@@ -155,8 +148,8 @@ class _ClientHomePageState extends State<ClientHomePage> {
         
         return Container(
           width: double.infinity,
-          margin: const EdgeInsets.only(top: 8, bottom: 8),
-          padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+          margin: const EdgeInsets.only(top: 8, bottom: 16),
+          padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDarkMode
@@ -175,59 +168,76 @@ class _ClientHomePageState extends State<ClientHomePage> {
               ),
             ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
             children: [
-              // Replace the icon container with a proper avatar
-              CircleAvatar(
-                radius: isSmallScreen ? 24 : 32,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                child: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        _avatarUrl!,
-                        width: isSmallScreen ? 48 : 64,
-                        height: isSmallScreen ? 48 : 64,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(
+              // User greeting section
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Avatar
+                  CircleAvatar(
+                    radius: isSmallScreen ? 24 : 32,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    child: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            _avatarUrl!,
+                            width: isSmallScreen ? 48 : 64,
+                            height: isSmallScreen ? 48 : 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.person_rounded,
+                              color: Colors.white,
+                              size: isSmallScreen ? 24 : 32,
+                            ),
+                          ),
+                        )
+                      : Icon(
                           Icons.person_rounded,
                           color: Colors.white,
                           size: isSmallScreen ? 24 : 32,
                         ),
-                      ),
-                    )
-                  : Icon(
-                      Icons.person_rounded,
-                      color: Colors.white,
-                      size: isSmallScreen ? 24 : 32,
+                  ),
+                  SizedBox(width: isSmallScreen ? 12 : 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greeting,
+                          style: GoogleFonts.poppins(
+                            fontSize: isSmallScreen ? 20 : 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Que recherchez-vous aujourd\'hui ?',
+                          style: GoogleFonts.poppins(
+                            fontSize: isSmallScreen ? 12 : 14,
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ],
               ),
-              SizedBox(width: isSmallScreen ? 12 : 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      greeting,
-                      style: GoogleFonts.poppins(
-                        fontSize: isSmallScreen ? 20 : 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Que recherchez-vous aujourd\'hui ?',
-                      style: GoogleFonts.poppins(
-                        fontSize: isSmallScreen ? 12 : 14,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
+              
+              // Divider between greeting and buttons
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 12 : 16),
+                child: Divider(
+                  color: Colors.white.withOpacity(0.2),
+                  thickness: 1,
                 ),
               ),
+              
+              // Quick action buttons inside the welcome card
+              _buildQuickActionButtonsInCard(context, isDarkMode, isSmallScreen),
             ],
           ),
         );
@@ -235,165 +245,101 @@ class _ClientHomePageState extends State<ClientHomePage> {
     );
   }
 
-  Widget _buildQuickActionsSection(BuildContext context, bool isDarkMode, Color primaryColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  // Updated method for quick action buttons inside the welcome card
+  Widget _buildQuickActionButtonsInCard(BuildContext context, bool isDarkMode, bool isSmallScreen) {
+    final itemSize = isSmallScreen ? 55.0 : 60.0; // Even smaller size
+    final fontSize = isSmallScreen ? 9.0 : 10.0; // Smaller font
+    
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      spacing: isSmallScreen ? 8 : 12,
+      runSpacing: isSmallScreen ? 10 : 12,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Actions rapides',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    'Accédez rapidement à vos fonctionnalitées préférées',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: isDarkMode ? Colors.white60 : Colors.black54,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
+        _buildQuickActionItemInCard(
+          context,
+          isDarkMode,
+          'Réservations',
+          Icons.event_note_rounded,
+          () => context.go('/clientHome/my-reservations'),
+          itemSize,
+          fontSize,
         ),
-        const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final screenWidth = constraints.maxWidth;
-            final isSmallScreen = screenWidth < 360;
-            final itemSize = isSmallScreen ? 60.0 : 70.0;
-            final fontSize = isSmallScreen ? 10.0 : 12.0;
-            
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildQuickActionItem(
-                  context,
-                  isDarkMode,
-                  'Réservations',
-                  Icons.event_note_rounded, // Changed to a cleaner calendar icon
-                  () => context.go('/clientHome/my-reservations'),
-                  itemSize,
-                  fontSize,
-                  primaryColor,
-                ),
-                _buildQuickActionItem(
-                  context,
-                  isDarkMode,
-                  'Réclamations',
-                  Icons.support_rounded, // Changed to a more friendly support icon
-                  () => context.go('/clientHome/reclamations'),
-                  itemSize,
-                  fontSize,
-                  primaryColor,
-                ),
-                _buildQuickActionItem(
-                  context,
-                  isDarkMode,
-                  'Conversations',
-                  Icons.chat_bubble_rounded, // Changed to a more consistent chat icon
-                  () => context.go('/clientHome/marketplace/chat'),
-                  itemSize,
-                  fontSize,
-                  primaryColor,
-                ),
-              ],
-            );
-          }
+        _buildQuickActionItemInCard(
+          context,
+          isDarkMode,
+          'Réclamations',
+          Icons.support_rounded,
+          () => context.go('/clientHome/reclamations'),
+          itemSize,
+          fontSize,
+        ),
+        _buildQuickActionItemInCard(
+          context,
+          isDarkMode,
+          'Favoris',
+          Icons.favorite_rounded,
+          () => context.go('/clientHome/marketplace/favorites'),
+          itemSize,
+          fontSize,
+        ),
+        _buildQuickActionItemInCard(
+          context,
+          isDarkMode,
+          'Prestataires',
+          Icons.person_pin_rounded,
+          () => context.go('/clientHome/favorite-providers'),
+          itemSize,
+          fontSize,
         ),
       ],
     );
   }
 
-  Widget _buildQuickActionItem(
+  Widget _buildQuickActionItemInCard(
     BuildContext context,
     bool isDarkMode,
     String label,
     IconData icon,
     VoidCallback onTap,
-    [double size = 70.0, double fontSize = 12.0, Color? primaryColor]
+    [double size = 50.0, double fontSize = 10.0]
   ) {
-    primaryColor = primaryColor ?? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen);
-    
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [       
-            // Add a container with subtle border for visual separation
+          // Button with white/transparent background
           Container(
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: Colors.transparent,
+              color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
-              // Add a subtle border for visual separation
               border: Border.all(
-                color: isDarkMode 
-                    ? Colors.white.withOpacity(0.08) 
-                    : Colors.black.withOpacity(0.05),
-                width: 1.5,
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
               ),
-              // Add a very subtle shadow for depth
-              boxShadow: [
-                BoxShadow(
-                  color: isDarkMode 
-                      ? Colors.black.withOpacity(0.1) 
-                      : Colors.black.withOpacity(0.03),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(11), // Slightly smaller to account for border
-                color: isDarkMode 
-                    ? AppColors.darkBackground 
-                    : AppColors.lightInputBackground,
-              ),
-              // Center the icon properly with alignment
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: primaryColor,
-                  size: size * 0.4, // Smaller icon (reduced from 0.45)
-                ),
+            child: Center(
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: size * 0.38,
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          // Improved text container for better visibility
-          Container(
-            width: size + 20, // Wider to ensure text fits
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: isDarkMode 
-                  ? Colors.black.withOpacity(0.2) 
-                  : Colors.transparent, // Removed background in light mode
-              borderRadius: BorderRadius.circular(4),
-            ),
+          const SizedBox(height: 4),
+          // Text label
+          SizedBox(
+            width: size + 10,
             child: Text(
               label,
               style: GoogleFonts.poppins(
-                fontSize: fontSize - 1, // Reduced font size by 1
+                fontSize: fontSize,
                 fontWeight: FontWeight.w500,
-                color: isDarkMode ? Colors.white70 : Colors.black87,
+                color: Colors.white.withOpacity(0.9),
               ),
-              textAlign: TextAlign.center, // Center the text
+              textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -407,74 +353,61 @@ class _ClientHomePageState extends State<ClientHomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section title
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start, // Align to top for better layout with wrapped text
-          children: [
-            Expanded(  // Add Expanded to allow the column to take available space and wrap text
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nos services',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    'Découvrez une variété de services à votre disposition',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: isDarkMode ? Colors.white60 : Colors.black54,
-                    ),
-                    maxLines: 2, // Allow wrapping to 2 lines
-                    overflow: TextOverflow.ellipsis, // Add ellipsis if text is too long
-                  ),
-                ],
+        // Section title with better spacing
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center, // Changed to center alignment
+            children: [
+              Text(
+                'Nos services',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                context.go('/clientHome/all-services');
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min, // Make row take minimum space
-                children: [
-                  Text(
-                    'Voir tout',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+              TextButton(
+                onPressed: () {
+                  context.go('/clientHome/all-services');
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Voir tout',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
                       color: primaryColor,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: primaryColor,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         
-        const SizedBox(height: 16),
-        
-        // Search bar with lighter background
+        // Search bar with improved styling and spacing
         Container(
+          margin: const EdgeInsets.only(bottom: 16.0),
           decoration: BoxDecoration(
-            color: isDarkMode 
-                ? AppColors.darkBackground.withOpacity(0.7) // Lighter in dark mode
-                : AppColors.lightBackground, // Lighter than page background in light mode
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: MarketplaceSearch(
             controller: _searchController,
             onClear: _clearSearch,
@@ -482,8 +415,6 @@ class _ClientHomePageState extends State<ClientHomePage> {
             onChanged: _onSearchChanged,
           ),
         ),
-        
-        const SizedBox(height: 16),
         
         // Conditional display based on search
         _searchQuery.isEmpty 
@@ -496,7 +427,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
   // Display horizontal scrollable list of services (original view)
   Widget _buildServicesList(bool isDarkMode, Color primaryColor) {
     return SizedBox(
-      height: 120, // Reduced height from 140 to 120
+      height: 100, // Reduced height by 20% (from 120 to 100)
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('services')
@@ -543,15 +474,15 @@ class _ClientHomePageState extends State<ClientHomePage> {
               final imageUrl = service['imageUrl'] as String?;
               
               return Padding(
-                padding: const EdgeInsets.only(right: 10.0),
+                padding: const EdgeInsets.only(right: 8.0), // Reduced padding
                 child: GestureDetector(
                   onTap: () {
                     context.go('/clientHome/service-providers/$serviceName');
                   },
                   child: Container(
-                    width: 85, // Reduced from 90 to 85 for better proportions
+                    width: 68, // Reduced width by 20% (from 85 to 68)
                     decoration: BoxDecoration(
-                      color: Colors.transparent, // Keep container transparent
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -562,7 +493,6 @@ class _ClientHomePageState extends State<ClientHomePage> {
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              // Remove background color completely to let page background show through
                               color: Colors.transparent,
                             ),
                             width: double.infinity,
@@ -575,7 +505,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Padding(
-                                      padding: const EdgeInsets.all(8.0),
+                                      padding: const EdgeInsets.all(6.0), // Reduced padding
                                       child: Image.network(
                                         imageUrl,
                                         fit: BoxFit.contain,
@@ -584,7 +514,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
                                             child: Icon(
                                               Icons.image_not_supported_rounded,
                                               color: isDarkMode ? Colors.white54 : Colors.black38,
-                                              size: 24,
+                                              size: 20, // Reduced icon size
                                             ),
                                           );
                                         },
@@ -595,7 +525,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
                                     child: Icon(
                                       Icons.home_repair_service_rounded,
                                       color: primaryColor,
-                                      size: 28, // Smaller icon size
+                                      size: 22, // Reduced icon size
                                     ),
                                   ),
                           ),
@@ -606,13 +536,13 @@ class _ClientHomePageState extends State<ClientHomePage> {
                           flex: 1,
                           child: Center(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4.0), // Reduced padding
+                              padding: const EdgeInsets.symmetric(horizontal: 2.0), // Reduced padding
                               child: Text(
                                 serviceName,
                                 style: GoogleFonts.poppins(
-                                  fontSize: 11, // Smaller font
+                                  fontSize: 10, // Smaller font
                                   fontWeight: FontWeight.w500,
-                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                  color: isDarkMode ? Colors.white70 : Colors.black87,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -791,77 +721,67 @@ class _ClientHomePageState extends State<ClientHomePage> {
     );
   }
   
+  // Build the recent marketplace section
   Widget _buildRecentMarketplaceSection(BuildContext context, bool isDarkMode, Color primaryColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Marketplace',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    'Explorez les offres récentes de notre communauté',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: isDarkMode ? Colors.white60 : Colors.black54,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+        // Section title with improved spacing
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'Marketplace',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                context.go('/clientHome/marketplace');
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Voir tout',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+              TextButton(
+                onPressed: () {
+                  context.go('/clientHome/marketplace');
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Voir tout',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
                       color: primaryColor,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: primaryColor,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         
-        const SizedBox(height: 16),
-        
-        // Marketplace items
+        // Horizontal scrollable marketplace items
         SizedBox(
-          height: 240,
+          height: 180, // Height for the marketplace items row
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('marketplace')
-                .where('isValidated', isEqualTo: true)
                 .orderBy('createdAt', descending: true)
-                .limit(10)
+                .limit(6) // Limit to 6 items
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -875,64 +795,160 @@ class _ClientHomePageState extends State<ClientHomePage> {
               if (snapshot.hasError) {
                 return Center(
                   child: Text(
-                    'Erreur de chargement des produits',
+                    'Erreur de chargement des annonces',
                     style: GoogleFonts.poppins(color: Colors.red),
                   ),
                 );
               }
               
-              final items = snapshot.data?.docs ?? [];
+              final posts = snapshot.data?.docs ?? [];
               
-              if (items.isEmpty) {
+              if (posts.isEmpty) {
                 return Center(
-                  child: Text(
-                    'Aucun produit disponible',
-                    style: GoogleFonts.poppins(
-                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.shopping_bag_outlined,
+                        size: 36,
+                        color: isDarkMode ? Colors.white54 : Colors.black38,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Aucune annonce disponible',
+                        style: GoogleFonts.poppins(
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
               
-              // Select 6 random items
-              List<DocumentSnapshot> randomItems = [];
-              if (items.length <= 6) {
-                randomItems = items;
-              } else {
-                // Create a copy of the items list to avoid modifying the original
-                final availableItems = List<DocumentSnapshot>.from(items);
-                final random = Random();
-                
-                while (randomItems.length < 6 && availableItems.isNotEmpty) {
-                  final randomIndex = random.nextInt(availableItems.length);
-                  randomItems.add(availableItems[randomIndex]);
-                  availableItems.removeAt(randomIndex);
-                }
-              }
-              
+              // Horizontal list view for swipeable marketplace items
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: randomItems.length,
+                itemCount: posts.length,
                 itemBuilder: (context, index) {
-                  final item = randomItems[index].data() as Map<String, dynamic>;
-                  final itemId = randomItems[index].id;
+                  final post = posts[index].data() as Map<String, dynamic>;
+                  final postId = posts[index].id;
                   
                   return Padding(
                     padding: const EdgeInsets.only(right: 12.0),
-                    child: SizedBox(
-                      width: 180, // Add a fixed width to prevent infinite width error
-                      child: MarketplaceCard(
-                        id: itemId,
-                        title: item['title'] ?? 'Sans titre',
-                        price: (item['price'] ?? 0).toDouble(),
-                        imageUrl: item['images'] != null && (item['images'] as List).isNotEmpty 
-                            ? item['images'][0] 
-                            : '',
-                        condition: item['condition'] ?? 'Occasion',
-                        location: item['location'] ?? 'Non spécifié',
-                        onTap: () {
-                          context.go('/clientHome/marketplace/details/$itemId');
-                        },
+                    child: GestureDetector(
+                      onTap: () {
+                        context.go('/clientHome/marketplace/post/$postId');
+                      },
+                      child: Container(
+                        width: 140, // Width of each marketplace card
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Product image
+                            SizedBox(
+                              height: 100,
+                              width: double.infinity,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  topRight: Radius.circular(12),
+                                ),
+                                child: post['images'] != null && (post['images'] as List).isNotEmpty
+                                    ? Image.network(
+                                        post['images'][0],
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                            child: Center(
+                                              child: Icon(
+                                                Icons.image_not_supported_rounded,
+                                                color: isDarkMode ? Colors.white54 : Colors.black38,
+                                                size: 24,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : Container(
+                                        color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.image_not_supported_rounded,
+                                            color: isDarkMode ? Colors.white54 : Colors.black38,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            
+                            // Product info
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Title
+                                  Text(
+                                    post['title'] ?? 'Sans titre',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDarkMode ? Colors.white : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  
+                                  // Price
+                                  Text(
+                                    '${post['price'] ?? 0} DT',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  
+                                  // Condition
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: post['condition'] == 'Neuf'
+                                          ? Colors.green.withOpacity(0.2)
+                                          : Colors.orange.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      post['condition'] ?? 'Occasion',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w500,
+                                        color: post['condition'] == 'Neuf'
+                                            ? Colors.green.shade800
+                                            : Colors.orange.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
