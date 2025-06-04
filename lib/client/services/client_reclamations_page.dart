@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
+import '../../front/app_spacing.dart';
+import '../../front/app_typography.dart';
+import '../../front/marketplace_search.dart';
 import '../../models/reclamation_model.dart';
 
 class ClientReclamationsPage extends StatefulWidget {
@@ -15,41 +18,214 @@ class ClientReclamationsPage extends StatefulWidget {
   State<ClientReclamationsPage> createState() => _ClientReclamationsPageState();
 }
 
-class _ClientReclamationsPageState extends State<ClientReclamationsPage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ClientReclamationsPageState extends State<ClientReclamationsPage> {
   bool _isLoading = false;
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  
+  String? _selectedFilterStatus;
+  final List<Map<String, String?>> _filterOptions = const [
+    {'label': 'Toutes', 'value': null},
+    {'label': 'En attente', 'value': 'pending'},
+    {'label': 'Traitées', 'value': 'resolved'}, // Changed from 'Acceptées' to 'Traitées'
+    {'label': 'Rejetées', 'value': 'rejected'}, // Added 'Rejetées'
+  ];
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isAscending = false; // For sorting by date (createdAt)
+
+  // Pagination and infinite scrolling variables
+  final ScrollController _scrollController = ScrollController();
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isFetchingMore = false;
+  final int _pageSize = 10;
+
+  List<Map<String, dynamic>> _allReclamations = [];
+  List<Map<String, dynamic>> _filteredAndSortedReclamations = [];
   
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _selectedFilterStatus = _filterOptions.first['value'];
+    _loadInitialReclamations();
+    _scrollController.addListener(_onScroll);
   }
   
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
-  
-  Stream<QuerySnapshot> _getReclamationsStream(String? status) {
-    if (currentUserId == null) {
-      return const Stream.empty();
+
+  void _onScroll() {
+    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent && _hasMore && !_isFetchingMore) {
+      _loadMoreReclamations();
     }
-    
-    final query = FirebaseFirestore.instance
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase().trim();
+      _applyFiltersAndSort();
+    });
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _applyFiltersAndSort();
+    });
+  }
+  
+  Future<Map<String, dynamic>> _fetchReclamationsPage({String? status, DocumentSnapshot? startAfterDocument}) async {
+    if (currentUserId == null) {
+      return {'reclamations': [], 'lastDocument': null};
+    }
+
+    Query query = FirebaseFirestore.instance
         .collection('reclamations')
         .where('submitterId', isEqualTo: currentUserId);
     
     if (status != null) {
-      return query
-          .where('status', isEqualTo: status)
-          .orderBy('createdAt', descending: true)
-          .snapshots();
-    } else {
-      return query
-          .orderBy('createdAt', descending: true)
-          .snapshots();
+      query = query.where('status', isEqualTo: status);
+    }
+    
+    query = query.orderBy('createdAt', descending: !_isAscending);
+
+    if (startAfterDocument != null) {
+      query = query.startAfterDocument(startAfterDocument);
+    }
+    query = query.limit(_pageSize);
+
+    final snapshot = await query.get();
+    List<Map<String, dynamic>> combinedReclamations = [];
+
+    for (var doc in snapshot.docs) {
+      final reclamationData = doc.data() as Map<String, dynamic>;
+      final reservationId = reclamationData['reservationId'] as String?;
+      
+      String providerName = 'Prestataire Inconnu';
+      String serviceName = 'Service Inconnu';
+
+      if (reservationId != null) {
+        final reservationDoc = await FirebaseFirestore.instance.collection('reservations').doc(reservationId).get();
+        if (reservationDoc.exists) {
+          final reservationData = reservationDoc.data() as Map<String, dynamic>;
+          serviceName = reservationData['serviceName'] as String? ?? 'Service Inconnu';
+          final providerId = reservationData['providerId'] as String?;
+
+          if (providerId != null) {
+            final providerUserDoc = await FirebaseFirestore.instance.collection('users').doc(providerId).get();
+            if (providerUserDoc.exists) {
+              final providerUserData = providerUserDoc.data() as Map<String, dynamic>;
+              providerName = '${providerUserData['firstname'] ?? ''} ${providerUserData['lastname'] ?? ''}'.trim();
+              providerName = providerName.isEmpty ? 'Prestataire Inconnu' : providerName;
+            }
+          }
+        }
+      }
+
+      combinedReclamations.add({
+        ...reclamationData,
+        'id': doc.id,
+        'fetchedProviderName': providerName,
+        'fetchedServiceName': serviceName,
+      });
+    }
+    return {
+      'reclamations': combinedReclamations,
+      'lastDocument': snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+    };
+  }
+
+  Future<void> _loadInitialReclamations() async {
+    setState(() {
+      _isLoading = true;
+      _allReclamations.clear();
+      _filteredAndSortedReclamations.clear();
+      _lastDocument = null;
+      _hasMore = true;
+    });
+
+    try {
+      final result = await _fetchReclamationsPage(status: _selectedFilterStatus);
+      final newReclamations = result['reclamations'] as List<Map<String, dynamic>>;
+      final lastDoc = result['lastDocument'] as DocumentSnapshot?;
+      if (mounted) {
+        setState(() {
+          _allReclamations = newReclamations;
+          _lastDocument = lastDoc;
+          _hasMore = newReclamations.length == _pageSize;
+          _applyFiltersAndSort();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading initial reclamations: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement des réclamations: $e')),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadMoreReclamations() async {
+    if (!_hasMore || _isFetchingMore || _lastDocument == null) return;
+
+    setState(() => _isFetchingMore = true);
+
+    try {
+      final result = await _fetchReclamationsPage(status: _selectedFilterStatus, startAfterDocument: _lastDocument);
+      final newReclamations = result['reclamations'] as List<Map<String, dynamic>>;
+      final lastDoc = result['lastDocument'] as DocumentSnapshot?;
+      if (mounted) {
+        setState(() {
+          _allReclamations.addAll(newReclamations);
+          _lastDocument = lastDoc;
+          _hasMore = newReclamations.length == _pageSize;
+          _applyFiltersAndSort();
+          _isFetchingMore = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading more reclamations: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement de plus de réclamations: $e')),
+        );
+        setState(() => _isFetchingMore = false);
+      }
+    }
+  }
+
+  void _applyFiltersAndSort() {
+    List<Map<String, dynamic>> temp = List.from(_allReclamations);
+
+    if (_searchQuery.isNotEmpty) {
+      temp = temp.where((reclamation) {
+        final title = (reclamation['title'] as String? ?? '').toLowerCase();
+        final description = (reclamation['description'] as String? ?? '').toLowerCase();
+        final providerName = (reclamation['fetchedProviderName'] as String? ?? '').toLowerCase(); // Added
+        final serviceName = (reclamation['fetchedServiceName'] as String? ?? '').toLowerCase(); // Added
+        return title.contains(_searchQuery) || 
+               description.contains(_searchQuery) ||
+               providerName.contains(_searchQuery) || // Added
+               serviceName.contains(_searchQuery); // Added
+      }).toList();
+    }
+
+    // Sorting is handled by Firestore query, so no client-side sort needed here
+    // unless we introduce other client-side filters.
+
+    if (mounted) {
+      setState(() {
+        _filteredAndSortedReclamations = temp;
+      });
     }
   }
   
@@ -58,94 +234,172 @@ class _ClientReclamationsPageState extends State<ClientReclamationsPage> with Si
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Consistent background
       appBar: CustomAppBar(
         title: 'Mes réclamations',
         showBackButton: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-          labelColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-          unselectedLabelColor: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-          tabs: const [
-            Tab(text: 'Toutes'),
-            Tab(text: 'En attente'),
-            Tab(text: 'Traitées'),
-          ],
-        ),
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-              ),
-            )
-          : TabBarView(
-              controller: _tabController,
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            child: Column(
               children: [
-                // All reclamations
-                _buildReclamationsList(null, isDarkMode),
-                // Pending reclamations
-                _buildReclamationsList('pending', isDarkMode),
-                // Resolved reclamations
-                _buildReclamationsList('resolved', isDarkMode),
+                MarketplaceSearch(
+                  controller: _searchController,
+                  hintText: 'Rechercher par titre, description, prestataire ou service...', // Updated hint
+                  onChanged: _onSearchChanged,
+                  onClear: _clearSearch,
+                ),
+                SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Changed to Colors.white for light mode visibility
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                          border: Border.all(
+                            color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: DropdownButtonFormField<String?>(
+                          value: _selectedFilterStatus,
+                          decoration: InputDecoration(
+                            labelText: 'Filtrer par statut',
+                            filled: true,
+                            fillColor: Colors.transparent, // Background handled by parent Container
+                            border: InputBorder.none, // Remove default border
+                            contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            labelStyle: AppTypography.bodyMedium(context).copyWith(
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                          icon: Icon( // Control the default icon
+                            Icons.arrow_drop_down,
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen, // Ensure visible icon
+                          ),
+                          items: _filterOptions.map((option) {
+                            return DropdownMenuItem<String?>(
+                              value: option['value'],
+                              child: Text(
+                                option['label']!,
+                                style: AppTypography.bodyMedium(context).copyWith(
+                                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen, // Ensure visible text in dropdown items
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedFilterStatus = newValue;
+                              _loadInitialReclamations();
+                            });
+                          },
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen, // Ensure visible selected text
+                          ),
+                          dropdownColor: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Changed to Colors.white for light mode visibility
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.sm),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isAscending = !_isAscending;
+                          _loadInitialReclamations();
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightCardBackground,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                          border: Border.all(
+                            color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Icon(
+                          _isAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                          size: AppSpacing.iconMd,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
+          Expanded(
+            child: _isLoading && _filteredAndSortedReclamations.isEmpty
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    ),
+                  )
+                : _filteredAndSortedReclamations.isEmpty && !_hasMore && !_isFetchingMore // Corrected typo
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _searchQuery.isNotEmpty ? Icons.search_off : Icons.inbox_outlined, // Changed icon
+                              size: AppSpacing.iconXl,
+                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                            ),
+                            SizedBox(height: AppSpacing.sm),
+                            Text(
+                              _searchQuery.isNotEmpty ? 'Aucune réclamation trouvée pour votre recherche' : 'Aucune réclamation trouvée', // Changed text
+                              style: AppTypography.bodyMedium(context).copyWith(
+                                color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        itemCount: _filteredAndSortedReclamations.length + (_hasMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _filteredAndSortedReclamations.length) {
+                            return Padding(
+                              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                ),
+                              ),
+                            );
+                          }
+
+                          final reclamationData = _filteredAndSortedReclamations[index];
+                          final reclamation = ReclamationModel.fromMap(reclamationData, reclamationData['id']);
+                          final fetchedProviderName = reclamationData['fetchedProviderName'] as String?;
+                          final fetchedServiceName = reclamationData['fetchedServiceName'] as String?;
+                          
+                          return _buildReclamationCard(
+                            reclamation, 
+                            isDarkMode,
+                            fetchedProviderName,
+                            fetchedServiceName,
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
   
-  Widget _buildReclamationsList(String? status, bool isDarkMode) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getReclamationsStream(status),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-            ),
-          );
-        }
-        
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Erreur: ${snapshot.error}',
-              style: GoogleFonts.poppins(
-                color: isDarkMode ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          );
-        }
-        
-        final reclamations = snapshot.data?.docs ?? [];
-        
-        if (reclamations.isEmpty) {
-          return Center(
-            child: Text(
-              'Aucune réclamation ${status == 'pending' ? 'en attente' : status == 'resolved' ? 'traitée' : ''}',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: isDarkMode ? Colors.white70 : Colors.black54,
-              ),
-            ),
-          );
-        }
-        
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: reclamations.length,
-          itemBuilder: (context, index) {
-            final doc = reclamations[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final reclamation = ReclamationModel.fromMap(data, doc.id);
-            
-            return _buildReclamationCard(reclamation, isDarkMode);
-          },
-        );
-      },
-    );
-  }
-  
-  Widget _buildReclamationCard(ReclamationModel reclamation, bool isDarkMode) {
+  Widget _buildReclamationCard(
+    ReclamationModel reclamation, 
+    bool isDarkMode,
+    String? providerName, // Added
+    String? serviceName, // Added
+  ) {
     // Format the date
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
     final createdAtDate = reclamation.createdAt.toDate();
@@ -161,11 +415,11 @@ class _ClientReclamationsPageState extends State<ClientReclamationsPage> with Si
         statusText = 'En attente';
         break;
       case 'resolved':
-        statusColor = Colors.green;
-        statusText = 'Résolue';
+        statusColor = AppColors.primaryGreen; // Changed to AppColors.primaryGreen
+        statusText = 'Traitée';
         break;
       case 'rejected':
-        statusColor = Colors.red;
+        statusColor = AppColors.errorRed; // Changed to AppColors.errorRed
         statusText = 'Rejetée';
         break;
       default:
@@ -174,18 +428,23 @@ class _ClientReclamationsPageState extends State<ClientReclamationsPage> with Si
     }
     
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
+      margin: EdgeInsets.only(bottom: AppSpacing.md), // Use AppSpacing
+      elevation: 0, // Consistent with other cards
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+        side: BorderSide(
+          color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.2) : AppColors.lightBorderColor.withOpacity(0.2),
+          width: 1,
+        ),
       ),
+      color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Consistent with other cards
       child: InkWell(
         onTap: () {
           context.push('/clientHome/reclamations/details/${reclamation.id}');
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -195,26 +454,24 @@ class _ClientReclamationsPageState extends State<ClientReclamationsPage> with Si
                   Expanded(
                     child: Text(
                       reclamation.title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
+                      style: AppTypography.h4(context).copyWith( // Use AppTypography
                         fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                        color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xxs), // Use AppSpacing
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                       border: Border.all(color: statusColor),
                     ),
                     child: Text(
                       statusText,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
+                      style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
                         color: statusColor,
                         fontWeight: FontWeight.w500,
                       ),
@@ -222,33 +479,35 @@ class _ClientReclamationsPageState extends State<ClientReclamationsPage> with Si
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              AppSpacing.verticalSpacing(AppSpacing.xs), // Use AppSpacing
               Text(
-                reclamation.description,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                'Prestataire: ${providerName ?? 'Non spécifié'}', // Display provider name
+                style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                 ),
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalSpacing(AppSpacing.xxs), // Added spacing
+              Text(
+                'Service: ${serviceName ?? 'Non spécifié'}', // Display service name
+                style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              AppSpacing.verticalSpacing(AppSpacing.sm), // Use AppSpacing
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Soumise le $formattedDate',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: isDarkMode ? Colors.white60 : Colors.black45,
+                    style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
+                      color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                     ),
                   ),
-                  if (reclamation.imageUrls.isNotEmpty)
-                    const Icon(
-                      Icons.image,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
+                  // Removed image icon
                 ],
               ),
             ],

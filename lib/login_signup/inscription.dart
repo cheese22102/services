@@ -108,6 +108,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         'createdAt': FieldValue.serverTimestamp(),
         'role': 'client',
         'emailVerified': false,
+        'profileCompleted': false, // Added
         'fcmToken': fcmToken,
         'tokenLastUpdated': FieldValue.serverTimestamp(),
       });
@@ -238,6 +239,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
             'createdAt': FieldValue.serverTimestamp(),
             'lastLogin': FieldValue.serverTimestamp(),
             'role': 'client', // Default role
+            'profileCompleted': false, // Added
             'fcmToken': fcmToken,
           });
           
@@ -367,7 +369,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Form(
@@ -376,44 +378,44 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 10), // Reduced spacing
                           
                           // Signup Image
                           Container(
-                            height: 160,
+                            height: 120, // Reduced height
                             decoration: BoxDecoration(
-                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Image.asset(
-                              "assets/images/login.png",
-                              height: 120,
+                              "assets/images/login.png", // Using login image for consistency
+                              height: 100, // Reduced height
                               fit: BoxFit.contain,
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 10), // Reduced spacing
                           
                           // App Title
                           Text(
                             "Services Pro",
                             style: GoogleFonts.poppins(
-                              fontSize: 22,
+                              fontSize: 24, // Reduced font size
                               fontWeight: FontWeight.bold,
                               color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 4), // Consistent spacing
                           
                           // Subtitle
                           Text(
                             "Créez un compte pour commencer",
                             style: GoogleFonts.poppins(
-                              fontSize: 13,
+                              fontSize: 14, // Reduced font size
                               color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24), // Reduced spacing
                           
                           // Email Field
                           CustomTextField(
@@ -448,10 +450,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
-                          
-                          // Find the Password Field section in your code and add the password strength indicator after it
-                          // This should be around line 370-400 in your file
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Password Field
                           CustomTextField(
@@ -514,7 +513,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                             password: _passwordController.text,
                             isDarkMode: isDarkMode,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Confirm Password Field
                           CustomTextField(
@@ -560,7 +559,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 24), // Reduced spacing
                           
                           // Signup Button
                           CustomButton(
@@ -577,13 +576,13 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                             },
                             isLoading: _isLoading,
                             width: double.infinity,
-                            height: 45,
+                            height: 50, // Consistent height
                             useFullScreenLoader: true,
                             backgroundColor: isDarkMode 
-                                ? CustomTextField.getBorderColor(context) // Utiliser la couleur de bordure en mode sombre
-                                : null, // Garder la couleur par défaut en mode clair
+                                ? AppColors.primaryGreen // Consistent primary color
+                                : AppColors.primaryDarkGreen, // Consistent primary color
                           ),
-                          const SizedBox(height: 12), // Same spacing as login button
+                          const SizedBox(height: 16), // Consistent spacing
                           
                           // Divider
                           Row(
@@ -612,7 +611,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Social Login Buttons
                           Row(
@@ -632,10 +631,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                     color: isDarkMode ? Colors.white : null,
                                     colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
                                   ),
-                                  height: 45,
+                                  height: 50, // Consistent height
                                   useFullScreenLoader: true,
                                   backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                                  textColor: isDarkMode ? Colors.white : Colors.black87,
+                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary,
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -657,14 +656,14 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                     height: 20,
                                     width: 20,
                                   ),
-                                  height: 45,
+                                  height: 50, // Consistent height
                                   backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                                  textColor: isDarkMode ? Colors.white : Colors.black87,
+                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 24), // Reduced spacing
                           
                           // Login Link
                           Row(
@@ -691,7 +690,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
+                                    color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent color
                                   ),
                                 ),
                               ),

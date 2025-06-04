@@ -170,6 +170,19 @@ class NotificationsService {
     await _saveNotificationToFirestore(message);
   }
 
+  // New static method to get unread notifications count
+  static Stream<int> getTotalUnreadNotificationsCount() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value(0);
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notifications')
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
 
   static Future<void> sendMessageNotification({
     required String receiverId,

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../models/reclamation_model.dart';
+import '../front/app_colors.dart'; // Import AppColors
 
 class ReclamationsManagementPage extends StatefulWidget {
   const ReclamationsManagementPage({super.key});
@@ -50,16 +51,32 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestion des Réclamations'),
+        title: Text(
+          'Gestion des Réclamations',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+        elevation: 4, // Consistent elevation
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black87,
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/admin'),
         ),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: primaryColor, // Consistent label color
+          unselectedLabelColor: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700, // Consistent unselected label color
+          indicatorColor: primaryColor, // Consistent indicator color
+          indicatorWeight: 3,
           tabs: const [
             Tab(text: 'Toutes'),
             Tab(text: 'En attente'),
@@ -74,14 +91,33 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: _searchController,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
               decoration: InputDecoration(
                 hintText: 'Rechercher une réclamation...',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(
+                  color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                ),
+                prefixIcon: Icon(Icons.search, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: primaryColor,
+                    width: 2,
+                  ),
+                ),
                 filled: true,
-                fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
+                fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
               ),
               onChanged: (value) {
                 setState(() {
@@ -111,16 +147,28 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
   }
   
   Widget _buildReclamationsList(String? status, bool isDarkMode) {
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen; // Define primaryColor here for use in this method
+
     return StreamBuilder<QuerySnapshot>(
       stream: _getReclamationsStream(status),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: CircularProgressIndicator(
+              color: primaryColor, // Consistent progress indicator color
+            ),
+          );
         }
         
         if (snapshot.hasError) {
           return Center(
-            child: Text('Erreur: ${snapshot.error}'),
+            child: Text(
+              'Erreur: ${snapshot.error}',
+              style: GoogleFonts.poppins(
+                color: Colors.red[700],
+                fontSize: 16,
+              ),
+            ),
           );
         }
         
@@ -205,11 +253,12 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
     }
     
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16), // Consistent horizontal margin
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
+      color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent card background
       child: InkWell(
         onTap: () {
           context.push('/admin/reclamations/details/${reclamation.id}');
@@ -229,6 +278,7 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.black87, // Consistent text color
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -274,10 +324,10 @@ class _ReclamationsManagementPageState extends State<ReclamationsManagementPage>
                     ),
                   ),
                   if (reclamation.imageUrls.isNotEmpty)
-                    const Icon(
+                    Icon( // Use Icon widget directly
                       Icons.image,
                       size: 16,
-                      color: Colors.grey,
+                      color: isDarkMode ? Colors.grey.shade400 : Colors.grey, // Consistent icon color
                     ),
                 ],
               ),

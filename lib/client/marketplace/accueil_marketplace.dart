@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../front/app_colors.dart';
-import '../../front/marketplace_card.dart'; 
+import '../../front/app_spacing.dart';
+import '../../front/app_typography.dart';
+import '../../front/marketplace_card.dart';
 import '../../front/marketplace_filter.dart'; 
 import '../../front/marketplace_search.dart'; 
 import '../../front/custom_app_bar.dart';
@@ -27,12 +28,13 @@ class _MarketplacePageState extends State<MarketplacePage> {
   bool _sortByDateAsc = false; // Default to newest first
   final bool _isAscending = false; // Add this line for price sorting
   RangeValues _priceRange = const RangeValues(0, 10000);
+  String? _filterLocation = 'Tous'; // New state variable for location filter
   bool _isFilterVisible = false;
   
   // Scroll controller for hiding search bar
   final ScrollController _scrollController = ScrollController();
 
-  // Replace static categories with dynamic services
+  // Categories list - initialized once
   List<Map<String, dynamic>> _categories = [
     {'id': 'all', 'name': 'Tous', 'icon': Icons.apps, 'isSelected': true, 'imageUrl': ''},
   ];
@@ -58,9 +60,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
   
   // Load services from Firestore
   Future<void> _loadServices() async {
-    setState(() {
-    });
-    
     try {
       final servicesSnapshot = await FirebaseFirestore.instance
           .collection('services')
@@ -88,9 +87,9 @@ class _MarketplacePageState extends State<MarketplacePage> {
         });
       }
     } catch (e) {
+      // Handle error, e.g., show a snackbar
       if (mounted) {
-        setState(() {
-        });
+        // CustomSnackBar.showError(context, 'Erreur de chargement des services: $e'); // Assuming CustomSnackBar is available
       }
     }
   }
@@ -146,7 +145,12 @@ class _MarketplacePageState extends State<MarketplacePage> {
     query = query.where('price', isGreaterThanOrEqualTo: _priceRange.start);
     query = query.where('price', isLessThanOrEqualTo: _priceRange.end);
     
-    // Apply sort order
+    // Apply location filter if not "Tous"
+    if (_filterLocation != null && _filterLocation != 'Tous') {
+      query = query.where('location', isEqualTo: _filterLocation);
+    }
+    
+    // Apply sort order (keep existing sort by price and date)
     query = query.orderBy('price', descending: !_isAscending);
     query = query.orderBy('createdAt', descending: !_sortByDateAsc);
     
@@ -164,11 +168,13 @@ class _MarketplacePageState extends State<MarketplacePage> {
     required String condition,
     required bool sortByDateAsc,
     required RangeValues priceRange,
+    String? location, // New parameter for location
   }) {
     setState(() {
       _filterCondition = condition;
       _sortByDateAsc = sortByDateAsc;
       _priceRange = priceRange;
+      _filterLocation = location; // Update location filter
       _isFilterVisible = false;
     });
   }
@@ -178,6 +184,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
       _filterCondition = 'All';
       _sortByDateAsc = false;
       _priceRange = const RangeValues(0, 10000);
+      _filterLocation = 'Tous'; // Reset location filter
       _searchController.clear();
       _searchQuery = '';
       
@@ -199,7 +206,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         return false;
       },
       child: Scaffold(
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
         drawer: const Sidebar(), // Add the Sidebar widget as the drawer
         appBar: CustomAppBar(
           title: 'Marketplace',
@@ -207,345 +214,360 @@ class _MarketplacePageState extends State<MarketplacePage> {
           showSidebar: true,
           showNotifications: true,
           currentIndex: 2, // Marketplace index
-          backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
+          // backgroundColor removed to use default from CustomAppBar
         ),
-        body: Column(
-          children: [
-            // Search bar with filter button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  // Search bar (takes most of the width)
-                  Expanded(
-                    flex: 5,
-                    child: MarketplaceSearch(
-                      controller: _searchController,
-                      hintText: 'Rechercher...',
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                        });
-                      },
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() {
-                          _searchQuery = '';
-                        });
-                      },
-                    ),
-                  ),
-                  // Small gap
-                  const SizedBox(width: 8),
-                  // Filter button
-                  Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        _isFilterVisible ? Icons.filter_list_off : Icons.filter_list,
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
+        body: CustomScrollView( // Changed to CustomScrollView
+          controller: _scrollController, // Assign scroll controller
+          slivers: [
+            // Search bar with filter button (as a SliverToBoxAdapter)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md), // Adjusted padding
+                child: Row(
+                  children: [
+                    // Search bar (takes most of the width)
+                    Expanded(
+                      flex: 5,
+                      child: MarketplaceSearch(
+                        controller: _searchController,
+                        hintText: 'Rechercher...',
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                          });
+                        },
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
                       ),
-                      onPressed: _toggleFilterVisibility,
-                      tooltip: 'Filtrer',
                     ),
-                  ),
-                ],
+                    // Small gap
+                    SizedBox(width: AppSpacing.md), // Increased spacing
+                    // Filter button
+                    Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _isFilterVisible ? Icons.filter_list_off : Icons.filter_list,
+                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                        ),
+                        onPressed: _toggleFilterVisibility,
+                        tooltip: 'Filtrer',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             
-            // Categories (always visible)
-            Column(
-              children: [
-                // Remove duplicate search bar
-                
-                // Categories
-                SizedBox(
-                  height: 110, // Increased from 100 to 110 to accommodate content
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    itemCount: _categories.length,
-                    itemBuilder: (context, index) {
-                      final category = _categories[index];
-                      final isSelected = category['isSelected'] as bool;
-                      
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: GestureDetector(
-                          onTap: () => _selectCategory(index),
-                          child: SizedBox(
-                            width: 70, // Fixed width for the entire column
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min, // Use min size
-                              children: [
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                        : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
-                                    borderRadius: BorderRadius.circular(15),
-                                  ),
-                                  child: index == 0 
-                                    ? Icon(
-                                        category['icon'] as IconData,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : (isDarkMode ? Colors.white70 : Colors.black54),
-                                        size: 30,
-                                      )
-                                    : ClipRRect(
-                                        borderRadius: BorderRadius.circular(15),
-                                        child: category['imageUrl'] != null && category['imageUrl'].toString().isNotEmpty
-                                          ? Image.network(
-                                              category['imageUrl'].toString(),
-                                              width: 60,
-                                              height: 60,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Icon(
-                                                  Icons.miscellaneous_services,
-                                                  color: isSelected
-                                                      ? Colors.white
-                                                      : (isDarkMode ? Colors.white70 : Colors.black54),
-                                                  size: 30,
-                                                );
-                                              },
-                                            )
-                                          : Icon(
-                                              Icons.miscellaneous_services,
-                                              color: isSelected
-                                                  ? Colors.white
-                                                  : (isDarkMode ? Colors.white70 : Colors.black54),
-                                              size: 30,
-                                            ),
-                                      ),
-                                ),
-                                const SizedBox(height: 6), // Reduced from 8 to 6
-                                Flexible( // Added Flexible to handle text overflow
-                                  child: Text(
-                                    category['name'] as String,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            // Categories (as a SliverToBoxAdapter)
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  // Categories
+                  SizedBox(
+                    height: 90, // Reduced height for more space
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs), // Use AppSpacing
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final category = _categories[index];
+                        final isSelected = category['isSelected'] as bool;
+                        
+                        return Padding(
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm), // Increased horizontal padding
+                          child: GestureDetector(
+                            onTap: () => _selectCategory(index),
+                            child: SizedBox(
+                              width: 60, // Reduced width for the entire column
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min, // Use min size
+                                children: [
+                                  Container(
+                                    width: 40, // Reduced size
+                                    height: 40, // Reduced size
+                                    decoration: BoxDecoration(
                                       color: isSelected
                                           ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                          : (isDarkMode ? Colors.white70 : Colors.black54),
+                                          : Colors.transparent, // Changed to transparent for unselected
+                                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                                     ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                    child: index == 0 
+                                      ? Icon(
+                                          category['icon'] as IconData,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), // Use AppColors
+                                          size: AppSpacing.iconSm, // Reduced icon size
+                                        )
+                                      : ClipRRect(
+                                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                                          child: category['imageUrl'] != null && category['imageUrl'].toString().isNotEmpty
+                                            ? Image.network(
+                                                category['imageUrl'].toString(),
+                                                width: 40,
+                                                height: 40,
+                                                fit: BoxFit.cover,
+                                                loadingBuilder: (context, child, loadingProgress) { // Added loadingBuilder
+                                                  if (loadingProgress == null) return child;
+                                                  return Center(
+                                                    child: CircularProgressIndicator(
+                                                      value: loadingProgress.expectedTotalBytes != null
+                                                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                          : null,
+                                                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                                    ),
+                                                  );
+                                                },
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Icon(
+                                                    Icons.miscellaneous_services,
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), // Use AppColors
+                                                    size: AppSpacing.iconSm, // Reduced icon size
+                                                  );
+                                                },
+                                              )
+                                            : Icon(
+                                                Icons.miscellaneous_services,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), // Use AppColors
+                                                size: AppSpacing.iconSm, // Use AppSpacing
+                                              ),
+                                          ),
+                                    ),
+                                    SizedBox(height: AppSpacing.sm), // Reduced spacing
+                                    Flexible( // Added Flexible to handle text overflow
+                                      child: Text(
+                                        category['name'] as String,
+                                        style: AppTypography.labelSmall(context).copyWith( // Changed to labelSmall
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          color: isSelected
+                                              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                              : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), // Use AppColors
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    // Filter panel (conditionally visible)
+                    if (_isFilterVisible)
+                      MarketplaceFilter(
+                        condition: _filterCondition,
+                        sortByDateAsc: _sortByDateAsc,
+                        priceRange: _priceRange,
+                        selectedLocation: _filterLocation, // Pass selected location
+                        onApply: _applyFilters,
+                        onReset: _resetFilters,
+                      ),
+                  ],
+                ), 
+            ),
+          
+            // Results count and sort indicator replaced with buttons (as a SliverToBoxAdapter)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.xs, horizontal: AppSpacing.lg), // Reduced vertical padding
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Buttons for favorites and my products
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
+                                onTap: () {
+                                  context.push('/clientHome/marketplace/favorites');
+                                },
+                                child: Ink(
+                                  height: 30, // Reduced height
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm), // Reduced padding
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.favorite,
+                                          size: AppSpacing.iconXs, // Reduced icon size
+                                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                                        ),
+                                        SizedBox(width: AppSpacing.xs), // Reduced spacing
+                                        Flexible(
+                                          child: Text(
+                                            'Favoris',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.labelSmall(context).copyWith( // Changed to labelSmall
+                                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                
-                // Filter panel (conditionally visible)
-                if (_isFilterVisible)
-                  MarketplaceFilter(
-                    condition: _filterCondition,
-                    sortByDateAsc: _sortByDateAsc,
-                    priceRange: _priceRange,
-                    onApply: _applyFilters,
-                    onReset: _resetFilters,
-                  ),
-            ],
-          ),
-          
-          // Results count and sort indicator replaced with buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Buttons for favorites and my products
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              context.push('/clientHome/marketplace/favorites');
-                            },
-                            child: Ink(
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.favorite,
-                                      size: 14,
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Flexible(
-                                      child: Text(
-                                        'Favoris',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                          SizedBox(width: AppSpacing.sm), // Reduced spacing
+                          Flexible(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
+                                onTap: () {
+                                  context.push('/clientHome/marketplace/my-products');
+                                },
+                                child: Ink(
+                                  height: 30, // Reduced height
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm), // Reduced padding
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.inventory_2,
+                                          size: AppSpacing.iconXs, // Reduced icon size
+                                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                                         ),
-                                      ),
+                                        SizedBox(width: AppSpacing.xs), // Reduced spacing
+                                        Flexible(
+                                          child: Text(
+                                            'Mes annonces',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.labelSmall(context).copyWith( // Changed to labelSmall
+                                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              context.push('/clientHome/marketplace/my-products');
-                            },
-                            child: Ink(
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2,
-                                      size: 14,
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Flexible(
-                                      child: Text(
-                                        'Mes articles',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                    ),
+                    // Sort indicator
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _sortByDateAsc = !_sortByDateAsc;
+                        });
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Trier: ',
+                            style: AppTypography.labelSmall(context).copyWith( // Changed to labelSmall
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                             ),
                           ),
-                        ),
+                          Text(
+                            _sortByDateAsc ? 'Plus ancien' : 'Plus récent',
+                            style: AppTypography.labelSmall(context).copyWith( // Changed to labelSmall
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                            ),
+                          ),
+                          Icon(
+                            _sortByDateAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                            size: AppSpacing.iconXs, // Reduced icon size
+                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                // Sort indicator
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _sortByDateAsc = !_sortByDateAsc;
-                    });
-                  },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Trier: ',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                      Text(
-                        _sortByDateAsc ? 'Plus ancien' : 'Plus récent',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                        ),
-                      ),
-                      Icon(
-                        _sortByDateAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                        size: 14,
-                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          
-          // Marketplace items
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            
+            // Marketplace items (as a SliverGrid)
+            StreamBuilder<QuerySnapshot>(
               stream: _getMarketplacePosts(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
+                    child: Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)), // Use AppColors
+                  );
                 }
                 
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Erreur de chargement: ${snapshot.error}',
-                      style: GoogleFonts.poppins(),
+                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
+                    child: Center(
+                      child: Text(
+                        'Erreur de chargement: ${snapshot.error}',
+                        style: AppTypography.bodyMedium(context).copyWith(color: AppColors.errorLightRed), // Use AppColors
+                      ),
                     ),
                   );
                 }
                 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off,
-                          size: 64,
-                          color: isDarkMode ? Colors.white54 : Colors.black38,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucune annonce trouvée',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: AppSpacing.iconXl, // Use AppSpacing
+                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Essayez de modifier vos filtres',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: isDarkMode ? Colors.white54 : Colors.black45,
+                          SizedBox(height: AppSpacing.md), // Use AppSpacing
+                          Text(
+                            'Aucune annonce trouvée',
+                            style: AppTypography.h4(context).copyWith( // Use AppTypography
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(height: AppSpacing.xs), // Use AppSpacing
+                          Text(
+                            'Essayez de modifier vos filtres',
+                            style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -583,99 +605,122 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 }
                 
                 if (posts.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off,
-                          size: 64,
-                          color: isDarkMode ? Colors.white54 : Colors.black38,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucune annonce trouvée',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                  return SliverFillRemaining( // Use SliverFillRemaining for empty state
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: AppSpacing.iconXl, // Use AppSpacing
+                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Essayez de modifier vos filtres',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: isDarkMode ? Colors.white54 : Colors.black45,
+                          SizedBox(height: AppSpacing.md), // Use AppSpacing
+                          Text(
+                            'Aucune annonce trouvée',
+                            style: AppTypography.h4(context).copyWith( // Use AppTypography
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(height: AppSpacing.xs), // Use AppTypography
+                          Text(
+                            'Essayez de modifier vos filtres',
+                            style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
                 
-                // Replace the GridView.builder with this updated version
-                return GridView.builder(
-                  controller: _scrollController,
-                  // Use NeverScrollableScrollPhysics to disable the native scrolling behavior
-                  // that might be causing the refresh, then wrap with ScrollConfiguration
-                  physics: const ScrollPhysics(), // Use basic ScrollPhysics
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.8, // Adjust this ratio for card dimensions
-                    crossAxisSpacing: 8, // Increased for better spacing
-                    mainAxisSpacing: 8, // Increased for better spacing
-                  ),
-                  itemCount: posts.length,
-                  itemBuilder: (context, index) {
-                    final doc = posts[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    
-                    // Ensure all required data is available and has valid types
-                    final String title = data['title'] as String? ?? 'Sans titre';
-                    final double price = (data['price'] is num) 
-                        ? (data['price'] as num).toDouble() 
-                        : 0.0;
-                    final String location = data['location'] as String? ?? 'Emplacement inconnu';
-                    final String condition = data['condition'] as String? ?? 'État inconnu';
-                    
-                    // Safely extract the image URL
-                    String imageUrl = 'https://via.placeholder.com/300';
-                    if (data['images'] is List && (data['images'] as List).isNotEmpty) {
-                      final firstImage = (data['images'] as List).first;
-                      if (firstImage is String) {
-                        imageUrl = firstImage;
-                      }
-                    }
-                    
-                    return MarketplaceCard(
-                      id: doc.id,
-                      title: title,
-                      price: price,
-                      location: location,
-                      imageUrl: imageUrl,
-                      condition: condition,
-                      onTap: () {
-                        // Navigate to detail page
-                        context.push('/clientHome/marketplace/details/${doc.id}');
+                // Replace the GridView.builder with SliverGrid
+                return SliverPadding( // Wrap with SliverPadding
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md), // Apply padding here
+                  sliver: SliverGrid(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final doc = posts[index];
+                        final data = doc.data() as Map<String, dynamic>;
+                        
+                        // Ensure all required data is available and has valid types
+                        final String title = data['title'] as String? ?? 'Sans titre';
+                        final double price = (data['price'] is num) 
+                              ? (data['price'] as num).toDouble() 
+                              : 0.0;
+                        final String location = data['location'] as String? ?? 'Emplacement inconnu';
+                        final String condition = data['condition'] as String? ?? 'État inconnu';
+                        
+                        // Safely extract the image URL
+                        String imageUrl = 'https://via.placeholder.com/300';
+                        if (data['images'] is List && (data['images'] as List).isNotEmpty) {
+                          final firstImage = (data['images'] as List).first;
+                          if (firstImage is String) {
+                            imageUrl = firstImage;
+                          }
+                        }
+                        
+                        return MarketplaceCard(
+                          id: doc.id,
+                          title: title,
+                          price: price,
+                          location: location,
+                          imageUrl: imageUrl,
+                          condition: condition,
+                          onTap: () {
+                            // Navigate to detail page
+                            context.push('/clientHome/marketplace/details/${doc.id}');
+                          },
+                        );
                       },
-                    );
-                  },
+                      childCount: posts.length,
+                    ),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.7, // Adjusted aspect ratio for thinner cards
+                      crossAxisSpacing: AppSpacing.lg, // Increased spacing for smaller cards horizontally
+                      mainAxisSpacing: AppSpacing.lg, // Increased spacing
+                    ),
+                  ),
                 );
               },
             ),
+          ],
+        ),
+        // Update the bottom navigation bar without centerButton parameter
+        bottomNavigationBar: CustomBottomNav(
+          currentIndex: _selectedIndex,
+        ),
+        floatingActionButton: SizedBox( // Wrap with SizedBox to control size
+          width: 70, // 25% bigger than default 56
+          height: 70, // 25% bigger than default 56
+          child: Container( // Wrap FAB in a Container with solid color
+            decoration: BoxDecoration(
+              shape: BoxShape.circle, // Ensure container is also circular
+              color: AppColors.primaryGreen, // Solid green color
+              boxShadow: [ // Keep existing shadow
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              onPressed: () {
+                context.go('/clientHome/marketplace/add'); // Navigate to add publication page
+              },
+              backgroundColor: Colors.transparent, // Make FAB transparent
+              elevation: 0, // Remove default elevation to avoid color overlap
+              shape: CircleBorder(), // Ensure it's perfectly rounded
+              child: Icon(Icons.add, color: Colors.white, size: 32), // Add icon
+            ),
           ),
-        ],
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat, // Position at bottom right
       ),
-      // Remove the floating action button
-      floatingActionButton: null,
-      floatingActionButtonLocation: null,
-      // Update the bottom navigation bar without centerButton parameter
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: _selectedIndex,
-      ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -76,6 +76,10 @@ final loginSignupRoutes = [
         path: 'forgot-password',  // This becomes '/forgot-password' when accessed
         builder: (BuildContext context, GoRouterState state) => const ForgotPasswordPage(),
       ),
+      GoRoute(
+        path: 'completer-profile', // This becomes '/completer-profile' when accessed
+        builder: (BuildContext context, GoRouterState state) => const Signup2Page(),
+      ),
     ],
   ),
 ];

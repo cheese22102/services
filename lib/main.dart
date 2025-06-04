@@ -112,7 +112,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp.router(
             routerConfig: router,
             debugShowCheckedModeBanner: false,
-            title: 'Services App',
+            title: 'Services App', // Restored original title
             theme: themeProvider.getLightTheme(),
             darkTheme: themeProvider.getDarkTheme(),
             themeMode: themeProvider.themeMode,

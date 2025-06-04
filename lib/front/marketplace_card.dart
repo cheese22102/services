@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:geocoding/geocoding.dart' as geo; // Import geocoding with alias
 import 'app_colors.dart';
+import 'app_spacing.dart'; // Import AppSpacing
+import 'app_typography.dart'; // Import AppTypography
 
-class MarketplaceCard extends StatelessWidget {
+class MarketplaceCard extends StatefulWidget {
   final String id;
   final String title;
   final double price;
@@ -10,11 +12,6 @@ class MarketplaceCard extends StatelessWidget {
   final String condition;
   final String location;
   final VoidCallback onTap;
-  final double cardHeight; // New parameter
-  final double imageHeight; // New parameter
-  final double titleFontSize; // New parameter
-  final double priceFontSize; // New parameter
-  final double detailsFontSize; // New parameter
 
   const MarketplaceCard({
     Key? key,
@@ -25,49 +22,92 @@ class MarketplaceCard extends StatelessWidget {
     required this.condition,
     required this.location,
     required this.onTap,
-    this.cardHeight = 210, // Default value
-    this.imageHeight = 130, // Default value
-    this.titleFontSize = 13, // Default value
-    this.priceFontSize = 15, // Default value
-    this.detailsFontSize = 10, // Default value
   }) : super(key: key);
+
+  @override
+  State<MarketplaceCard> createState() => _MarketplaceCardState();
+}
+
+class _MarketplaceCardState extends State<MarketplaceCard> {
+  String _displayLocation = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _getCityFromAddress(widget.location);
+  }
+
+  @override
+  void didUpdateWidget(covariant MarketplaceCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location != widget.location) {
+      _getCityFromAddress(widget.location);
+    }
+  }
+
+  Future<void> _getCityFromAddress(String address) async {
+    if (address.isEmpty) {
+      if (!mounted) return; // Add mounted check
+      setState(() {
+        _displayLocation = 'Inconnu';
+      });
+      return;
+    }
+    try {
+      List<geo.Placemark> placemarks = await geo.GeocodingPlatform.instance!.placemarkFromAddress(address); // Use alias
+      if (!mounted) return; // Add mounted check
+      if (placemarks.isNotEmpty) {
+        setState(() {
+          _displayLocation = placemarks.first.locality ?? placemarks.first.subAdministrativeArea ?? 'Inconnu';
+        });
+      } else {
+        setState(() {
+          _displayLocation = 'Inconnu';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return; // Add mounted check
+      setState(() {
+        _displayLocation = 'Inconnu';
+      });
+      debugPrint('Error getting city from address: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: cardHeight, // Use parameter instead of fixed value
-          decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey.shade900 : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product image with fixed height
-              SizedBox(
-                height: imageHeight, // Use parameter instead of fixed value
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
-                  ),
-                  child: imageUrl.isNotEmpty
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product image (takes available space)
+            Expanded( // Use Expanded to make image flexible
+              flex: 3, // Give more flex to image
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                  topRight: Radius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                ),
+                child: SizedBox( // Wrap with SizedBox to explicitly set width
+                  width: double.infinity, // Make it take full available width
+                  child: widget.imageUrl.isNotEmpty
                       ? Image.network(
-                          imageUrl,
+                          widget.imageUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
@@ -75,9 +115,20 @@ class MarketplaceCard extends StatelessWidget {
                               child: Center(
                                 child: Icon(
                                   Icons.image_not_supported_rounded,
-                                  color: isDarkMode ? Colors.white54 : Colors.black38,
-                                  size: 24,
+                                  color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                                  size: AppSpacing.iconLg, // Use AppSpacing
                                 ),
+                              ),
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) { // Added loadingBuilder
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                               ),
                             );
                           },
@@ -87,73 +138,80 @@ class MarketplaceCard extends StatelessWidget {
                           child: Center(
                             child: Icon(
                               Icons.image_not_supported_rounded,
-                              color: isDarkMode ? Colors.white54 : Colors.black38,
-                              size: 24,
+                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                              size: AppSpacing.iconLg, // Use AppSpacing
                             ),
                           ),
                         ),
                 ),
               ),
-              
-              // Product info
-              Padding(
-                padding: const EdgeInsets.all(8.0),
+            ),
+            
+            // Product info (takes remaining space)
+            Expanded( // Use Expanded to make info flexible
+              flex: 2, // Give less flex to info
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.sm), // Use AppSpacing
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.start, // Changed to MainAxisAlignment.start
                   children: [
                     // Title
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: titleFontSize, // Use parameter instead of fixed value
-                        fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                    Flexible( // Use Flexible for title
+                      child: Text(
+                        widget.title,
+                        style: AppTypography.labelSmall(context).copyWith( // Reduced font size to labelSmall
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                        ),
+                        maxLines: 2, // Allow two lines for title
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: AppSpacing.xs), // Use AppSpacing
                     
                     // Price
-                    Text(
-                      '$price DT',
-                      style: GoogleFonts.poppins(
-                        fontSize: priceFontSize, // Use parameter instead of fixed value
-                        fontWeight: FontWeight.bold,
-                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    Flexible( // Use Flexible for price
+                      child: Text(
+                        '${widget.price.toStringAsFixed(2)} DT', // Format price
+                        style: AppTypography.labelMedium(context).copyWith( // Reduced font size to labelMedium
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: AppSpacing.xs), // Use AppSpacing
                     
                     // Condition and location
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs), // Use AppSpacing
                           decoration: BoxDecoration(
-                            color: condition == 'Neuf'
+                            color: widget.condition == 'Neuf'
                                 ? Colors.green.withOpacity(0.2)
                                 : Colors.orange.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusXs), // Use AppSpacing
                           ),
                           child: Text(
-                            condition,
-                            style: GoogleFonts.poppins(
-                              fontSize: detailsFontSize, // Use parameter instead of fixed value
+                            widget.condition,
+                            style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
                               fontWeight: FontWeight.w500,
-                              color: condition == 'Neuf'
+                              color: widget.condition == 'Neuf'
                                   ? Colors.green.shade800
                                   : Colors.orange.shade800,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
+                        SizedBox(width: AppSpacing.xs), // Use AppSpacing
+                        Expanded( // Use Expanded for location
                           child: Text(
-                            location,
-                            style: GoogleFonts.poppins(
-                              fontSize: detailsFontSize, // Use parameter instead of fixed value
-                              color: isDarkMode ? Colors.white70 : Colors.black54,
+                            _displayLocation, // Use the extracted city
+                            style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -164,8 +222,8 @@ class MarketplaceCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

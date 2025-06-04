@@ -12,6 +12,8 @@ class CustomTextField extends StatelessWidget {
   final Widget? prefixIcon;
   final String? errorText;
   final FormFieldValidator<String>? validator;
+  final int? maxLength;
+  final int? maxLines;
 
   const CustomTextField({
     Key? key,
@@ -24,9 +26,10 @@ class CustomTextField extends StatelessWidget {
     this.prefixIcon,
     this.errorText,
     this.validator,
+    this.maxLength,
+    this.maxLines = 1,
   }) : super(key: key);
 
-  // Méthode statique pour obtenir la couleur de bordure
   static Color getBorderColor(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor;
@@ -56,6 +59,8 @@ class CustomTextField extends StatelessWidget {
           style: GoogleFonts.poppins(
             color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
           ),
+          maxLength: maxLength,
+          maxLines: maxLines,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.poppins(

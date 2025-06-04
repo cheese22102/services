@@ -132,7 +132,7 @@ class _VerificationPageState extends State<VerificationPage> {
     final size = MediaQuery.of(context).size;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -160,27 +160,28 @@ class _VerificationPageState extends State<VerificationPage> {
                 Text(
                   'Vérification Email',
                   style: GoogleFonts.poppins(
-                    fontSize: size.width * 0.07,
+                    fontSize: 28, // Consistent font size
                     fontWeight: FontWeight.bold,
                     color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16), // Consistent spacing
                 Text(
                   'Un email de vérification a été envoyé à ${_user.email}',
                   style: GoogleFonts.poppins(
-                    fontSize: size.width * 0.04,
+                    fontSize: 16, // Consistent font size
                     color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                   ),
+                  textAlign: TextAlign.center, // Center align for better readability
                 ),
                 
                 // Add image - using the same image as forgot password page
                 Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: size.height * 0.03),
+                    padding: const EdgeInsets.symmetric(vertical: 24), // Consistent spacing
                     child: Image.asset(
                       'assets/images/emailverif.png',
-                      height: size.height * 0.2,
+                      height: 150, // Consistent image height
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -190,16 +191,17 @@ class _VerificationPageState extends State<VerificationPage> {
                 Text(
                   'Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification.',
                   style: GoogleFonts.poppins(
-                    fontSize: size.width * 0.04,
+                    fontSize: 16, // Consistent font size
                     color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                   ),
+                  textAlign: TextAlign.center, // Center align for better readability
                 ),
-                SizedBox(height: size.height * 0.02),
+                const SizedBox(height: 24), // Consistent spacing
                 
                 // Countdown text
                 Center(
                   child: Container(
-                    padding: EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 12,
                     ),
@@ -220,7 +222,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         ? 'Vous pouvez renvoyer l\'email maintenant'
                         : 'Vous pourrez renvoyer l\'email dans $_timeoutSeconds secondes',
                       style: GoogleFonts.poppins(
-                        fontSize: size.width * 0.035,
+                        fontSize: 14, // Consistent font size
                         fontWeight: _canResend ? FontWeight.w600 : FontWeight.normal,
                         color: _canResend
                             ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
@@ -230,7 +232,7 @@ class _VerificationPageState extends State<VerificationPage> {
                     ),
                   ),
                 ),
-                SizedBox(height: size.height * 0.04),
+                const SizedBox(height: 24), // Consistent spacing
                 
                 // Resend button
                 CustomButton(
@@ -238,9 +240,11 @@ class _VerificationPageState extends State<VerificationPage> {
                   onPressed: _canResend ? _resendVerification : null,
                   isLoading: _isLoading,
                   width: double.infinity,
+                  height: 50, // Consistent button height
                   useFullScreenLoader: true,
+                  backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent primary color
                 ),
-                SizedBox(height: size.height * 0.03),
+                const SizedBox(height: 24), // Consistent spacing
                 
                 // Back to login
                 Center(
@@ -251,7 +255,7 @@ class _VerificationPageState extends State<VerificationPage> {
                       Text(
                         'Retourner à ',
                         style: GoogleFonts.poppins(
-                          fontSize: size.width * 0.035,
+                          fontSize: 14, // Consistent font size
                           color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                         ),
                       ),
@@ -267,7 +271,7 @@ class _VerificationPageState extends State<VerificationPage> {
                         child: Text(
                           'la page de connexion',
                           style: GoogleFonts.poppins(
-                            fontSize: size.width * 0.035,
+                            fontSize: 14, // Consistent font size
                             fontWeight: FontWeight.w600,
                             color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                           ),

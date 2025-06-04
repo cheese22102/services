@@ -1,146 +1,106 @@
+import 'dart:async'; // For StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'app_colors.dart';
+import '../chat/liste_conversations.dart'; // Import ChatListScreen
 
-class CustomBottomNav extends StatelessWidget {
+class CustomBottomNav extends StatefulWidget {
   final int currentIndex;
   final Function(int)? onTap;
-  final Widget? centerButton; // This will be ignored as we'll determine the button based on currentIndex
-  final Color? backgroundColor; // Add this parameter to accept custom background color
+  final Color? backgroundColor;
 
   const CustomBottomNav({
     super.key,
     required this.currentIndex,
     this.onTap,
-    this.centerButton,
-    this.backgroundColor, // Make it optional
+    this.backgroundColor,
   });
+
+  @override
+  State<CustomBottomNav> createState() => _CustomBottomNavState();
+}
+
+class _CustomBottomNavState extends State<CustomBottomNav> {
+  bool _hasUnreadMessages = false;
+  StreamSubscription<int>? _unreadCountSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _unreadCountSubscription = ChatListScreen.getTotalUnreadCount().listen((count) {
+      if (_hasUnreadMessages != (count > 0)) {
+        setState(() {
+          _hasUnreadMessages = count > 0;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _unreadCountSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    // Use provided backgroundColor or fall back to default
-    final bgColor = backgroundColor ?? (isDarkMode ? Colors.grey.shade900 : AppColors.lightBackground);
-    final borderColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    final bgColor = widget.backgroundColor ?? (isDarkMode ? Colors.grey.shade900 : Colors.white);
     
-    return Stack(
-      clipBehavior: Clip.none, // Allow the center button to overflow
-      alignment: Alignment.topCenter,
-      children: [
-        // Main container for the navbar
-        Container(
-          height: 60,
-          decoration: BoxDecoration(
-            color: bgColor, // Use the background color here
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -5),
-              ),
-            ],
-            // Remove the borderRadius property to eliminate rounded corners
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: bgColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // First two buttons (left side)
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavButton(
-                      context: context,
-                      icon: Icons.dashboard_outlined,
-                      activeIcon: Icons.dashboard,
-                      label: 'Accueil',
-                      index: 0,
-                      isDarkMode: isDarkMode,
-                    ),
-                    _buildSeparator(isDarkMode, borderColor),
-                    _buildNavButton(
-                      context: context,
-                      icon: Icons.handyman_outlined,
-                      activeIcon: Icons.handyman,
-                      label: 'Services',
-                      index: 1,
-                      isDarkMode: isDarkMode,
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Center space for the floating button
-              SizedBox(width: 60), // Fixed width for center button space
-              
-              // Last two buttons (right side)
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavButton(
-                      context: context,
-                      icon: Icons.shopping_bag_outlined,
-                      activeIcon: Icons.shopping_bag,
-                      label: 'Marketplace',
-                      index: 2,
-                      isDarkMode: isDarkMode,
-                    ),
-                    _buildSeparator(isDarkMode, borderColor),
-                    _buildNavButton(
-                      context: context,
-                      icon: Icons.chat_bubble_outline_rounded,
-                      activeIcon: Icons.chat_bubble_rounded,
-                      label: 'Messages',
-                      index: 3,
-                      isDarkMode: isDarkMode,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavButton(
+            context: context,
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: 'Accueil',
+            index: 0,
+            isDarkMode: isDarkMode,
+            hasRedDot: false, // No red dot for home
           ),
-        ),
-        
-        // Center button that changes based on current index
-        Positioned(
-          top: -15, // Make it pop out by 15 pixels
-          child: GestureDetector(
-            onTap: () {
-              // Navigate based on current index
-              if (currentIndex == 2) { // If in marketplace
-                context.push('/clientHome/marketplace/add');
-              } else { // For all other pages
-                context.push('/clientHome/chatbot');
-              }
-            },
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Icon(
-                // Updated icons to more modern alternatives
-                currentIndex == 2 
-                    ? Icons.add_circle_outline_rounded  // More modern add icon with outline
-                    : Icons.smart_toy_outlined,         // Outlined robot icon to match style
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
+          _buildNavButton(
+            context: context,
+            icon: Icons.build_outlined,
+            activeIcon: Icons.build_rounded,
+            label: 'Services',
+            index: 1,
+            isDarkMode: isDarkMode,
+            hasRedDot: false, // No red dot for services
           ),
-        ),
-      ],
+          _buildNavButton(
+            context: context,
+            icon: Icons.shopping_cart_outlined,
+            activeIcon: Icons.shopping_cart_rounded,
+            label: 'Market',
+            index: 2,
+            isDarkMode: isDarkMode,
+            hasRedDot: false, // No red dot for market
+          ),
+          _buildNavButton(
+            context: context,
+            icon: Icons.chat_bubble_outline_rounded,
+            activeIcon: Icons.chat_bubble_rounded,
+            label: 'Messages',
+            index: 3,
+            isDarkMode: isDarkMode,
+            hasRedDot: _hasUnreadMessages, // Use internal state for red dot
+          ),
+        ],
+      ),
     );
   }
 
@@ -151,16 +111,22 @@ class CustomBottomNav extends StatelessWidget {
     required String label,
     required int index,
     required bool isDarkMode,
+    bool hasRedDot = false,
   }) {
-    final isActive = index == currentIndex;
+    final isActive = index == widget.currentIndex;
+    final activeColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    final inactiveColor = isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     
+    final textColor = isActive ? activeColor : inactiveColor;
+    final iconColor = isActive ? activeColor : inactiveColor;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          if (onTap != null) {
-            onTap!(index);
-          } else if (index != currentIndex) {
+          if (widget.onTap != null) {
+            widget.onTap!(index);
+          } else if (index != widget.currentIndex) {
             _handleNavigation(context, index);
           }
         },
@@ -173,25 +139,40 @@ class CustomBottomNav extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                isActive ? activeIcon : icon,
-                color: isActive 
-                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                    : (isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600),
-                size: 22,
-              ),
-              if (isActive) ...[
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+              Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Icon(
+                    isActive ? activeIcon : icon,
+                    color: iconColor, // Use the determined icon color
+                    size: 24,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  if (hasRedDot && index == 3)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 10, // Bigger dot
+                        height: 10, // Bigger dot
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  color: textColor,
                 ),
-              ],
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -199,14 +180,6 @@ class CustomBottomNav extends StatelessWidget {
     );
   }
   
-  Widget _buildSeparator(bool isDarkMode, Color borderColor) {
-    return Container(
-      height: 25,
-      width: 1,
-      color: borderColor.withOpacity(0.5),
-    );
-  }
-
   void _handleNavigation(BuildContext context, int index) {
     switch (index) {
       case 0:

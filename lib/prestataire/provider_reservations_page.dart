@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 import '../front/app_colors.dart';
+import '../front/app_spacing.dart';
+import '../front/app_typography.dart';
 import '../front/custom_app_bar.dart';
+import '../front/marketplace_search.dart';
 
 class ProviderReservationsPage extends StatefulWidget {
   const ProviderReservationsPage({super.key});
@@ -13,106 +17,475 @@ class ProviderReservationsPage extends StatefulWidget {
   State<ProviderReservationsPage> createState() => _ProviderReservationsPageState();
 }
 
-class _ProviderReservationsPageState extends State<ProviderReservationsPage> with SingleTickerProviderStateMixin {
+class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
   bool _isLoading = false;
   String? _currentUserId;
-  late TabController _tabController;
   
+  String? _selectedFilterStatus;
+  final List<Map<String, String?>> _filterOptions = const [
+    {'label': 'Toutes', 'value': null},
+    {'label': 'En attente', 'value': 'pending'},
+    {'label': 'Acceptées', 'value': 'approved'},
+    {'label': 'Terminées', 'value': 'completed'},
+    {'label': 'Refusées', 'value': 'rejected'},
+    {'label': 'Annulées', 'value': 'cancelled'},
+  ];
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isAscending = false;
+
+  // Pagination and infinite scrolling variables
+  final ScrollController _scrollController = ScrollController();
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isFetchingMore = false;
+  final int _pageSize = 10;
+
+  List<Map<String, dynamic>> _allReservations = [];
+  List<Map<String, dynamic>> _filteredAndSortedReservations = [];
+
   @override
   void initState() {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    _tabController = TabController(length: 4, vsync: this);
+    _selectedFilterStatus = _filterOptions.first['value'];
+    _loadInitialReservations();
+    _scrollController.addListener(_onScroll);
   }
   
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent && _hasMore && !_isFetchingMore) {
+      _loadMoreReservations();
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase().trim();
+      _applyFiltersAndSort();
+    });
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _applyFiltersAndSort();
+    });
+  }
   
-  Stream<QuerySnapshot> _getReservationsStream(String? status) {
-    final query = FirebaseFirestore.instance
+  Future<Map<String, dynamic>> _fetchReservationsPage({String? status, DocumentSnapshot? startAfterDocument}) async {
+    Query query = FirebaseFirestore.instance
         .collection('reservations')
-        .where('providerId', isEqualTo: _currentUserId);
+        .where('providerId', isEqualTo: _currentUserId); // Changed from userId to providerId
     
     if (status != null) {
-      return query
-          .where('status', isEqualTo: status)
-          .orderBy('createdAt', descending: true)
-          // Add limit to prevent loading too many documents at once
-          .limit(20)
-          .snapshots();
-    } else {
-      return query
-          .orderBy('createdAt', descending: true)
-          // Add limit to prevent loading too many documents at once
-          .limit(20)
-          .snapshots();
+      query = query.where('status', isEqualTo: status);
+    }
+    
+    query = query.orderBy('createdAt', descending: !_isAscending);
+
+    if (startAfterDocument != null) {
+      query = query.startAfterDocument(startAfterDocument);
+    }
+    query = query.limit(_pageSize);
+
+    final snapshot = await query.get();
+    List<Map<String, dynamic>> combinedReservations = [];
+
+    for (var doc in snapshot.docs) {
+      final reservationData = doc.data() as Map<String, dynamic>;
+      final userId = reservationData['userId'] as String?; // Changed to userId
+      
+      String userName = 'Client Inconnu'; // Changed to Client
+      String? userPhotoURL; // Changed to userPhotoURL
+
+      if (userId != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          userName = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim();
+          userName = userName.isEmpty ? 'Client Inconnu' : userName;
+          userPhotoURL = userData['avatarUrl'] as String?;
+        }
+      }
+      
+      combinedReservations.add({
+        ...reservationData,
+        'id': doc.id,
+        'fetchedUserName': userName, // Changed to fetchedUserName
+        'fetchedUserPhotoURL': userPhotoURL, // Changed to fetchedUserPhotoURL
+      });
+    }
+    return {
+      'reservations': combinedReservations,
+      'lastDocument': snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+    };
+  }
+
+  Future<void> _loadInitialReservations() async {
+    setState(() {
+      _isLoading = true;
+      _allReservations.clear();
+      _filteredAndSortedReservations.clear();
+      _lastDocument = null;
+      _hasMore = true;
+    });
+
+    try {
+      final result = await _fetchReservationsPage(status: _selectedFilterStatus);
+      final newReservations = result['reservations'] as List<Map<String, dynamic>>;
+      final lastDoc = result['lastDocument'] as DocumentSnapshot?;
+      if (mounted) {
+        setState(() {
+          _allReservations = newReservations;
+          _lastDocument = lastDoc;
+          _hasMore = newReservations.length == _pageSize;
+          _applyFiltersAndSort();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading initial reservations: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement des réservations: $e')),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadMoreReservations() async {
+    if (!_hasMore || _isFetchingMore || _lastDocument == null) return;
+
+    setState(() => _isFetchingMore = true);
+
+    try {
+      final result = await _fetchReservationsPage(status: _selectedFilterStatus, startAfterDocument: _lastDocument);
+      final newReservations = result['reservations'] as List<Map<String, dynamic>>;
+      final lastDoc = result['lastDocument'] as DocumentSnapshot?;
+      if (mounted) {
+        setState(() {
+          _allReservations.addAll(newReservations);
+          _lastDocument = lastDoc;
+          _hasMore = newReservations.length == _pageSize;
+          _applyFiltersAndSort();
+          _isFetchingMore = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading more reservations: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement de plus de réservations: $e')),
+        );
+        setState(() => _isFetchingMore = false);
+      }
+    }
+  }
+
+  void _applyFiltersAndSort() {
+    List<Map<String, dynamic>> temp = List.from(_allReservations);
+
+    if (_searchQuery.isNotEmpty) {
+      temp = temp.where((reservation) {
+        final serviceName = (reservation['serviceName'] as String? ?? '').toLowerCase();
+        final userName = (reservation['fetchedUserName'] as String? ?? '').toLowerCase(); // Changed to userName
+        return serviceName.contains(_searchQuery) || userName.contains(_searchQuery);
+      }).toList();
+    }
+
+    if (mounted) {
+      setState(() {
+        _filteredAndSortedReservations = temp;
+      });
     }
   }
   
-  // Then add pagination controls in your UI
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
       appBar: CustomAppBar(
-        title: 'Demandes de réservations',
+        title: 'Mes réservations',
         showBackButton: true,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-          labelColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-          unselectedLabelColor: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-          labelStyle: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-          tabs: const [
-            Tab(text: 'Toutes'),
-            Tab(text: 'En attente'),
-            Tab(text: 'Acceptées'),
-            Tab(text: 'Terminées'),
-          ],
-        ),
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-              ),
-            )
-          : TabBarView(
-              controller: _tabController,
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            child: Column(
               children: [
-                // All reservations
-                _buildReservationsList(null, isDarkMode),
-                // Pending reservations
-                _buildReservationsList('pending', isDarkMode),
-                // Approved reservations
-                _buildReservationsList('approved', isDarkMode),
-                // Completed reservations
-                _buildReservationsList('completed', isDarkMode),
+                MarketplaceSearch(
+                  controller: _searchController,
+                  hintText: 'Rechercher par service ou client...', // Changed hint text
+                  onChanged: _onSearchChanged,
+                  onClear: _clearSearch,
+                ),
+                SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.white,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                          border: Border.all(
+                            color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: DropdownButtonFormField<String?>(
+                          value: _selectedFilterStatus,
+                          decoration: InputDecoration(
+                            labelText: 'Filtrer par statut',
+                            filled: true,
+                            fillColor: Colors.transparent,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            labelStyle: AppTypography.bodyMedium(context).copyWith(
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.arrow_drop_down,
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen,
+                          ),
+                          items: _filterOptions.map((option) {
+                            return DropdownMenuItem<String?>(
+                              value: option['value'],
+                              child: Text(
+                                option['label']!,
+                                style: AppTypography.bodyMedium(context).copyWith(
+                                  color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedFilterStatus = newValue;
+                              _loadInitialReservations();
+                            });
+                          },
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.primaryDarkGreen,
+                          ),
+                          dropdownColor: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.sm),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isAscending = !_isAscending;
+                          _loadInitialReservations();
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey.shade800.withOpacity(0.3) : Colors.white,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                          border: Border.all(
+                            color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.3) : AppColors.lightBorderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Icon(
+                          _isAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                          size: AppSpacing.iconMd,
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
+          Expanded(
+            child: _isLoading && _filteredAndSortedReservations.isEmpty
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    ),
+                  )
+                : _filteredAndSortedReservations.isEmpty && !_hasMore && !_isFetchingMore
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _searchQuery.isNotEmpty ? Icons.search_off : Icons.calendar_today_outlined,
+                              size: AppSpacing.iconXl,
+                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                            ),
+                            SizedBox(height: AppSpacing.sm),
+                            Text(
+                              _searchQuery.isNotEmpty ? 'Aucune réservation trouvée pour votre recherche' : 'Aucune réservation trouvée',
+                              style: AppTypography.bodyMedium(context).copyWith(
+                                color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: _scrollController,
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        itemCount: _filteredAndSortedReservations.length + (_hasMore ? 1 : 0),
+                        separatorBuilder: (context, index) => SizedBox(height: AppSpacing.md),
+                        itemBuilder: (context, index) {
+                          if (index == _filteredAndSortedReservations.length) {
+                            return Padding(
+                              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                ),
+                              ),
+                            );
+                          }
+
+                          final reservation = _filteredAndSortedReservations[index];
+                          final reservationId = reservation['id'] as String;
+                          final userName = reservation['fetchedUserName'] as String?; // Changed to userName
+                          final userPhotoURL = reservation['fetchedUserPhotoURL'] as String?; // Changed to userPhotoURL
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              // Navigate to provider's reservation details page
+                              context.go('/prestataireHome/reservation-details/$reservationId');
+                            },
+                            child: Card(
+                              elevation: AppSpacing.xxs,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                              ),
+                              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+                              child: Padding(
+                                padding: EdgeInsets.all(AppSpacing.md),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            reservation['serviceName'] ?? 'Service',
+                                            style: AppTypography.bodyLarge(context).copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              color: isDarkMode ? Colors.white : Colors.black87,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        _buildStatusBadge(
+                                          context,
+                                          reservation['status'] ?? 'pending',
+                                          isDarkMode,
+                                          providerCompletionStatus: reservation['providerCompletionStatus'],
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: AppSpacing.md),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: AppSpacing.iconXl,
+                                          height: AppSpacing.iconXl,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
+                                            image: userPhotoURL != null && userPhotoURL.isNotEmpty // Changed to userPhotoURL
+                                                ? DecorationImage(
+                                                    image: NetworkImage(userPhotoURL), // Changed to userPhotoURL
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : null,
+                                          ),
+                                          child: (userPhotoURL == null || userPhotoURL.isEmpty) // Changed to userPhotoURL
+                                              ? Icon(
+                                                  Icons.person,
+                                                  color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                                                  size: AppSpacing.iconLg,
+                                                )
+                                              : null,
+                                        ),
+                                        SizedBox(width: AppSpacing.md),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Client: ${userName ?? 'Non spécifié'}', // Changed to Client and userName
+                                                style: AppTypography.labelLarge(context).copyWith(
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                                ),
+                                              ),
+                                              if (reservation['scheduledDate'] != null) ...[
+                                                SizedBox(height: AppSpacing.xs),
+                                                Text(
+                                                  'Date: ${_formatDate(reservation['scheduledDate'])}',
+                                                  style: AppTypography.bodySmall(context).copyWith(
+                                                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
   
-  Widget _buildStatusBadge(String status, bool isDarkMode, {bool providerCompletionStatus = false}) {
+  Widget _buildStatusBadge(BuildContext context, String status, bool isDarkMode, {dynamic providerCompletionStatus = false}) {
     Color badgeColor;
     String statusText;
     
-    if (status == 'approved' && providerCompletionStatus == true) {
+    bool isProviderCompleted = false;
+    if (providerCompletionStatus is bool) {
+      isProviderCompleted = providerCompletionStatus;
+    } else if (providerCompletionStatus is String) {
+      isProviderCompleted = providerCompletionStatus == 'true';
+    }
+    
+    if (status == 'approved' && isProviderCompleted) {
       badgeColor = Colors.purple;
-      statusText = 'En attente de\nconfirmation';
+      statusText = 'À confirmer';
     } else {
       switch (status) {
         case 'approved':
           badgeColor = Colors.green;
           statusText = 'Acceptée';
+          break;
+        case 'cancelled':
+          badgeColor = Colors.red;
+          statusText = 'Annulée';
           break;
         case 'rejected':
           badgeColor = Colors.red;
@@ -131,287 +504,39 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> wit
     }
     
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
       decoration: BoxDecoration(
         color: badgeColor.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         border: Border.all(color: badgeColor, width: 1),
       ),
       child: Text(
         statusText,
         textAlign: TextAlign.center,
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+        style: AppTypography.labelSmall(context).copyWith(
           color: badgeColor,
+          fontWeight: FontWeight.w500,
           height: 1.2,
         ),
       ),
     );
   }
   
-  Widget _buildReservationsList(String? status, bool isDarkMode) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getReservationsStream(status),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-            ),
-          );
-        }
-        
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Erreur: ${snapshot.error}',
-              style: GoogleFonts.poppins(
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-          );
-        }
-        
-        final reservations = snapshot.data?.docs ?? [];
-        
-        if (reservations.isEmpty) {
-          return _buildEmptyState(status, isDarkMode);
-        }
-        
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: reservations.length,
-          itemBuilder: (context, index) {
-            final reservation = reservations[index].data() as Map<String, dynamic>;
-            final userId = reservation['userId'] as String;
-            final reservationId = reservation['reservationId'] as String;
-            final serviceName = reservation['serviceName'] as String? ?? 'Service non spécifié';
-            final timestamp = reservation['createdAt'] as Timestamp?;
-            final date = timestamp?.toDate() ?? DateTime.now();
-            final formattedDate = '${date.day}/${date.month}/${date.year}';
-            final reservationStatus = reservation['status'] as String? ?? 'pending';
-            final providerCompletionStatus = reservation['providerCompletionStatus'] == 'completed';
-            
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-              builder: (context, userSnapshot) {
-                if (!userSnapshot.hasData) {
-                  return const Card(
-                    margin: EdgeInsets.only(bottom: 16),
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
-                }
-                
-                final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
-                final userName = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim();
-                final userPhone = userData['phone'] as String? ?? 'Non spécifié';
-                final userPhoto = userData['photoURL'] as String? ?? '';
-                
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      context.push('/prestataireHome/reservation-details/$reservationId');
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              // User photo
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                    width: 2,
-                                  ),
-                                  image: userPhoto.isNotEmpty
-                                      ? DecorationImage(
-                                          image: NetworkImage(userPhoto),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : null,
-                                ),
-                                child: userPhoto.isEmpty
-                                    ? Icon(
-                                        Icons.person,
-                                        size: 30,
-                                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(width: 16),
-                              
-                              // User info
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      userName.isEmpty ? 'Utilisateur inconnu' : userName,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDarkMode ? Colors.white : Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.phone,
-                                          size: 16,
-                                          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          userPhone,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              
-                              // Status indicator
-                              _buildStatusBadge(reservationStatus, isDarkMode, providerCompletionStatus: providerCompletionStatus),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          
-                          // Service info
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.handyman,
-                                size: 16,
-                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  serviceName,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDarkMode ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          
-                          // Date
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                size: 16,
-                                color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                formattedDate,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-  
-  Widget _buildEmptyState(String? status, bool isDarkMode) {
-    String message;
-    String description;
-    IconData icon = Icons.calendar_today_outlined;
+  String _formatDate(dynamic date) {
+    if (date == null) return 'Non spécifiée';
     
-    switch (status) {
-      case 'pending':
-        message = 'Aucune demande en attente';
-        description = 'Vous n\'avez pas de demandes d\'intervention en attente';
-        icon = Icons.pending_actions;
-        break;
-      case 'approved':
-        message = 'Aucune demande acceptée';
-        description = 'Vous n\'avez pas encore accepté de demandes d\'intervention';
-        icon = Icons.check_circle_outline;
-        break;
-      case 'completed':
-        message = 'Aucune intervention terminée';
-        description = 'Vous n\'avez pas encore d\'interventions terminées';
-        icon = Icons.task_alt;
-        break;
-      default:
-        message = 'Aucune demande';
-        description = 'Vous n\'avez pas encore reçu de demandes d\'intervention';
-        icon = Icons.calendar_today_outlined;
-        break;
+    try {
+      if (date is Timestamp) {
+        final dateTime = date.toDate();
+        return DateFormat('dd/MM/yyyy à HH:mm').format(dateTime);
+      } else if (date is String) {
+        final dateTime = DateTime.parse(date);
+        return DateFormat('dd/MM/yyyy à HH:mm').format(dateTime);
+      }
+    } catch (e) {
+      // Handle parsing errors
     }
     
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: isDarkMode ? Colors.white : Colors.black,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              description,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
+    return 'Non spécifiée';
   }
 }

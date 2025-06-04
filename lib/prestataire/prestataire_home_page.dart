@@ -87,7 +87,7 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
           case 'pending':
             return _buildPendingApplicationView(isDarkMode);
           case 'rejected':
-            return _buildRejectedApplicationView(isDarkMode, rejectionReason);
+            return _buildRejectedApplicationView(isDarkMode, rejectionReason, data); // Pass data here
           case 'approved':
             return _buildApprovedApplicationView(isDarkMode);
           default:
@@ -198,7 +198,7 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
     );
   }
 
-  Widget _buildRejectedApplicationView(bool isDarkMode, String? rejectionReason) {
+  Widget _buildRejectedApplicationView(bool isDarkMode, String? rejectionReason, Map<String, dynamic>? providerData) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -265,7 +265,10 @@ class _PrestataireHomePageState extends State<PrestataireHomePage> {
             const SizedBox(height: 24),
             CustomButton(
               text: 'Soumettre une nouvelle demande',
-              onPressed: () => context.go('/prestataireHome/registration'),
+              onPressed: () {
+                // Pass the entire provider data to the registration page
+                context.go('/prestataireHome/registration', extra: providerData);
+              },
               backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
               textColor: Colors.white,
             ),

@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../front/app_colors.dart';
+import '../front/app_typography.dart'; // Import AppTypography
 import '../front/custom_app_bar.dart';
 import '../front/custom_button.dart';
+import '../front/app_spacing.dart'; // Import AppSpacing
 import '../utils/image_gallery_utils.dart';
 
 class ReservationDetailsPage extends StatefulWidget {
@@ -26,9 +29,16 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   bool _isLoading = true;
   Map<String, dynamic>? _reservationData;
   Map<String, dynamic>? _userData;
+  bool _hasPendingReclamation = false; // New state variable
   
   // Add these new variables for completion functionality
   final TextEditingController _completionDescriptionController = TextEditingController();
+
+  // Map related variables
+  GoogleMapController? _googleMapController;
+  double? _latitude;
+  double? _longitude;
+  Set<Circle> _circles = {};
   
   @override
   void initState() {
@@ -39,12 +49,29 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   @override
   void dispose() {
     _completionDescriptionController.dispose();
+    _googleMapController?.dispose(); // Dispose map controller
     super.dispose();
+  }
+  
+  void _showCustomSnackBar(BuildContext context, String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: AppTypography.bodySmall(context).copyWith(color: Colors.white),
+        ),
+        backgroundColor: isError ? AppColors.errorLightRed : AppColors.warningOrange,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
   
   Future<void> _loadReservationData() async {
     setState(() {
       _isLoading = true;
+      _hasPendingReclamation = false; // Reset on load
     });
     
     try {
@@ -56,9 +83,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       
       if (!reservationDoc.exists) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Réservation introuvable')),
-          );
+          _showCustomSnackBar(context, 'Réservation introuvable', isError: true);
           Navigator.pop(context);
         }
         return;
@@ -74,19 +99,51 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
           .get();
       
       final userData = userDoc.data();
+
+      // Extract location data for map
+      final locationData = reservationData['location'] as Map<String, dynamic>?;
+      double? latitude;
+      double? longitude;
+      if (locationData != null && locationData['latitude'] != null && locationData['longitude'] != null) {
+        latitude = (locationData['latitude'] as num?)?.toDouble();
+        longitude = (locationData['longitude'] as num?)?.toDouble();
+      }
+
+      // Check for pending reclamations
+      final reclamationsSnapshot = await FirebaseFirestore.instance
+          .collection('reclamations')
+          .where('reservationId', isEqualTo: widget.reservationId)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get();
+      
+      bool hasPendingReclamation = reclamationsSnapshot.docs.isNotEmpty;
       
       if (mounted) {
         setState(() {
           _reservationData = reservationData;
           _userData = userData;
+          _latitude = latitude;
+          _longitude = longitude;
+          _hasPendingReclamation = hasPendingReclamation;
+          if (_latitude != null && _longitude != null) {
+            _circles = {
+              Circle(
+                circleId: const CircleId('user_location_radius'),
+                center: LatLng(_latitude!, _longitude!),
+                radius: 1000, // Example radius, adjust as needed
+                fillColor: AppColors.primaryGreen.withOpacity(0.1),
+                strokeColor: AppColors.primaryGreen.withOpacity(0.5),
+                strokeWidth: 1,
+              )
+            };
+          }
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
+        _showCustomSnackBar(context, 'Erreur: $e', isError: true);
         setState(() {
           _isLoading = false;
         });
@@ -147,23 +204,18 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              status == 'approved'
-                  ? 'Demande acceptée avec succès'
-                  : 'Demande refusée avec succès',
-            ),
-            backgroundColor: status == 'approved' ? Colors.green : Colors.red,
-          ),
+        _showCustomSnackBar(
+          context,
+          status == 'approved'
+              ? 'Demande acceptée avec succès'
+              : 'Demande refusée avec succès',
+          isError: status == 'rejected',
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
+        _showCustomSnackBar(context, 'Erreur: $e', isError: true);
         setState(() {
           _isLoading = false;
         });
@@ -177,23 +229,44 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
     final phone = _userData!['phone'] as String?;
     if (phone == null || phone.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Numéro de téléphone non disponible')),
-        );
+        _showCustomSnackBar(context, 'Numéro de téléphone non disponible');
       }
       return;
     }
     
-    // Simply open the dialer with the phone number
-    final phoneUri = Uri(scheme: 'tel', path: phone);
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final Uri phoneUri = Uri(scheme: 'tel', path: cleanPhone);
     
     try {
-      await launchUrl(phoneUri);
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $phoneUri';
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'ouvrir le composeur téléphonique')),
-        );
+        _showCustomSnackBar(context, 'Impossible d\'ouvrir le composeur téléphonique: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _openInGoogleMaps() async {
+    if (_latitude == null || _longitude == null) {
+      if (mounted) {
+        _showCustomSnackBar(context, 'Coordonnées de l\'utilisateur non disponibles');
+      }
+      return;
+    }
+    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$_latitude,$_longitude');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $url';
+      }
+    } catch (e) {
+      if (mounted) {
+        _showCustomSnackBar(context, 'Impossible d\'ouvrir Maps: $e', isError: true);
       }
     }
   }
@@ -207,18 +280,14 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
     
     if (currentUser == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vous devez être connecté pour contacter le client')),
-        );
+        _showCustomSnackBar(context, 'Vous devez être connecté pour contacter le client', isError: true);
       }
       return;
     }
 
     if (currentUser.uid == userId) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vous ne pouvez pas contacter votre propre réservation')),
-        );
+        _showCustomSnackBar(context, 'Vous ne pouvez pas contacter votre propre réservation');
       }
       return;
     }
@@ -233,10 +302,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       
       if (userData != null) {
         clientName = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim();
-        clientName = clientName.trim().isNotEmpty ? clientName : 'Client';
+        clientName = clientName.isEmpty ? 'Client' : clientName;
       }
-      
-      // Create chat ID from user IDs
       
       // Navigate to chat screen with the properly formatted chat ID and user name
       if (mounted) {
@@ -247,11 +314,9 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'accès au chat: $e')),
-        );
+        _showCustomSnackBar(context, 'Erreur lors de l\'accès au chat: $e', isError: true);
       }
+      setState(() => _isLoading = false);
     }
   }
   
@@ -263,7 +328,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       builder: (context) => AlertDialog(
         backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
         title: Text(
-          action == 'approve' 
+          action == 'approved' 
               ? 'Accepter la demande' 
               : 'Refuser la demande',
           style: GoogleFonts.poppins(
@@ -272,7 +337,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
           ),
         ),
         content: Text(
-          action == 'approve'
+          action == 'approved'
               ? 'Êtes-vous sûr de vouloir accepter cette demande d\'intervention ?'
               : 'Êtes-vous sûr de vouloir refuser cette demande d\'intervention ?',
           style: GoogleFonts.poppins(
@@ -292,12 +357,12 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _updateReservationStatus(action == 'approve' ? 'approved' : 'rejected');
+              _updateReservationStatus(action == 'approved' ? 'approved' : 'rejected');
             },
             child: Text(
               'Confirmer',
               style: GoogleFonts.poppins(
-                color: action == 'approve'
+                color: action == 'approved'
                     ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
                     : Colors.red,
                 fontWeight: FontWeight.bold,
@@ -317,6 +382,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return isDarkMode ? Colors.red.shade800 : Colors.red.shade600;
       case 'completed':
         return isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600;
+      case 'waiting_confirmation': // New status
+        return Colors.purple.shade600;
       case 'pending':
       default:
         return isDarkMode ? Colors.orange.shade700 : Colors.orange.shade600;
@@ -331,6 +398,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return Icons.cancel;
       case 'completed':
         return Icons.task_alt;
+      case 'waiting_confirmation': // New status
+        return Icons.pending_actions_rounded; // Changed icon
       case 'pending':
       default:
         return Icons.pending;
@@ -345,6 +414,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return 'Demande refusée';
       case 'completed':
         return 'Intervention terminée';
+      case 'waiting_confirmation': // New status
+        return 'En attente confirmation client';
       case 'pending':
       default:
         return 'En attente de confirmation';
@@ -366,16 +437,34 @@ void _navigateToCompletionPage() async {
   }
 }
 
+  Widget _buildContactButton({required IconData icon, required String label, required VoidCallback onTap, required bool isDarkMode}) {
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    return Expanded(
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 20, color: primaryColor),
+        label: Text(label, style: GoogleFonts.poppins(fontSize: 14, color: primaryColor, fontWeight: FontWeight.w500)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: primaryColor, width: 1.5)),
+          elevation: 0,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     if (_isLoading) {
-      return Scaffold(
-        appBar: CustomAppBar(
-          title: 'Détails de la demande',
-          showBackButton: true,
-        ),
+    return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
+      appBar: CustomAppBar(
+        title: 'Détails de la demande',
+        showBackButton: true,
+      ),
         body: Center(
           child: CircularProgressIndicator(
             color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
@@ -404,7 +493,6 @@ void _navigateToCompletionPage() async {
     
     // Extract reservation data
     final description = _reservationData!['description'] as String? ?? '';
-    final address = _reservationData!['address'] as String? ?? '';
     final imageUrls = List<String>.from(_reservationData!['imageUrls'] ?? []);
     final isImmediate = _reservationData!['isImmediate'] as bool? ?? false;
     final serviceName = _reservationData!['serviceName'] as String? ?? 'Service non spécifié';
@@ -474,90 +562,95 @@ void _navigateToCompletionPage() async {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
+                child: Column(
                   children: [
-                    // User photo
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                          width: 2,
-                        ),
-                        image: userPhoto.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(userPhoto),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: userPhoto.isEmpty
-                          ? Icon(
-                              Icons.person,
-                              size: 35,
+                    Row(
+                      children: [
+                        // User photo
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
                               color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 16),
-                    
-                    // User info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            userName.isEmpty ? 'Utilisateur inconnu' : userName,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.white : Colors.black87,
+                              width: 2,
                             ),
+                            image: userPhoto.isNotEmpty
+                                ? DecorationImage(
+                                    image: NetworkImage(userPhoto),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                          const SizedBox(height: 4),
-                          Row(
+                          child: userPhoto.isEmpty
+                              ? Icon(
+                                  Icons.person,
+                                  size: 35,
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 16),
+                        
+                        // User info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.phone,
-                                size: 16,
-                                color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                              ),
-                              const SizedBox(width: 4),
                               Text(
-                                userPhone,
+                                userName.isEmpty ? 'Utilisateur inconnu' : userName,
                                 style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDarkMode ? Colors.white : Colors.black87,
                                 ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.phone,
+                                    size: 16,
+                                    color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    userPhone,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    
-                    // Call button
-                    IconButton(
-                      onPressed: _makePhoneCall,
-                      icon: Icon(
-                        Icons.call,
-                        color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                      ),
-                      tooltip: 'Appeler',
+                    const SizedBox(height: 16), // Spacing between user info and buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildContactButton(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          label: 'Message',
+                          onTap: _navigateToChat,
+                          isDarkMode: isDarkMode,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildContactButton(
+                          icon: Icons.phone_outlined,
+                          label: 'Appeler',
+                          onTap: _makePhoneCall,
+                          isDarkMode: isDarkMode,
+                        ),
+                      ],
                     ),
-                    IconButton(
-                  onPressed: _navigateToChat,
-                  icon: Icon(
-                    Icons.chat_bubble_outline,
-                    color: AppColors.primaryGreen,
-                  ),
-                  tooltip: 'Message',
-                ),
                   ],
                 ),
               ),
@@ -580,7 +673,7 @@ void _navigateToCompletionPage() async {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -681,39 +774,6 @@ void _navigateToCompletionPage() async {
                       ),
                     ],
                     
-                    const SizedBox(height: 12),
-                    
-                    // Address
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 20,
-                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Adresse:',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            address.isEmpty ? 'Non spécifiée' : address,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isDarkMode ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -736,7 +796,7 @@ void _navigateToCompletionPage() async {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
@@ -748,6 +808,60 @@ void _navigateToCompletionPage() async {
                 ),
               ),
             ),
+
+            // Map section
+            if (_latitude != null && _longitude != null) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Localisation de l\'utilisateur',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: 'Ouvrir dans Maps',
+                onPressed: _openInGoogleMaps,
+                backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                textColor: Colors.white,
+                icon: const Icon(Icons.map_outlined, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 200, // Fixed height for the map
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: GoogleMap(
+                    mapType: MapType.normal,
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(_latitude!, _longitude!),
+                      zoom: 14.0,
+                    ),
+                    onMapCreated: (GoogleMapController controller) {
+                      _googleMapController = controller;
+                    },
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('userLocation'),
+                        position: LatLng(_latitude!, _longitude!),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      ),
+                    },
+                    circles: _circles,
+                    zoomControlsEnabled: false,
+                    scrollGesturesEnabled: false,
+                    tiltGesturesEnabled: false,
+                    rotateGesturesEnabled: false,
+                  ),
+                ),
+              ),
+            ],
             
             // Images
             if (imageUrls.isNotEmpty) ...[
@@ -770,79 +884,143 @@ void _navigateToCompletionPage() async {
             ],
             const SizedBox(height: 32),
             
-            // Action buttons
-            if (status == 'pending') ...[
-              Row(
-                children: [
-                  // Reject button
-                  Expanded(
-                    child: CustomButton(
-                      onPressed: () => _showConfirmationDialog('reject'),
-                      text: 'Refuser',
-                      backgroundColor: isDarkMode ? Colors.red.shade800 : Colors.red.shade600,
-                      textColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  
-                  // Accept button
-                  Expanded(
-                    child: CustomButton(
-                      onPressed: () => _showConfirmationDialog('approve'),
-                      text: 'Accepter',
-                      backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                      textColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            
-            // Add "Mark as Completed" button for approved reservations
-            if (status == 'approved' && providerCompletionStatus != 'completed') ...[
-              const SizedBox(height: 24),
-              CustomButton(
-                onPressed: _navigateToCompletionPage,
-                text: 'Marquer comme terminée',
-                backgroundColor: isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600,
-                textColor: Colors.white,
-              ),
-            ],
-            
             // Show completion status if provider has marked it as completed
-            if (status == 'approved' && providerCompletionStatus == 'completed') ...[
-              const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.purple, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.hourglass_bottom,
-                      color: Colors.purple,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Vous avez marqué cette intervention comme terminée. En attente de confirmation du client.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.purple,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            // This specific message is now handled by the 'waiting_confirmation' status badge
+            // if (status == 'approved' && providerCompletionStatus == 'completed') ...[
+            // This section can be removed or adapted if a different message is needed when status is 'waiting_confirmation'
+            // For now, the main status badge will show "En attente confirmation client"
+            // ],
           ],
+        ),
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(isDarkMode),
+    );
+  }
+
+  Widget _buildBottomNavigationBar(bool isDarkMode) {
+    final status = _reservationData?['status'];
+    final providerCompletionStatus = _reservationData?['providerCompletionStatus'];
+    final bool canSubmitReclamation = !_hasPendingReclamation;
+
+
+    List<Widget> buttons = [];
+
+    if (status == 'pending') {
+      buttons.add(
+        Expanded(
+          child: CustomButton(
+            text: 'Refuser',
+            onPressed: () => _showConfirmationDialog('rejected'),
+            backgroundColor: isDarkMode ? Colors.red.shade800 : Colors.red.shade600,
+            textColor: Colors.white,
+          ),
+        ),
+      );
+      buttons.add(const SizedBox(width: 16));
+      buttons.add(
+        Expanded(
+          child: CustomButton(
+            text: 'Accepter',
+            onPressed: () => _showConfirmationDialog('approved'),
+            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            textColor: Colors.white,
+          ),
+        ),
+      );
+    } else if (status == 'approved') {
+      bool marquerTermineePresent = false;
+      // Only show "Marquer comme terminée" if status is 'approved' AND provider hasn't marked it yet.
+      // If status is 'waiting_confirmation', provider has already marked it.
+      if (providerCompletionStatus != 'completed' && status == 'approved') { 
+        buttons.add(
+          Expanded(
+            child: CustomButton(
+              text: 'Marquer comme terminée',
+              onPressed: _navigateToCompletionPage,
+              backgroundColor: isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600,
+              textColor: Colors.white,
+            ),
+          ),
+        );
+        marquerTermineePresent = true;
+      }
+
+      if (canSubmitReclamation && status != 'waiting_confirmation') { // Don't show reclamation button if waiting for client
+        if (marquerTermineePresent) { // Small square icon button (only if "Marquer terminée" is also shown)
+          buttons.add(const SizedBox(width: 16));
+          buttons.add(
+            SizedBox(
+              width: AppSpacing.buttonMedium,
+              height: AppSpacing.buttonMedium,
+              child: ElevatedButton(
+                onPressed: () {
+                  context.push('/prestataireHome/reclamation/create/${widget.reservationId}');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.warningOrange,
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                ),
+                child: const Icon(Icons.report_problem, color: Colors.white, size: 24.0),
+              ),
+            ),
+          );
+        } else { // Full width button with text (if "Marquer terminée" is not shown, but can submit reclamation)
+                 // This case applies if status is 'approved' but providerCompletionStatus IS 'completed'
+                 // OR if status is 'completed' (though this part of the 'if' is for 'approved')
+          if (buttons.isNotEmpty) { 
+             buttons.add(const SizedBox(width: 16));
+          }
+          buttons.add(
+            Expanded(
+              child: CustomButton(
+                text: 'Soumettre une réclamation',
+                icon: const Icon(Icons.report_problem, color: Colors.white),
+                onPressed: () {
+                  context.push('/prestataireHome/reclamation/create/${widget.reservationId}');
+                },
+                isPrimary: false,
+                backgroundColor: AppColors.warningOrange,
+                textColor: Colors.white,
+                height: AppSpacing.buttonMedium,
+              ),
+            ),
+          );
+        }
+      }
+    } else if (status == 'completed') { // This is when client has confirmed
+      if (canSubmitReclamation) {
+        buttons.add(
+          Expanded(
+            child: CustomButton(
+              text: 'Soumettre une réclamation',
+              icon: const Icon(Icons.report_problem, color: Colors.white),
+              onPressed: () {
+                context.push('/prestataireHome/reclamation/create/${widget.reservationId}');
+              },
+              isPrimary: false,
+              backgroundColor: AppColors.warningOrange,
+              textColor: Colors.white,
+              height: AppSpacing.buttonMedium,
+            ),
+          ),
+        );
+      }
+    }
+
+    if (buttons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Same as CustomAppBar background
+      padding: const EdgeInsets.all(16),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: buttons,
         ),
       ),
     );

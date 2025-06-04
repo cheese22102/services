@@ -25,58 +25,104 @@ final GoRouter router = GoRouter(
     
     // If no user is logged in and not trying to access login/signup pages
     if (currentUser == null) {
-      // Allow access to login/signup routes and tutorial
+      // Allow access to login/signup routes, verification, complete profile, and tutorial
       if (state.matchedLocation.startsWith('/') || 
           state.matchedLocation.startsWith('/signup') || 
           state.matchedLocation.startsWith('/forgot-password') ||
+          state.matchedLocation.startsWith('/verification') || // Added
+          state.matchedLocation.startsWith('/completer-profile') || // Added
           state.matchedLocation == '/tutorial') {
         return null; // Allow access to these routes
       }
       // Redirect to login for all other routes
       return '/login';
     } else {
-      // User is logged in, check their role
+      // User is logged in
+      print('User logged in: ${currentUser.uid}');
+      print('Current location: ${state.matchedLocation}');
+
       try {
+        // Reload user to get the latest email verification status
+        await currentUser.reload();
+        final updatedUser = FirebaseAuth.instance.currentUser; // Get reloaded user
+
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(currentUser.uid)
+            .doc(updatedUser!.uid) // Use updatedUser
             .get();
         
-        if (userDoc.exists) {
-          final userData = userDoc.data();
-          final userRole = userData?['role'] as String?;
-          
-          // If trying to access login/signup pages while logged in, redirect to appropriate home
-          if (state.matchedLocation.startsWith('/login') || 
-              state.matchedLocation.startsWith('/signup') || 
-              state.matchedLocation.startsWith('/forgot-password') ||
-              state.matchedLocation == '/') {
-            
-            // Redirect based on role
-            if (userRole == 'admin') {
-              return '/admin';
-            } else if (userRole == 'prestataire') {
-              return '/prestataireHome';
-            } else {
-              return '/clientHome'; // Default to client
-            }
+        final userData = userDoc.data();
+        // Determine if signed in with Google based on provider data
+        final isGoogleSignIn = updatedUser.providerData.any((info) => info.providerId == 'google.com');
+        final profileCompleted = userData?['profileCompleted'] ?? false;
+        final userRole = userData?['role'] as String?;
+
+        // If user document does not exist, force profile completion
+        // This handles cases where a user is authenticated but their Firestore profile isn't created yet.
+        if (!userDoc.exists) {
+          if (state.matchedLocation != '/completer-profile') {
+            return '/completer-profile';
           }
+          return null; // Allow access to complete profile page
+        }
+
+        // 1. Email Verification Check (for non-Google sign-ins)
+        // If email is not verified AND it's not a Google sign-in
+        if (!updatedUser.emailVerified && !isGoogleSignIn) { // Use updatedUser
+          // If not already on the verification page, redirect there
+          if (state.matchedLocation != '/verification') {
+            return '/verification';
+          }
+          // If already on /verification, allow it
+          return null; 
+        }
+
+        // 2. Profile Completion Check (after email verification or if Google sign-in)
+        // If profile is not completed
+        if (!profileCompleted) {
+          // If not already on the complete profile page, redirect there
+          if (state.matchedLocation != '/completer-profile') {
+            return '/completer-profile';
+          }
+          // If already on /completer-profile, allow it
+          return null; 
+        }
+        
+        // If trying to access login/signup/verification/complete-profile/root pages while logged in and fully set up, redirect to appropriate home
+        if (state.matchedLocation.startsWith('/login') || 
+            state.matchedLocation.startsWith('/signup') || 
+            state.matchedLocation.startsWith('/forgot-password') ||
+            state.matchedLocation.startsWith('/verification') || 
+            state.matchedLocation.startsWith('/completer-profile') || 
+            state.matchedLocation == '/') {
           
-          // Prevent access to routes not matching the user's role
-          if (userRole == 'admin' && !state.matchedLocation.startsWith('/admin')) {
+          // Redirect based on role
+          if (userRole == 'admin') {
             return '/admin';
-          } else if (userRole == 'prestataire' && !state.matchedLocation.startsWith('/prestataireHome')) {
+          } else if (userRole == 'prestataire') {
             return '/prestataireHome';
-          } else if (userRole == 'client' && !state.matchedLocation.startsWith('/clientHome')) {
-            return '/clientHome';
+          } else {
+            return '/clientHome'; // Default to client
           }
         }
+        
+        // Prevent access to routes not matching the user's role (only if profile is completed and email verified)
+        if (userRole == 'admin' && !state.matchedLocation.startsWith('/admin')) {
+          return '/admin';
+        } else if (userRole == 'prestataire' && !state.matchedLocation.startsWith('/prestataireHome')) {
+          return '/prestataireHome';
+        } else if (userRole == 'client' && !state.matchedLocation.startsWith('/clientHome')) {
+          return '/clientHome';
+        }
       } catch (e) {
-        print('Error checking user role: $e');
+        print('Error in redirect logic: $e');
+        // If there's an error (e.g., network issue, malformed user data),
+        // redirect to login to prevent infinite loops or unhandled states.
+        return '/login'; 
       }
     }
     
-    return null; // Allow the navigation
+    return null; // Allow the navigation if no redirects were triggered
   },
   routes: <RouteBase>[
     ...loginSignupRoutes,

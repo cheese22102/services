@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../notifications_service.dart';
-import 'package:go_router/go_router.dart'; // Add this import
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import '../front/app_colors.dart'; // Import AppColors
+import '../front/loading_overlay.dart'; // Import LoadingOverlay
 
 // VerificationItem class
 class VerificationItem {
@@ -108,14 +110,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     }
   }
 
-  // Add a new method to display user information
-  Widget _buildUserInfoSection(Map<String, dynamic> data) {
+  // Modified method to display user information with consistent styling
+  Widget _buildUserInfoSection(Map<String, dynamic> data, bool isDarkMode) {
     final userData = data['userData'] as Map<String, dynamic>?;
     
     if (userData == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.0),
-        child: Text('Informations utilisateur non disponibles'),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Informations utilisateur non disponibles',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
       );
     }
     
@@ -129,6 +136,11 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2, // Consistent elevation
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent card background
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -138,7 +150,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // User photo
-                if (photoURL != null)
+                if (photoURL != null && photoURL.isNotEmpty)
                   Container(
                     width: 80,
                     height: 80,
@@ -149,7 +161,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                         fit: BoxFit.cover,
                       ),
                       border: Border.all(
-                        color: Colors.grey.shade300,
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
                         width: 2,
                       ),
                     ),
@@ -160,16 +172,16 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                     height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.grey.shade200,
+                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                       border: Border.all(
-                        color: Colors.grey.shade300,
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
                         width: 2,
                       ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.person,
                       size: 40,
-                      color: Colors.grey,
+                      color: isDarkMode ? Colors.grey.shade400 : Colors.grey,
                     ),
                   ),
                 const SizedBox(width: 16),
@@ -181,16 +193,17 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                     children: [
                       Text(
                         '$firstName $lastName',
-                        style: const TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      _buildUserInfoItem(Icons.email, email),
-                      _buildUserInfoItem(Icons.phone, phone),
-                      _buildUserInfoItem(Icons.person, 'Genre: $gender'),
-                      _buildUserInfoItem(Icons.cake, 'Âge: $age ans'),
+                      _buildUserInfoItem(Icons.email, email, isDarkMode),
+                      _buildUserInfoItem(Icons.phone, phone, isDarkMode),
+                      _buildUserInfoItem(Icons.person, 'Genre: $gender', isDarkMode),
+                      _buildUserInfoItem(Icons.cake, 'Âge: $age ans', isDarkMode),
                     ],
                   ),
                 ),
@@ -202,17 +215,21 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     );
   }
 
-  Widget _buildUserInfoItem(IconData icon, String text) {
+  // Modified _buildUserInfoItem to accept isDarkMode
+  Widget _buildUserInfoItem(IconData icon, String text, bool isDarkMode) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.grey),
+          Icon(icon, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 14),
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: isDarkMode ? Colors.white70 : Colors.black87,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -222,13 +239,18 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
   }
 
   // Update the project photos section to use the correct field name
-  Widget _buildProjectPhotosSection(Map<String, dynamic> data) {
+  Widget _buildProjectPhotosSection(Map<String, dynamic> data, bool isDarkMode) {
     final projectPhotos = List<String>.from(data['projectPhotos'] ?? []);
     
     if (projectPhotos.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.0),
-        child: Text('Aucune photo de projet fournie'),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucune photo de projet fournie',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
       );
     }
     
@@ -249,7 +271,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             final photoUrl = projectPhotos[index];
             return Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
+                border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Stack(
@@ -263,10 +285,21 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                       height: double.infinity,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
-                        return const Center(child: CircularProgressIndicator());
+                        return Center(
+                          child: CircularProgressIndicator(
+                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                          ),
+                        );
                       },
                       errorBuilder: (context, error, stackTrace) {
-                        return const Center(child: Text('Erreur de chargement'));
+                        return Center(
+                          child: Text(
+                            'Erreur de chargement',
+                            style: GoogleFonts.poppins(
+                              color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                            ),
+                          ),
+                        );
                       },
                     ),
                   ),
@@ -298,77 +331,195 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Détails du prestataire'),
+        title: Text(
+          'Détails du prestataire',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+        elevation: 4, // Consistent elevation
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black87,
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/admin/providers'), // Update navigation to use GoRouter
+          onPressed: () => context.go('/admin/providers'),
         ),
       ),
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(child: Text(_errorMessage!))
+              ? Center(
+                  child: Text(
+                    _errorMessage!,
+                    style: GoogleFonts.poppins(
+                      color: Colors.red[700],
+                      fontSize: 16,
+                    ),
+                  ),
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // User info section
-                      _buildSectionTitle('Informations personnelles'),
-                      _buildUserInfoSection(_providerData!),
+                      _buildSectionTitle('Informations personnelles', isDarkMode),
+                      _buildUserInfoSection(_providerData!, isDarkMode), // Pass isDarkMode
                       
                       const Divider(height: 32),
                       
                       // Services section
-                      _buildSectionTitle('Services proposés'),
-                      _buildServicesList(_providerData!),
+                      _buildSectionTitle('Services proposés', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildServicesList(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Documents section
-                      _buildSectionTitle('Pièce d\'identité'),
-                      _buildIdCard(_providerData!),
+                      _buildSectionTitle('Pièce d\'identité', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildIdCard(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const SizedBox(height: 16),
-                      _buildSectionTitle('Selfie avec pièce d\'identité'),
-                      _buildSelfieWithId(_providerData!),
+                      _buildSectionTitle('Selfie avec pièce d\'identité', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildSelfieWithId(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const SizedBox(height: 16),
-                      _buildSectionTitle('Patente'),
-                      _buildPatente(_providerData!),
+                      _buildSectionTitle('Patente', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildPatente(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const SizedBox(height: 16),
-                      _buildSectionTitle('Certifications'),
-                      _buildCertifications(_providerData!),
+                      _buildSectionTitle('Certifications', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildCertifications(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Project Photos section
-                      _buildSectionTitle('Photos de projets'),
-                      _buildProjectPhotosSection(_providerData!),
+                      _buildSectionTitle('Photos de projets', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildProjectPhotosSection(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Professional info section
-                      _buildSectionTitle('Informations professionnelles'),
-                      _buildProfessionalInfo(_providerData!),
+                      _buildSectionTitle('Informations professionnelles', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildProfessionalInfo(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Location section
-                      _buildSectionTitle('Localisation'),
-                      _buildLocationInfo(_providerData!),
+                      _buildSectionTitle('Localisation', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildLocationInfo(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Working hours section
-                      _buildSectionTitle('Horaires de travail'),
-                      _buildWorkingHours(_providerData!),
+                      _buildSectionTitle('Horaires de travail', isDarkMode),
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildWorkingHours(_providerData!, isDarkMode), // Pass isDarkMode
+                        ),
+                      ),
                       
                       const Divider(height: 32),
                       
                       // Action section
-                      _buildSectionTitle('Action'),
+                      _buildSectionTitle('Action', isDarkMode),
                       _buildActionButtons(widget.providerId, _providerData!, isDarkMode),
                     ],
                   ),
@@ -377,11 +528,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
   }
 
   // Add methods to display selfie with ID and patente
-  Widget _buildSelfieWithId(Map<String, dynamic> data) {
+  Widget _buildSelfieWithId(Map<String, dynamic> data, bool isDarkMode) {
     final selfieWithIdUrl = data['selfieWithIdUrl'] as String?;
     
     if (selfieWithIdUrl == null || selfieWithIdUrl.isEmpty) {
-      return const Text('Aucun selfie avec pièce d\'identité fourni');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucun selfie avec pièce d\'identité fourni',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
     }
     
     return Column(
@@ -391,7 +550,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
           height: 200,
           width: double.infinity,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
+            border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Image.network(
@@ -399,28 +558,52 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             fit: BoxFit.contain,
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(
+                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                ),
+              );
             },
             errorBuilder: (context, error, stackTrace) {
-              return const Center(child: Text('Erreur de chargement'));
+              return Center(
+                child: Text(
+                  'Erreur de chargement',
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                  ),
+                ),
+              );
             },
           ),
         ),
         const SizedBox(height: 8),
         TextButton.icon(
           onPressed: () => _showFullScreenImage(context, selfieWithIdUrl),
-          icon: const Icon(Icons.fullscreen),
-          label: const Text('Voir en plein écran'),
+          icon: Icon(Icons.fullscreen, color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+          label: Text(
+            'Voir en plein écran',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPatente(Map<String, dynamic> data) {
+  Widget _buildPatente(Map<String, dynamic> data, bool isDarkMode) {
     final patenteUrl = data['patenteUrl'] as String?;
     
     if (patenteUrl == null || patenteUrl.isEmpty) {
-      return const Text('Aucune patente fournie (optionnel)');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucune patente fournie (optionnel)',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
     }
     
     return Column(
@@ -430,7 +613,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
           height: 200,
           width: double.infinity,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
+            border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Image.network(
@@ -438,44 +621,69 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             fit: BoxFit.contain,
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(
+                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                ),
+              );
             },
             errorBuilder: (context, error, stackTrace) {
-              return const Center(child: Text('Erreur de chargement'));
+              return Center(
+                child: Text(
+                  'Erreur de chargement',
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                  ),
+                ),
+              );
             },
           ),
         ),
         const SizedBox(height: 8),
         TextButton.icon(
           onPressed: () => _showFullScreenImage(context, patenteUrl),
-          icon: const Icon(Icons.fullscreen),
-          label: const Text('Voir en plein écran'),
+          icon: Icon(Icons.fullscreen, color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+          label: Text(
+            'Voir en plein écran',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            ),
+          ),
         ),
       ],
     );
   }
 
   // Update the professional info method to include more details
-  Widget _buildProfessionalInfo(Map<String, dynamic> data) {
+  Widget _buildProfessionalInfo(Map<String, dynamic> data, bool isDarkMode) {
     final experiences = List<Map<String, dynamic>>.from(data['experiences'] ?? []);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoItem('Bio', data['bio'] ?? 'Non spécifiée'),
+        _buildInfoItem('Bio', data['bio'] ?? 'Non spécifiée', isDarkMode),
         
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Expériences',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
             fontSize: 16,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
         
         if (experiences.isEmpty)
-          const Text('Aucune expérience spécifiée')
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              'Aucune expérience spécifiée',
+              style: GoogleFonts.poppins(
+                color: isDarkMode ? Colors.white70 : Colors.black54,
+              ),
+            ),
+          )
         else
           ListView.builder(
             shrinkWrap: true,
@@ -484,11 +692,16 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             itemBuilder: (context, index) {
               final exp = experiences[index];
               final service = exp['service'] as String? ?? 'Non spécifié';
-              final years = exp['years']?.toString() ?? 'Non spécifié';
-              final description = exp['description'] as String? ?? 'Non spécifiée';
-              
+              final int yearsInt = exp['years'] as int? ?? 0;
+              final String yearsDisplay = yearsInt == 5 ? '5+' : yearsInt.toString();
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
+                elevation: 1, // Slightly less elevation for nested cards
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100, // Lighter background for nested cards
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -496,15 +709,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                     children: [
                       Text(
                         service,
-                        style: const TextStyle(
+                        style: GoogleFonts.poppins(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
+                          color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('$years ans d\'expérience'),
-                      const SizedBox(height: 4),
-                      Text(description),
+                      Text(
+                        '$yearsDisplay ans d\'expérience', // Display the string range directly
+                        style: GoogleFonts.poppins(
+                          color: isDarkMode ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -515,38 +732,69 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
   );
   }
   
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, bool isDarkMode) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Text(
         title,
-        style: const TextStyle(
+        style: GoogleFonts.poppins(
           fontSize: 18,
           fontWeight: FontWeight.bold,
+          color: isDarkMode ? Colors.white : Colors.black87,
         ),
       ),
     );
   }
   
-  Widget _buildServicesList(Map<String, dynamic> data) {
+  Widget _buildServicesList(Map<String, dynamic> data, bool isDarkMode) {
     final services = List<String>.from(data['services'] ?? []);
     
+    if (services.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucun service proposé',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 8,
+      runSpacing: 8, // Add runSpacing for better layout
       children: services.map((service) {
         return Chip(
-          label: Text(service),
-          backgroundColor: Colors.blue.shade100,
+          label: Text(
+            service,
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? Colors.white : AppColors.primaryDarkGreen, // Adjust chip text color
+            ),
+          ),
+          backgroundColor: isDarkMode ? AppColors.primaryGreen.withOpacity(0.3) : Colors.blue.shade100, // Adjust chip background
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: isDarkMode ? AppColors.primaryGreen : Colors.blue.shade200), // Add border
+          ),
         );
       }).toList(),
     );
   }
   
-  Widget _buildIdCard(Map<String, dynamic> data) {
+  Widget _buildIdCard(Map<String, dynamic> data, bool isDarkMode) {
     final idCardUrl = data['idCardUrl'] as String?;
     
     if (idCardUrl == null || idCardUrl.isEmpty) {
-      return const Text('Aucune pièce d\'identité fournie');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucune pièce d\'identité fournie',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
     }
     
     return Column(
@@ -556,7 +804,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
           height: 200,
           width: double.infinity,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
+            border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Image.network(
@@ -564,29 +812,53 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             fit: BoxFit.contain,
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(
+                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                ),
+              );
             },
             errorBuilder: (context, error, stackTrace) {
-              return const Center(child: Text('Erreur de chargement'));
+              return Center(
+                child: Text(
+                  'Erreur de chargement',
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                  ),
+                ),
+              );
             },
           ),
         ),
         const SizedBox(height: 8),
         TextButton.icon(
           onPressed: () => _showFullScreenImage(context, idCardUrl),
-          icon: const Icon(Icons.fullscreen),
-          label: const Text('Voir en plein écran'),
+          icon: Icon(Icons.fullscreen, color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+          label: Text(
+            'Voir en plein écran',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            ),
+          ),
         ),
       ],
     );
   }
   
-  Widget _buildCertifications(Map<String, dynamic> data) {
+  Widget _buildCertifications(Map<String, dynamic> data, bool isDarkMode) {
     final certifications = List<String>.from(data['certifications'] ?? []);
     final certificationFiles = List<String>.from(data['certificationFiles'] ?? []);
     
     if (certifications.isEmpty) {
-      return const Text('Aucune certification fournie');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Text(
+          'Aucune certification fournie',
+          style: GoogleFonts.poppins(
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
     }
     
     return ListView.builder(
@@ -599,14 +871,35 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         
         if (certUrl == null) {
           return Card(
+            elevation: 1, // Slightly less elevation for nested cards
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100, // Lighter background for nested cards
             child: ListTile(
-              title: Text(certName),
-              subtitle: const Text('Aucun fichier associé'),
+              title: Text(
+                certName,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              subtitle: Text(
+                'Aucun fichier associé',
+                style: GoogleFonts.poppins(
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                ),
+              ),
             ),
           );
         }
         
         return Card(
+          elevation: 1, // Slightly less elevation for nested cards
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100, // Lighter background for nested cards
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Column(
@@ -614,14 +907,18 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               children: [
                 Text(
                   certName,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   height: 150,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
+                    border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Image.network(
@@ -629,18 +926,34 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                     fit: BoxFit.contain,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
-                      return const Center(child: CircularProgressIndicator());
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        ),
+                      );
                     },
                     errorBuilder: (context, error, stackTrace) {
-                      return const Center(child: Text('Erreur de chargement'));
+                      return Center(
+                        child: Text(
+                          'Erreur de chargement',
+                          style: GoogleFonts.poppins(
+                            color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => _showFullScreenImage(context, certUrl),
-                  icon: const Icon(Icons.fullscreen),
-                  label: const Text('Voir en plein écran'),
+                  icon: Icon(Icons.fullscreen, color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+                  label: Text(
+                    'Voir en plein écran',
+                    style: GoogleFonts.poppins(
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -651,7 +964,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
   }
 
   
-  Widget _buildInfoItem(String label, String value) {
+  Widget _buildInfoItem(String label, String value, bool isDarkMode) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -661,18 +974,26 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             width: 120,
             child: Text(
               '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
             ),
           ),
           Expanded(
-            child: Text(value),
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(
+                color: isDarkMode ? Colors.white70 : Colors.black87,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
   
-  Widget _buildLocationInfo(Map<String, dynamic> data) {
+  Widget _buildLocationInfo(Map<String, dynamic> data, bool isDarkMode) {
     final exactLocation = data['exactLocation'] as Map<String, dynamic>?;
     final address = exactLocation?['address'] as String? ?? 'Adresse non spécifiée';
     final latitude = exactLocation?['latitude'] as double? ?? 0.0;
@@ -682,8 +1003,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoItem('Adresse', address),
-        _buildInfoItem('Zone d\'intervention', workingArea),
+        _buildInfoItem('Adresse', address, isDarkMode),
+        _buildInfoItem('Zone d\'intervention', workingArea, isDarkMode),
         const SizedBox(height: 8),
         
         // Map widget
@@ -691,41 +1012,41 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
           Container(
             height: 300,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
+              border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: FlutterMap(
-              options: MapOptions(
-                center: LatLng(latitude, longitude),
-                zoom: 15.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.app',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: GoogleMap(
+                mapType: MapType.normal,
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(latitude, longitude),
+                  zoom: 15.0,
                 ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      width: 40.0,
-                      height: 40.0,
-                      point: LatLng(latitude, longitude),
-                      builder: (context) => const Icon(
-                        Icons.location_on,
-                        color: Colors.red,
-                        size: 40.0,
-                      ),
+                markers: {
+                  Marker(
+                    markerId: const MarkerId('provider_location'),
+                    position: LatLng(latitude, longitude),
+                    infoWindow: const InfoWindow(title: 'Provider Location'),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(
+                      isDarkMode ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                },
+                myLocationEnabled: false,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                onMapCreated: (GoogleMapController controller) {
+                  // No need to store controller if not interacting with map after creation
+                },
+              ),
             ),
           ),
       ],
     );
   }
   
-  Widget _buildWorkingHours(Map<String, dynamic> data) {
+  Widget _buildWorkingHours(Map<String, dynamic> data, bool isDarkMode) {
     final workingDays = Map<String, bool>.from(data['workingDays'] ?? {});
     final workingHours = Map<String, Map<String, dynamic>>.from(data['workingHours'] ?? {});
     
@@ -749,9 +1070,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         
         if (!isWorkingDay) {
           return ListTile(
-            title: Text(dayName),
-            subtitle: const Text('Jour non travaillé'),
-            leading: const Icon(Icons.cancel, color: Colors.red),
+            title: Text(
+              dayName,
+              style: GoogleFonts.poppins(
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            subtitle: Text(
+              'Jour non travaillé',
+              style: GoogleFonts.poppins(
+                color: isDarkMode ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            leading: Icon(Icons.cancel, color: isDarkMode ? Colors.red.shade300 : Colors.red),
           );
         }
         
@@ -760,9 +1091,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         final endTime = hours?['end'] ?? '00:00';
         
         return ListTile(
-          title: Text(dayName),
-          subtitle: Text('$startTime - $endTime'),
-          leading: const Icon(Icons.check_circle, color: Colors.green),
+          title: Text(
+            dayName,
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+          subtitle: Text(
+            '$startTime - $endTime',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          leading: Icon(Icons.check_circle, color: isDarkMode ? Colors.green.shade300 : Colors.green),
         );
       }).toList(),
     );
@@ -800,7 +1141,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                 const SizedBox(width: 12),
                 Text(
                   status == 'approved' ? 'Demande approuvée' : 'Demande rejetée',
-                  style: TextStyle(
+                  style: GoogleFonts.poppins( // Use GoogleFonts
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: status == 'approved'
@@ -814,7 +1155,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               const SizedBox(height: 12),
               Text(
                 'Motif: ${data['rejectionReason']}',
-                style: TextStyle(
+                style: GoogleFonts.poppins( // Use GoogleFonts
                   fontStyle: FontStyle.italic,
                   color: isDarkMode ? Colors.red.shade200 : Colors.red.shade800,
                 ),
@@ -830,10 +1171,11 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       children: [
         // Verification checklist
         Card(
+          elevation: 2, // Consistent elevation
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade50,
+          color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent card background
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -841,7 +1183,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               children: [
                 Text(
                   'Liste de vérification',
-                  style: TextStyle(
+                  style: GoogleFonts.poppins( // Use GoogleFonts
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: isDarkMode ? Colors.white : Colors.black87,
@@ -851,19 +1193,19 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                 ...(_checkList.map((item) => CheckboxListTile(
                       title: Text(
                         item.title,
-                        style: TextStyle(
+                        style: GoogleFonts.poppins( // Use GoogleFonts
                           fontWeight: FontWeight.w500,
                           color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                       subtitle: Text(
                         item.description,
-                        style: TextStyle(
+                        style: GoogleFonts.poppins( // Use GoogleFonts
                           color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
                         ),
                       ),
                       value: item.isVerified,
-                      activeColor: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                      activeColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent active color
                       checkColor: Colors.white,
                       onChanged: (value) {
                         setState(() {
@@ -883,9 +1225,12 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         // Rejection reason field
         TextField(
           controller: _commentController,
+          style: GoogleFonts.poppins( // Use GoogleFonts
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
           decoration: InputDecoration(
             labelText: 'Motif de rejet (obligatoire en cas de rejet)',
-            labelStyle: TextStyle(
+            labelStyle: GoogleFonts.poppins( // Use GoogleFonts
               color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
             ),
             border: OutlineInputBorder(
@@ -900,15 +1245,12 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent focused border color
                 width: 2,
               ),
             ),
             filled: true,
-            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade50,
-          ),
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
+            fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground, // Consistent fill color
           ),
           maxLines: 3,
         ),
@@ -921,7 +1263,12 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               child: ElevatedButton.icon(
                 onPressed: () => _rejectProvider(providerId),
                 icon: const Icon(Icons.cancel),
-                label: const Text('Rejeter'),
+                label: Text(
+                  'Rejeter',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isDarkMode ? Colors.red.shade800 : Colors.red.shade600,
                   foregroundColor: Colors.white,
@@ -937,9 +1284,14 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               child: ElevatedButton.icon(
                 onPressed: () => _approveProvider(providerId),
                 icon: const Icon(Icons.check_circle),
-                label: const Text('Approuver'),
+                label: Text(
+                  'Approuver',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isDarkMode ? Colors.green.shade800 : Colors.green.shade600,
+                  backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent approve button color
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -964,6 +1316,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       return;
     }
     
+    LoadingOverlay.show(context); // Show loading overlay
     try {
       // Update the status to approved
       await FirebaseFirestore.instance
@@ -1000,6 +1353,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur: $e')),
       );
+    } finally {
+      LoadingOverlay.hide(); // Hide loading overlay
     }
   }
   
@@ -1012,6 +1367,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       return;
     }
   
+    LoadingOverlay.show(context); // Show loading overlay
     try {
       // Update the status to rejected and add rejection reason
       await FirebaseFirestore.instance
@@ -1048,6 +1404,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur: $e')),
       );
+    } finally {
+      LoadingOverlay.hide(); // Hide loading overlay
     }
   }
   
@@ -1059,8 +1417,14 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       builder: (context) => Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Visualisation du document'),
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            title: Text( // Use Text widget for title
+              'Visualisation du document',
+              style: GoogleFonts.poppins( // Use GoogleFonts
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white, // Consistent background
             foregroundColor: isDarkMode ? Colors.white : Colors.black87,
             actions: [
               IconButton(
@@ -1086,7 +1450,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                           ? loadingProgress.cumulativeBytesLoaded /
                               (loadingProgress.expectedTotalBytes ?? 1)
                           : null,
-                      color: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700,
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent color
                     ),
                   );
                 },
@@ -1102,7 +1466,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
                       const SizedBox(height: 16),
                       Text(
                         'Impossible de charger l\'image',
-                        style: TextStyle(
+                        style: GoogleFonts.poppins( // Use GoogleFonts
                           fontSize: 18,
                           color: isDarkMode ? Colors.white : Colors.black87,
                         ),

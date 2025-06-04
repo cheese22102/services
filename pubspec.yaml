@@ -41,7 +41,7 @@ dependencies:
   cloudinary_api: ^1.0.0
   http: 1.3.0
   image_picker: ^1.0.7
-  intl: ^0.20.2
+  intl: ^0.19.0 # Downgraded to resolve conflict with flutter_localizations
   flutter_local_notifications: ^19.0.0
   firebase_messaging: ^15.2.5  # Updated
   introduction_screen: ^3.1.7
@@ -53,18 +53,18 @@ dependencies:
   go_router: ^14.8.1  # Keep at 14.8.1 for now to avoid major version jump
   cached_network_image: ^3.3.0
   google_fonts: ^6.2.1
-  flutter_map: ^5.0.0  # Keep at 5.0.0 for now to avoid major version jump
-  latlong2: ^0.9.0
-  geolocator: ^10.0.0  # Keep at 10.0.0 for now to avoid major version jump
-  geocoding: ^2.1.0  # Keep at 2.x for now to avoid major version jump
-  google_maps_flutter: ^2.12.1  # Updated
-  permission_handler: ^11.4.0  # Keep at 11.4.0 for now to avoid major version jump
+  geolocator: ^10.0.0
+  geocoding: ^2.1.0
+  google_maps_flutter: ^2.12.1
+  permission_handler: ^11.4.0
   url_launcher: ^6.1.10
   smooth_page_indicator: ^1.2.1
-  camera: ^0.10.5+4  # Keep at 0.10.x for now to avoid major version jump
-  google_generative_ai: ^0.1.0  # Keep at 0.2.0 for now to avoid major version jump
-  connectivity_plus: ^5.0.2  # Added for network connectivity checking
+  camera: ^0.10.5+4
+  google_generative_ai: ^0.1.0
+  connectivity_plus: ^5.0.2
   uuid: ^4.5.1
+  flutter_localizations:
+    sdk: flutter
 
 # Remove the standalone 'dependencies:' line
 dev_dependencies:
@@ -83,7 +83,7 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
+  generate: true # Enable Flutter's localization generation
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -97,6 +97,9 @@ flutter:
     - assets/images/facebook_dark.png
     - assets/images/motdepasseoublié.png
     - assets/images/emailverif.png
+    - assets/images/person.png
+    - assets/images/prestataire.png
+
 
   
 

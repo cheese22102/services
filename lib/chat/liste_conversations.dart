@@ -121,7 +121,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           showSidebar: true,
           showNotifications: true,
           currentIndex: _selectedIndex,
-          backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
+          // backgroundColor removed to use default from CustomAppBar
         ),
         body: Column(
           children: [
@@ -306,6 +306,33 @@ class _ChatListScreenState extends State<ChatListScreen> {
         bottomNavigationBar: CustomBottomNav(
           currentIndex: _selectedIndex,
         ),
+        floatingActionButton: SizedBox( // Wrap with SizedBox to control size
+          width: 70, // 25% bigger than default 56
+          height: 70, // 25% bigger than default 56
+          child: Container( // Wrap FAB in a Container with solid color
+            decoration: BoxDecoration(
+              shape: BoxShape.circle, // Ensure container is also circular
+              color: AppColors.primaryGreen, // Solid green color
+              boxShadow: [ // Keep existing shadow
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              onPressed: () {
+                context.go('/clientHome/chatbot'); // Navigate to chatbot page
+              },
+              backgroundColor: Colors.transparent, // Make FAB transparent
+              elevation: 0, // Remove default elevation to avoid color overlap
+              shape: CircleBorder(), // Ensure it's perfectly rounded
+              child: Icon(Icons.smart_toy_rounded, color: Colors.white, size: 32), // Icon color remains white
+            ),
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat, // Position at bottom right
       ),
     );
   }

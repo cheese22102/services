@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class CustomSnackbar {
   /// Shows a custom styled snackbar that matches the app's design
@@ -9,36 +8,64 @@ class CustomSnackbar {
     bool isError = true,
     Duration duration = const Duration(seconds: 4),
   }) {
+    // Ensure the context is mounted before showing the snackbar
+    if (!context.mounted) {
+      return;
+    }
+
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
-    final snackBar = SnackBar(
-      content: Text(
-        message,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          color: Colors.white,
-          fontWeight: FontWeight.w500,
+    final backgroundColor = isError 
+        ? (isDarkMode ? const Color(0xFF8B2D2D) : const Color(0xFFD32F2F))
+        : (isDarkMode ? const Color(0xFF3A523E) : const Color(0xFF4CAF50));
+    final textColor = Colors.white;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Builder( // Added Builder to get a new context for the button
+          builder: (builderContext) => Row(
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
+                color: textColor,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(builderContext).textTheme.bodyMedium?.copyWith( // Use builderContext
+                    fontSize: 14,
+                    color: textColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(builderContext).hideCurrentSnackBar(); // Use builderContext
+                },
+                child: Text(
+                  'OK',
+                  style: Theme.of(builderContext).textTheme.labelLarge?.copyWith( // Use builderContext
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      backgroundColor: isError 
-          ? (isDarkMode ? const Color(0xFF8B2D2D) : const Color(0xFFD32F2F))
-          : (isDarkMode ? const Color(0xFF3A523E) : const Color(0xFF4CAF50)),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: const EdgeInsets.all(16),
-      duration: duration,
-      action: SnackBarAction(
-        label: 'OK',
-        textColor: Colors.white,
-        onPressed: () {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        },
+        backgroundColor: backgroundColor,
+        duration: duration,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: EdgeInsets.fromLTRB(16, kToolbarHeight + 10, 16, 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
-
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
   
   /// Shows a success message
@@ -75,33 +102,11 @@ class CustomSnackbar {
     required String message,
     Duration duration = const Duration(seconds: 4),
   }) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    final snackBar = SnackBar(
-      content: Text(
-        message,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          color: Colors.white,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      backgroundColor: isDarkMode ? const Color(0xFF2D4263) : const Color(0xFF2196F3),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: const EdgeInsets.all(16),
+    show(
+      context: context,
+      message: message,
+      isError: false, // Info is not an error
       duration: duration,
-      action: SnackBarAction(
-        label: 'OK',
-        textColor: Colors.white,
-        onPressed: () {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        },
-      ),
     );
-
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 }

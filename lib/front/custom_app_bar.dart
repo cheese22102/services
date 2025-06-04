@@ -46,7 +46,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     
     return AppBar(
       elevation: 0,
-      backgroundColor: backgroundColor ?? (isDarkMode ? AppColors.darkBackground : AppColors.lightBackground),
+      backgroundColor: backgroundColor ?? (isDarkMode ? Colors.grey.shade900 : Colors.white), // Matched with CustomBottomNav
       centerTitle: true,
       leading: _buildLeadingWidget(context, defaultIconColor),
       title: Text(
@@ -117,11 +117,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 if (unreadCount > 0)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: 6, // Adjusted position
+                    right: 6, // Adjusted position
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      width: 12, // Increased size
+                      height: 12, // Increased size
                       decoration: BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,

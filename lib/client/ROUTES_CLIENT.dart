@@ -19,7 +19,6 @@ import 'services/reservation_page.dart';
 import 'services/client_reservations_page.dart';
 import 'services/favorite_providers_page.dart';
 import 'services/reservation_details_page.dart';
-// Add imports for reclamation pages
 import 'services/reclamation_form_page.dart';
 import 'services/client_reclamations_page.dart';
 import 'services/client_reclamation_details_page.dart';
@@ -173,11 +172,7 @@ final clientRoutes = GoRoute(
       path: 'notifications',
       builder: (context, state) => const NotificationsPage(),
     ),
-    // Make sure this route is properly defined
-    // Add a route for chat conversations
-  
-    // Add provider-details route
-    // Provider details route
+
     GoRoute(
       path: 'provider-details/:providerId',
       builder: (context, state) {

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../models/reclamation_model.dart';
+import '../front/app_colors.dart'; // Import AppColors
 
 class ReclamationDetailsPage extends StatefulWidget {
   final String reclamationId;
@@ -211,284 +212,341 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Détails de la réclamation'),
+        title: Text(
+          'Détails de la réclamation',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+        elevation: 4,
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black87,
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                color: primaryColor,
+              ),
+            )
           : _reclamation == null
-              ? const Center(child: Text('Réclamation introuvable'))
+              ? Center(
+                  child: Text(
+                    'Réclamation introuvable',
+                    style: GoogleFonts.poppins(
+                      color: Colors.red[700],
+                      fontSize: 16,
+                    ),
+                  ),
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Status badge
-                      _buildStatusBadge(isDarkMode),
+                      // Card for Reclamation Summary
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSummaryInfoRow(
+                                'Titre de la réclamation',
+                                _reclamation!.title,
+                                isDarkMode,
+                                isTitle: true, // Special styling for title
+                              ),
+                              const SizedBox(height: 12),
+                              _buildSummaryInfoRow(
+                                'Date de soumission',
+                                DateFormat('dd/MM/yyyy à HH:mm').format(_reclamation!.createdAt.toDate()),
+                                isDarkMode,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildSummaryInfoRow(
+                                'Statut',
+                                _getReclamationStatusText(_reclamation!.status),
+                                isDarkMode,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       
                       const SizedBox(height: 16),
                       
-                      // Reclamation title
-                      Text(
-                        _reclamation!.title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Date
-                      Text(
-                        'Soumise le ${DateFormat('dd/MM/yyyy à HH:mm').format(_reclamation!.createdAt.toDate())}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Parties involved
-                      _buildPartiesSection(isDarkMode),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Reservation details
-                      _buildReservationSection(isDarkMode),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Description
-                      Text(
-                        'Description',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
+                      // Card for Parties involved
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          _reclamation!.description,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Images
-                      if (_reclamation!.imageUrls.isNotEmpty) ...[
-                        Text(
-                          'Images',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: isDarkMode ? Colors.white : Colors.black,
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        SizedBox(
-                          height: 200,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _reclamation!.imageUrls.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    // Show full screen image
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => Dialog(
-                                        child: Image.network(
-                                          _reclamation!.imageUrls[index],
-                                          fit: BoxFit.contain,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    width: 200,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      image: DecorationImage(
-                                        image: NetworkImage(_reclamation!.imageUrls[index]),
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                      ],
-                      
-                      // Admin response
-                      Text(
-                        'Réponse de l\'administrateur',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      if (_reclamation!.status == 'pending') ...[
-                        TextField(
-                          controller: _responseController,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            hintText: 'Entrez votre réponse ici...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            filled: true,
-                            fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Action buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => _resolveReclamation('rejected'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Rejeter',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            
-                            const SizedBox(width: 16),
-                            
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => _resolveReclamation('resolved'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Résoudre',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else ...[
-                        Container(
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
                           padding: const EdgeInsets.all(16),
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _reclamation!.status == 'resolved' ? Colors.green : Colors.red,
-                            ),
-                          ),
-                          child: Text(
-                            _reclamation!.adminResponse ?? 'Aucune réponse fournie',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              color: isDarkMode ? Colors.white : Colors.black87,
-                            ),
-                          ),
+                          child: _buildPartiesSection(isDarkMode),
                         ),
-                      ],
-                    ],
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Card for Reservation details
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildReservationSection(isDarkMode),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Card for Description
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+              Text(
+                'Description',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _reclamation!.description,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+                      
+      const SizedBox(height: 16),
+                      
+      // Card for Images
+      if (_reclamation!.imageUrls.isNotEmpty) ...[
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 200,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _reclamation!.imageUrls.length,
+                    itemBuilder: (context, index) {
+                      final imageUrl = _reclamation!.imageUrls[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => _showFullScreenImage(context, imageUrl),
+                          child: Container(
+                            width: 200,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                              ),
+                              image: DecorationImage(
+                                image: NetworkImage(imageUrl),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+                      
+      // Card for Admin response/actions
+      Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Réponse de l\'administrateur',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_reclamation!.status == 'pending') ...[
+                TextField(
+                  controller: _responseController,
+                  maxLines: 5,
+                  style: GoogleFonts.poppins(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Entrez votre réponse ici...',
+                    hintStyle: GoogleFonts.poppins(
+                      color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: primaryColor,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _resolveReclamation('rejected'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade600,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Rejeter',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _resolveReclamation('resolved'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Résoudre',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _reclamation!.status == 'resolved' ? primaryColor : Colors.red.shade600,
+                    ),
+                  ),
+                  child: Text(
+                    _reclamation!.adminResponse ?? 'Aucune réponse fournie',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ],
+  ),
+),
     );
   }
   
-  Widget _buildStatusBadge(bool isDarkMode) {
-    Color statusColor;
-    String statusText;
-    
-    switch (_reclamation!.status) {
-      case 'pending':
-        statusColor = Colors.orange;
-        statusText = 'En attente';
-        break;
-      case 'resolved':
-        statusColor = Colors.green;
-        statusText = 'Résolue';
-        break;
-      case 'rejected':
-        statusColor = Colors.red;
-        statusText = 'Rejetée';
-        break;
-      default:
-        statusColor = Colors.grey;
-        statusText = 'Inconnu';
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor),
-      ),
-      child: Text(
-        statusText,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          color: statusColor,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
   
   Widget _buildPartiesSection(bool isDarkMode) {
     return Column(
@@ -499,7 +557,7 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
         
@@ -508,98 +566,175 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
+            color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+            ),
           ),
           child: Column(
             children: [
               // Submitter
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 12),
-                  
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Plaignant',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+              _submitterData == null
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_off, color: Colors.red.shade400),
+                          const SizedBox(width: 8),
+                          Expanded( // Wrap Text in Expanded
+                            child: Text(
+                              'Informations du plaignant non disponibles',
+                              style: GoogleFonts.poppins(
+                                color: isDarkMode ? Colors.red.shade200 : Colors.red.shade700,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              overflow: TextOverflow.ellipsis, // Add overflow handling
+                              maxLines: 2, // Allow two lines
+                            ),
                           ),
+                        ],
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundImage: (_submitterData!['avatarUrl'] != null && _submitterData!['avatarUrl'].isNotEmpty)
+                              ? NetworkImage(_submitterData!['avatarUrl'])
+                              : null,
+                          child: (_submitterData!['avatarUrl'] == null || _submitterData!['avatarUrl'].isEmpty)
+                              ? Icon(
+                                  Icons.person,
+                                  color: isDarkMode ? Colors.white : Colors.blueGrey,
+                                )
+                              : null,
+                          backgroundColor: (_submitterData!['avatarUrl'] == null || _submitterData!['avatarUrl'].isEmpty)
+                              ? (isDarkMode ? Colors.blueGrey.shade700 : Colors.blueGrey.shade200)
+                              : null,
                         ),
                         
-                        Text(
-                          '${_submitterData?['firstname'] ?? ''} ${_submitterData?['lastname'] ?? ''}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        const SizedBox(width: 12),
+                        
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Plaignant',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                              
+                              Text(
+                                '${_submitterData!['firstname'] ?? 'N/A'} ${_submitterData!['lastname'] ?? 'N/A'}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis, // Add overflow handling
+                                maxLines: 2, // Allow two lines
+                              ),
+                              if (_submitterData!['phone'] != null && _submitterData!['phone'].isNotEmpty)
+                                Text(
+                                  _submitterData!['phone'],
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis, // Add overflow handling
+                                  maxLines: 2, // Allow two lines
+                                ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
               
               const SizedBox(height: 16),
               
               // Target
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.orange,
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 12),
-                  
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Défendeur',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+              _targetData == null
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_off, color: Colors.red.shade400),
+                          const SizedBox(width: 8),
+                          Expanded( // Wrap Text in Expanded
+                            child: Text(
+                              'Informations du défendeur non disponibles',
+                              style: GoogleFonts.poppins(
+                                color: isDarkMode ? Colors.red.shade200 : Colors.red.shade700,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              overflow: TextOverflow.ellipsis, // Add overflow handling
+                              maxLines: 2, // Allow two lines
+                            ),
                           ),
+                        ],
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundImage: (_targetData!['avatarUrl'] != null && _targetData!['avatarUrl'].isNotEmpty)
+                              ? NetworkImage(_targetData!['avatarUrl'])
+                              : null,
+                          child: (_targetData!['avatarUrl'] == null || _targetData!['avatarUrl'].isEmpty)
+                              ? Icon(
+                                  Icons.person,
+                                  color: isDarkMode ? Colors.white : Colors.orange,
+                                )
+                              : null,
+                          backgroundColor: (_targetData!['avatarUrl'] == null || _targetData!['avatarUrl'].isEmpty)
+                              ? (isDarkMode ? Colors.orange.shade700 : Colors.orange.shade200)
+                              : null,
                         ),
                         
-                        Text(
-                          '${_targetData?['firstname'] ?? ''} ${_targetData?['lastname'] ?? ''}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black,
+                        const SizedBox(width: 12),
+                        
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Défendeur',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                              
+                              Text(
+                                '${_targetData!['firstname'] ?? 'N/A'} ${_targetData!['lastname'] ?? 'N/A'}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis, // Add overflow handling
+                                maxLines: 2, // Allow two lines
+                              ),
+                              if (_targetData!['phone'] != null && _targetData!['phone'].isNotEmpty)
+                                Text(
+                                  _targetData!['phone'],
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis, // Add overflow handling
+                                  maxLines: 2, // Allow two lines
+                                ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -616,7 +751,7 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
         
@@ -625,67 +760,37 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
+            color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              _buildReservationInfoRow(
                 'Service',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              
-              Text(
-                _reservationData?['serviceName'] ?? 'Service non spécifié',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
+                _reservationData?['serviceName'] ?? 'Non spécifié',
+                isDarkMode,
               ),
               
               const SizedBox(height: 12),
               
-              Text(
+              _buildReservationInfoRow(
                 'Date de réservation',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              
-              Text(
                 _reservationData?['createdAt'] != null
                     ? DateFormat('dd/MM/yyyy à HH:mm').format((_reservationData!['createdAt'] as Timestamp).toDate())
-                    : 'Date non spécifiée',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
+                    : 'Non spécifiée',
+                isDarkMode,
               ),
               
               const SizedBox(height: 12),
               
-              Text(
+              _buildReservationInfoRow(
                 'Statut de la réservation',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              
-              Text(
                 _getReservationStatusText(_reservationData?['status']),
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
+                isDarkMode,
               ),
             ],
           ),
@@ -694,6 +799,29 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
     );
   }
   
+  Widget _buildReservationInfoRow(String label, String value, bool isDarkMode) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
   String _getReservationStatusText(String? status) {
     switch (status) {
       case 'pending':
@@ -708,6 +836,124 @@ class _ReclamationDetailsPageState extends State<ReclamationDetailsPage> {
         return 'Annulée';
       default:
         return 'Statut inconnu';
+    }
+  }
+
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(
+              'Visualisation de l\'image',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+            foregroundColor: isDarkMode ? Colors.white : Colors.black87,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          backgroundColor: isDarkMode ? Colors.black : Colors.white,
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              boundaryMargin: const EdgeInsets.all(20),
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.network(
+                imageUrl,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              (loadingProgress.expectedTotalBytes ?? 1)
+                          : null,
+                      color: primaryColor,
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.broken_image_outlined,
+                        size: 64,
+                        color: isDarkMode ? Colors.red.shade300 : Colors.red.shade700,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Impossible de charger l\'image',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryInfoRow(String label, String value, bool isDarkMode, {bool isTitle = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+        Text(
+          value,
+          style: isTitle
+              ? GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                )
+              : GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: isTitle ? 2 : 1, // Allow title to wrap, others single line
+        ),
+      ],
+    );
+  }
+
+  String _getReclamationStatusText(String? status) {
+    switch (status) {
+      case 'pending':
+        return 'En attente';
+      case 'resolved':
+        return 'Résolue';
+      case 'rejected':
+        return 'Rejetée';
+      default:
+        return 'Inconnu';
     }
   }
 }

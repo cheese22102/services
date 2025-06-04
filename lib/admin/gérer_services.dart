@@ -154,13 +154,13 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
           ),
         ),
         backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
-        elevation: 2,
+        elevation: 4, // Consistent elevation with AdminHomePage
         iconTheme: IconThemeData(
           color: isDarkMode ? Colors.white : Colors.black87,
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/admin'), // Update navigation to use GoRouter
+          onPressed: () => context.go('/admin'),
         ),
       ),
       body: SingleChildScrollView(
@@ -168,11 +168,11 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
         child: Column(
           children: [
             Card(
-              elevation: 2,
+              elevation: 4, // Consistent elevation
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              color: isDarkMode ? AppColors.darkBackground : Colors.white,
+              color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent card background
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Form(
@@ -210,11 +210,11 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
             ),
             const SizedBox(height: 24),
             Card(
-              elevation: 2,
+              elevation: 4, // Consistent elevation
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              color: isDarkMode ? AppColors.darkBackground : Colors.white,
+              color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent card background
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -582,7 +582,7 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
         final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
         
         return AlertDialog(
-          backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+          backgroundColor: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent background
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -765,40 +765,74 @@ class _ServicesManagementPageState extends State<ServicesManagementPage> {
   void _deleteService(String serviceId) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: const Text('Voulez-vous vraiment supprimer ce service ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Consistent background
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await FirebaseFirestore.instance
-                    .collection('services')
-                    .doc(serviceId)
-                    .delete();
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Service supprimé avec succès')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Erreur: ${e.toString()}')),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Supprimer'),
+          title: Text(
+            'Confirmer la suppression',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: isDarkMode ? Colors.white : Colors.black87,
+            ),
           ),
-        ],
-      ),
+          content: Text(
+            'Voulez-vous vraiment supprimer ce service ?',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Annuler',
+                style: GoogleFonts.poppins(
+                  color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context); // Close dialog
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('services')
+                      .doc(serviceId)
+                      .delete();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Service supprimé avec succès')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur: ${e.toString()}')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Supprimer',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

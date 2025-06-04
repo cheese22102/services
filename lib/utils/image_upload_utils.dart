@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'cloudinary_service.dart';
+import 'image_gallery_utils.dart'; // Add this import
 
 class ImageUploadUtils {
   /// Pick multiple images from gallery
@@ -230,9 +231,9 @@ class ImageUploadUtils {
   
   /// Build a horizontal image picker with preview and camera option
   static Widget buildImagePickerPreview({
-    required List<String> imageUrls,
+    required List<dynamic> images, // Changed to dynamic to accept File or String
     required Function(int) onRemoveImage,
-    required Function() onAddImages,  // Changed parameter type
+    required Function() onAddImages,
     required bool isLoading,
     bool isDarkMode = false,
     double height = 100,
@@ -240,62 +241,96 @@ class ImageUploadUtils {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (imageUrls.isNotEmpty)
+        if (images.isNotEmpty)
           SizedBox(
             height: height,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: imageUrls.length,
+              itemCount: images.length,
               itemBuilder: (context, index) {
-                return Stack(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      width: height,
-                      height: height,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                        ),
-                        image: DecorationImage(
-                          image: NetworkImage(imageUrls[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 12,
-                      child: GestureDetector(
-                        onTap: () => onRemoveImage(index),
+                final item = images[index];
+                ImageProvider imageProvider;
+                if (item is File) {
+                  imageProvider = FileImage(item);
+                } else if (item is String) {
+                  imageProvider = NetworkImage(item);
+                } else {
+                  imageProvider = const AssetImage('assets/images/placeholder.png'); // Fallback
+                }
+
+                return Container( // Wrap each item in a Container for consistent margin
+                  margin: const EdgeInsets.only(right: 8),
+                  width: height,
+                  height: height,
+                  child: Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          if (item is String) { // Only open full screen for uploaded images (URLs)
+                            ImageGalleryUtils.showFullScreenImage(context, item);
+                          } else if (item is File) {
+                            // For local files, you might want to show a temporary preview or do nothing
+                            // For simplicity, we'll only enable full screen for uploaded images.
+                          }
+                        },
                         child: Container(
-                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.7),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 16,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                            ),
+                            image: DecorationImage(
+                              image: imageProvider,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => onRemoveImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
           ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed: isLoading ? null : onAddImages,  // Fixed this line
-          icon: const Icon(Icons.add_photo_alternate),
-          label: Text(isLoading ? 'Chargement...' : 'Ajouter des photos'),
+          onPressed: isLoading ? null : onAddImages,
+          icon: Icon(
+            Icons.add_photo_alternate,
+            color: isDarkMode ? Colors.white : Colors.white, // Icon color
+          ),
+          label: Text(
+            isLoading ? 'Chargement...' : 'Ajouter des photos',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.white, // Text color
+            ),
+          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
+            backgroundColor: isDarkMode ? Colors.blue.shade700 : Colors.blue, // Button background
+            foregroundColor: isDarkMode ? Colors.white : Colors.white, // Splash color
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8), // Rounded corners
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Padding
           ),
         ),
       ],

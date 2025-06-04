@@ -4,8 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import '../front/custom_button.dart';
 import '../front/custom_snackbar.dart';
@@ -13,6 +11,7 @@ import '../front/app_colors.dart';
 import '../front/custom_text_field.dart';
 import '../front/loading_overlay.dart';
 import '../front/page_transition.dart';
+import '../utils/cloudinary_service.dart';
 
 class Signup2Page extends StatefulWidget {
   const Signup2Page({super.key});
@@ -26,23 +25,20 @@ class _Signup2PageState extends State<Signup2Page> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  
+  final _ageController = TextEditingController(text: '25'); 
+
   String _role = "client";
-  String _gender = "homme"; // Default to homme
-  int _age = 25; // Default age
+  String _gender = "homme";
   File? _profileImage;
   bool _isLoading = false;
-  int _currentStep = 0; // Track the current step in the walkthrough
+  int _currentStep = 0;
   
-  // For image upload
-  final String cloudName = "dfk7mskxv";
-  final String uploadPreset = "plateforme_service";
-
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
+    _ageController.dispose(); // Dispose age controller
     super.dispose();
   }
 
@@ -57,24 +53,7 @@ class _Signup2PageState extends State<Signup2Page> {
     }
   }
 
-  Future<String?> _uploadImageToCloudinary(File imageFile) async {
-    final url = "https://api.cloudinary.com/v1_1/$cloudName/image/upload";
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(url));
-      request.fields['upload_preset'] = uploadPreset;
-      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        var responseData = await response.stream.bytesToString();
-        var jsonData = json.decode(responseData);
-        return jsonData['secure_url'];
-      } else {
-        return null;
-      }
-    } catch (e) {
-      return null;
-    }
-  }
+  // Removed _uploadImageToCloudinary as it's now in CloudinaryService
 
   Future<void> _saveUserInfo() async {
     if (!_formKey.currentState!.validate()) return;
@@ -90,10 +69,10 @@ class _Signup2PageState extends State<Signup2Page> {
         throw Exception("Utilisateur non connecté");
       }
       
-      // Upload profile image if selected
+      // Upload profile image if selected using CloudinaryService
       String? photoURL;
       if (_profileImage != null) {
-        photoURL = await _uploadImageToCloudinary(_profileImage!);
+        photoURL = await CloudinaryService.uploadImage(_profileImage!);
       }
       
       // Prepare user data
@@ -103,7 +82,7 @@ class _Signup2PageState extends State<Signup2Page> {
         'role': _role,
         'updatedAt': FieldValue.serverTimestamp(),
         'gender': _gender,
-        'age': _age,
+        'age': int.tryParse(_ageController.text) ?? 25, // Parse age from text field
         'phone': _phoneController.text.trim(),
       };
       
@@ -116,7 +95,10 @@ class _Signup2PageState extends State<Signup2Page> {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .update(userData);
+          .update({
+            ...userData,
+            'profileCompleted': true, // Mark profile as completed
+          });
       
       // Hide loading overlay
       LoadingOverlay.hide();
@@ -159,6 +141,7 @@ class _Signup2PageState extends State<Signup2Page> {
 
   // Move to next step in the walkthrough
   void _nextStep() {
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
     if (_currentStep < 2) { // We have 3 steps (0, 1, 2)
       // Make sure any loading overlay is hidden before changing steps
       LoadingOverlay.hide();
@@ -174,6 +157,7 @@ class _Signup2PageState extends State<Signup2Page> {
 
   // Move to previous step in the walkthrough
   void _previousStep() {
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
     if (_currentStep > 0) {
       // Make sure any loading overlay is hidden before changing steps
       LoadingOverlay.hide();
@@ -195,8 +179,12 @@ class _Signup2PageState extends State<Signup2Page> {
       // Validate phone number (8 digits for Tunisia)
       final phoneRegex = RegExp(r'^[0-9]{8}$');
       return phoneRegex.hasMatch(_phoneController.text);
+    } else if (_currentStep == 2) {
+      // Validate age for step 2
+      final age = int.tryParse(_ageController.text);
+      return age != null && age >= 18 && age <= 80;
     }
-    return true; // Step 2 doesn't need validation
+    return true;
   }
 
   @override
@@ -205,7 +193,7 @@ class _Signup2PageState extends State<Signup2Page> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -221,7 +209,7 @@ class _Signup2PageState extends State<Signup2Page> {
         title: Text(
           'Complétez votre profil',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.05,
+            fontSize: 24, // Consistent font size
             fontWeight: FontWeight.w600,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
@@ -232,8 +220,8 @@ class _Signup2PageState extends State<Signup2Page> {
         child: SingleChildScrollView(
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: size.width * 0.06,
-              vertical: size.height * 0.02,
+              horizontal: 24, // Consistent horizontal padding
+              vertical: 16, // Consistent vertical padding
             ),
             child: Form(
               key: _formKey,
@@ -248,19 +236,19 @@ class _Signup2PageState extends State<Signup2Page> {
                       isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                     ),
                   ),
-                  SizedBox(height: size.height * 0.02),
+                  const SizedBox(height: 24), // Consistent spacing
                   
                   // Step indicator
                   Center(
                     child: Text(
                       'Étape ${_currentStep + 1} sur 3',
                       style: GoogleFonts.poppins(
-                        fontSize: size.width * 0.04,
+                        fontSize: 16, // Consistent font size
                         color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       ),
                     ),
                   ),
-                  SizedBox(height: size.height * 0.03),
+                  const SizedBox(height: 32), // Consistent spacing
                   
                   // Profile image (shown on all steps)
                   if (_currentStep == 0)
@@ -270,7 +258,7 @@ class _Signup2PageState extends State<Signup2Page> {
                         child: Stack(
                           children: [
                             CircleAvatar(
-                              radius: 60,
+                              radius: 50, // Reduced radius
                               backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                               backgroundImage: _profileImage != null 
                                   ? FileImage(_profileImage!) 
@@ -278,7 +266,7 @@ class _Signup2PageState extends State<Signup2Page> {
                               child: _profileImage == null
                                   ? Icon(
                                       Icons.person,
-                                      size: 60,
+                                      size: 50, // Reduced size
                                       color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
                                     )
                                   : null,
@@ -303,12 +291,12 @@ class _Signup2PageState extends State<Signup2Page> {
                         ),
                       ),
                     ),
-                  SizedBox(height: size.height * 0.03),
+                  const SizedBox(height: 32), // Consistent spacing
                   
                   // Step content
                   _buildCurrentStep(context, size, isDarkMode),
                   
-                  SizedBox(height: size.height * 0.04),
+                  const SizedBox(height: 32), // Consistent spacing
                   
                   // Next/Submit button
                   CustomButton(
@@ -316,7 +304,9 @@ class _Signup2PageState extends State<Signup2Page> {
                     onPressed: _validateCurrentStep() ? _nextStep : null,
                     isLoading: _currentStep == 2 && _isLoading, // Only show loading on final step
                     width: double.infinity,
+                    height: 50, // Consistent button height
                     useFullScreenLoader: _currentStep == 2, // Only use full screen loader on final step
+                    backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent primary color
                   ),
                 ],
               ),
@@ -347,20 +337,20 @@ class _Signup2PageState extends State<Signup2Page> {
         Text(
           'Informations personnelles',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.06,
+            fontSize: 24, // Consistent font size
             fontWeight: FontWeight.bold,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.01),
+        const SizedBox(height: 8), // Consistent spacing
         Text(
           'Veuillez entrer votre nom et prénom',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
+            fontSize: 16, // Consistent font size
             color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
           ),
         ),
-        SizedBox(height: size.height * 0.03),
+        const SizedBox(height: 24), // Consistent spacing
         
         // First name field
         CustomTextField(
@@ -374,7 +364,7 @@ class _Signup2PageState extends State<Signup2Page> {
             return null;
           },
         ),
-        SizedBox(height: size.height * 0.02),
+        const SizedBox(height: 16), // Consistent spacing
         
         // Last name field
         CustomTextField(
@@ -399,20 +389,20 @@ class _Signup2PageState extends State<Signup2Page> {
         Text(
           'Coordonnées',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.06,
+            fontSize: 24, // Consistent font size
             fontWeight: FontWeight.bold,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.01),
+        const SizedBox(height: 8), // Consistent spacing
         Text(
           'Veuillez entrer votre numéro de téléphone',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
+            fontSize: 16, // Consistent font size
             color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
           ),
         ),
-        SizedBox(height: size.height * 0.03),
+        const SizedBox(height: 24), // Consistent spacing
         
         // Phone number field with enhanced Tunisian validation
         CustomTextField(
@@ -487,31 +477,31 @@ class _Signup2PageState extends State<Signup2Page> {
         Text(
           'Préférences',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.06,
+            fontSize: 24, // Consistent font size
             fontWeight: FontWeight.bold,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.01),
+        const SizedBox(height: 8), // Consistent spacing
         Text(
           'Quelques informations supplémentaires',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
+            fontSize: 16, // Consistent font size
             color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
           ),
         ),
-        SizedBox(height: size.height * 0.03),
+        const SizedBox(height: 24), // Consistent spacing
         
         // Gender selection
         Text(
           'Genre',
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
+            fontSize: 16, // Consistent font size
             fontWeight: FontWeight.w500,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.01),
+        const SizedBox(height: 8), // Consistent spacing
         Row(
           children: [
             Expanded(
@@ -519,7 +509,7 @@ class _Signup2PageState extends State<Signup2Page> {
                 title: Text(
                   'Homme',
                   style: GoogleFonts.poppins(
-                    fontSize: size.width * 0.04,
+                    fontSize: 16, // Consistent font size
                     color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
@@ -539,7 +529,7 @@ class _Signup2PageState extends State<Signup2Page> {
                 title: Text(
                   'Femme',
                   style: GoogleFonts.poppins(
-                    fontSize: size.width * 0.04,
+                    fontSize: 16, // Consistent font size
                     color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
@@ -556,91 +546,117 @@ class _Signup2PageState extends State<Signup2Page> {
             ),
           ],
         ),
-        SizedBox(height: size.height * 0.03),
+        const SizedBox(height: 24), // Consistent spacing
         
-        // Age slider
-        Text(
-          'Âge: $_age ans',
-          style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
-            fontWeight: FontWeight.w500,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
-        Slider(
-          value: _age.toDouble(),
-          min: 18,
-          max: 80,
-          divisions: 62,
-          label: _age.toString(),
-          onChanged: (double value) {
-            setState(() {
-              _age = value.round();
-            });
+        // Age input
+        CustomTextField(
+          controller: _ageController,
+          labelText: 'Âge',
+          hintText: 'Entrez votre âge',
+          keyboardType: TextInputType.number,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Veuillez entrer votre âge';
+            }
+            final age = int.tryParse(value);
+            if (age == null || age < 18 || age > 80) {
+              return 'L\'âge doit être entre 18 et 80 ans';
+            }
+            return null;
           },
-          activeColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-          inactiveColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
         ),
-        SizedBox(height: size.height * 0.03),
+        const SizedBox(height: 24), // Consistent spacing
         
-        // Role selection
+        // Role selection (images)
         Text(
-          'Type de compte',
+          'Je suis...', // Playful message
           style: GoogleFonts.poppins(
-            fontSize: size.width * 0.04,
+            fontSize: 16, // Consistent font size
             fontWeight: FontWeight.w500,
             color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.01),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+        const SizedBox(height: 8), // Consistent spacing
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildRoleOption(
+              context,
+              'client',
+              'Client',
+              'assets/images/person.png',
+              isDarkMode,
             ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _role,
-              isExpanded: true,
-              dropdownColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
-              icon: Icon(
-                Icons.arrow_drop_down,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-              items: [
-                DropdownMenuItem(
-                  value: 'client',
-                  child: Text(
-                    'Client',
-                    style: GoogleFonts.poppins(
-                      fontSize: size.width * 0.04,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: 'prestataire',
-                  child: Text(
-                    'Prestataire de services',
-                    style: GoogleFonts.poppins(
-                      fontSize: size.width * 0.04,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: (value) => setState(() => _role = value!),
+            _buildRoleOption(
+              context,
+              'prestataire',
+              'Prestataire de services',
+              'assets/images/prestataire.png',
+              isDarkMode,
             ),
-          ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildRoleOption(BuildContext context, String roleValue, String roleText, String imagePath, bool isDarkMode) {
+    final isSelected = _role == roleValue;
+    return SizedBox( // Wrap with SizedBox for fixed height
+      height: 155, // Fixed height for the entire card
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _role = roleValue;
+          });
+        },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                    : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected
+                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                      : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                  width: 2,
+                ),
+              ),
+              child: Center(
+                child: Image.asset(
+                  imagePath,
+                  height: 60,
+                  width: 60,
+                  fit: BoxFit.contain, // Changed from cover to contain
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 80, // Constrain width to force wrapping
+              child: Text(
+                roleText,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected
+                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                      : (isDarkMode ? Colors.white : Colors.black87),
+                ),
+                textAlign: TextAlign.center, // Ensure text is centered within its constrained width
+                maxLines: 2, // Allow up to 2 lines
+                overflow: TextOverflow.ellipsis, // Add ellipsis if it still overflows
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

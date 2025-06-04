@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../notifications_service.dart';
 import 'package:go_router/go_router.dart'; // Add this import
+import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
+import '../front/app_colors.dart'; // Import AppColors
 
 class PostsValidationPage extends StatefulWidget {
   const PostsValidationPage({super.key});
@@ -12,6 +14,15 @@ class PostsValidationPage extends StatefulWidget {
 
 class _PostsValidationPageState extends State<PostsValidationPage> {
   final _rejectionReasonController = TextEditingController();
+  final List<String> _predefinedReasons = [
+    'Problème(s) avec l\'image(s)',
+    'Prix irréaliste',
+    'Description insuffisante',
+    'Contenu inapproprié',
+    'Informations manquantes',
+    'Catégorie incorrecte',
+  ];
+  List<String> _selectedReasons = [];
 
   @override
   void dispose() {
@@ -20,67 +31,241 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
   }
 
   void _showRejectionDialog(String postId) {
-    _rejectionReasonController.clear(); 
+    _rejectionReasonController.clear();
+    _selectedReasons = []; // Clear previous selections
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Raison du refus'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Veuillez indiquer la raison du refus de cette publication',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _rejectionReasonController,
-              decoration: const InputDecoration(
-                labelText: 'Raison',
-                border: OutlineInputBorder(),
-                hintText: 'Expliquez pourquoi la publication est refusée',
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+
+        return StatefulBuilder( // Use StatefulBuilder to manage dialog state
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              maxLines: 3,
+              title: Text(
+                'Raison du refus',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Veuillez indiquer la raison du refus de cette publication:',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: isDarkMode ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._predefinedReasons.map((reason) {
+                      return CheckboxListTile(
+                        title: Text(
+                          reason,
+                          style: GoogleFonts.poppins(
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        value: _selectedReasons.contains(reason),
+                        onChanged: (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              _selectedReasons.add(reason);
+                            } else {
+                              _selectedReasons.remove(reason);
+                            }
+                          });
+                        },
+                        activeColor: primaryColor,
+                        checkColor: Colors.white,
+                      );
+                    }).toList(),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _rejectionReasonController,
+                      style: GoogleFonts.poppins(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Autre raison (optionnel)',
+                        labelStyle: GoogleFonts.poppins(
+                          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        hintText: 'Ajoutez une raison personnalisée',
+                        hintStyle: GoogleFonts.poppins(
+                          color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                        ),
+                        filled: true,
+                        fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                      ),
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _rejectionReasonController.clear();
+                    _selectedReasons = [];
+                  },
+                  child: Text(
+                    'Annuler',
+                    style: GoogleFonts.poppins(
+                      color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final customReason = _rejectionReasonController.text.trim();
+                    if (_selectedReasons.isEmpty && customReason.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Veuillez sélectionner ou indiquer au moins une raison'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    String finalReason = _selectedReasons.join(', ');
+                    if (customReason.isNotEmpty) {
+                      if (finalReason.isNotEmpty) {
+                        finalReason += ', ';
+                      }
+                      finalReason += customReason;
+                    }
+
+                    Navigator.pop(context);
+                    _rejectPost(postId, finalReason);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Refuser',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showValidationConfirmationDialog(String postId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+        return AlertDialog(
+          backgroundColor: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Confirmer la validation',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+          content: Text(
+            'Voulez-vous vraiment valider cette publication ?',
+            style: GoogleFonts.poppins(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Annuler',
+                style: GoogleFonts.poppins(
+                  color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _validatePost(postId);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Valider',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _rejectionReasonController.clear();
-            },
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_rejectionReasonController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Veuillez indiquer une raison'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              _rejectPost(postId, _rejectionReasonController.text.trim());
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Refuser'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Validation des Posts'),
+        title: Text(
+          'Validation des Posts',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : Colors.white,
+        elevation: 4,
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black87,
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/admin'), // Update navigation to use GoRouter
@@ -90,23 +275,41 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
         stream: FirebaseFirestore.instance
             .collection('marketplace')
             .where('isValidated', isEqualTo: false)
-            .where('isRejected', isEqualTo: false) // Add this line to filter out rejected posts
+            .where('isRejected', isEqualTo: false) // Exclude rejected posts
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('Une erreur est survenue'));
+            return Center(
+              child: Text(
+                'Une erreur est survenue',
+                style: GoogleFonts.poppins(
+                  color: Colors.red[700],
+                  fontSize: 16,
+                ),
+              ),
+            );
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(
+                color: primaryColor,
+              ),
+            );
           }
 
           final posts = snapshot.data?.docs ?? [];
 
           if (posts.isEmpty) {
-            return const Center(
-              child: Text('Aucun post en attente de validation'),
+            return Center(
+              child: Text(
+                'Aucun post en attente de validation',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                ),
+              ),
             );
           }
 
@@ -119,60 +322,130 @@ class _PostsValidationPageState extends State<PostsValidationPage> {
 
               return Card(
                 margin: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (images.isNotEmpty)
-                      SizedBox(
-                        height: 200,
-                        child: PageView.builder(
-                          itemCount: images.length,
-                          itemBuilder: (context, imageIndex) {
-                            return Image.network(
-                              images[imageIndex],
-                              fit: BoxFit.cover,
-                            );
-                          },
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['title'] ?? '',
-                            style: Theme.of(context).textTheme.titleLarge,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+                child: InkWell( // Use InkWell for tap effect
+                  onTap: () {
+                    context.push('/admin/posts/${post.id}'); // Navigate to post details page
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (images.isNotEmpty)
+                        SizedBox(
+                          height: 200,
+                          child: PageView.builder(
+                            itemCount: images.length,
+                            itemBuilder: (context, imageIndex) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                                child: Image.network(
+                                  images[imageIndex],
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        color: primaryColor,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(
+                                        Icons.broken_image_outlined,
+                                        size: 50,
+                                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
                           ),
-                          const SizedBox(height: 8),
-                          Text(data['description'] ?? ''),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${data['price']} DT',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['title'] ?? '',
+                              style: GoogleFonts.poppins(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: isDarkMode ? Colors.white : Colors.black87,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Text(
+                              data['description'] ?? '',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: isDarkMode ? Colors.white70 : Colors.black87,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${data['price']?.toStringAsFixed(2) ?? 'N/A'} DT',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: isDarkMode ? AppColors.primaryGreen : Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    ButtonBar(
-                      children: [
-                        TextButton(
-                          onPressed: () => _showRejectionDialog(post.id),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('Rejeter'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => _showRejectionDialog(post.id),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.shade600,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Rejeter',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () => _showValidationConfirmationDialog(post.id), // Call confirmation dialog
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Valider',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        ElevatedButton(
-                          onPressed: () => _validatePost(post.id),
-                          child: const Text('Valider'),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

@@ -1,16 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:google_fonts/google_fonts.dart';
 import '../../front/app_colors.dart';
+import '../../front/app_spacing.dart';
+import '../../front/app_typography.dart';
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
-import '../../front/custom_dialog.dart';
 import '../../front/loading_overlay.dart';
+import '../../front/custom_snack.dart'; // Import CustomSnackBar
+import '../../utils/image_upload_utils.dart'; // Import ImageUploadUtils
+import '../../utils/image_gallery_utils.dart'; // Import ImageGalleryUtils
 
 class ModifyPostPage extends StatefulWidget {
   final DocumentSnapshot post;
@@ -20,16 +20,14 @@ class ModifyPostPage extends StatefulWidget {
   State<ModifyPostPage> createState() => _ModifyPostPageState();
 }
 
-// Update the variable name from _etatProduit to _condition to match ajouter_publication.dart
 class _ModifyPostPageState extends State<ModifyPostPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-  String _condition = 'Neuf';  // Changed from _etatProduit to _condition
+  String _condition = 'Neuf';
   List<File> _images = [];
   List<String> _existingImageUrls = [];
-  final _picker = ImagePicker();
   bool _isUploading = false;
   String? _titleError;
   String? _descriptionError;
@@ -46,7 +44,6 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
     _titleController.text = data['title'] ?? '';
     _descriptionController.text = data['description'] ?? '';
     _priceController.text = (data['price'] ?? 0).toString();
-    // Update to use 'condition' field from database instead of 'etat'
     _condition = data['condition'] ?? 'Neuf';
     
     if (data['images'] != null && data['images'] is List) {
@@ -55,10 +52,34 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFiles = await _picker.pickMultiImage();
-    if (pickedFiles.isNotEmpty) {
+    setState(() {
+      _isUploading = true; // Set uploading state to true when picking starts
+    });
+    try {
+      final pickedFiles = await ImageUploadUtils.pickMultipleImagesWithOptions(
+        context,
+        isDarkMode: Theme.of(context).brightness == Brightness.dark,
+      );
+      if (pickedFiles.isNotEmpty) {
+        if (_images.length + pickedFiles.length > 5) {
+          // Show a snackbar or dialog if too many images are selected
+          // For now, just take the allowed number
+          final remainingSlots = 5 - _images.length;
+          final filesToAdd = pickedFiles.take(remainingSlots).toList();
+          setState(() {
+            _images.addAll(filesToAdd);
+          });
+        } else {
+          setState(() {
+            _images.addAll(pickedFiles);
+          });
+        }
+      }
+    } catch (e) {
+      print('Error picking images: $e');
+    } finally {
       setState(() {
-        _images.addAll(pickedFiles.map((e) => File(e.path)).toList());
+        _isUploading = false; // Set uploading state to false when picking ends
       });
     }
   }
@@ -78,45 +99,15 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
   Future<List<String>> _uploadImages() async {
     if (_images.isEmpty) return [];
     
-    
-    List<String> uploadedUrls = [];
-    try {
-      for (var image in _images) {
-        final bytes = await image.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        
-        final response = await http.post(
-          Uri.parse('https://api.imgbb.com/1/upload'),
-          body: {
-            'key': 'YOUR_IMGBB_API_KEY',  // Replace with your actual API key
-            'image': base64Image,
-          },
-        );
-        
-        if (response.statusCode == 200) {
-          final jsonResponse = json.decode(response.body);
-          if (jsonResponse['success'] == true) {
-            uploadedUrls.add(jsonResponse['data']['url']);
-          }
-        }
-      }
-    } catch (e) {
-      print('Error uploading images: $e');
-    } finally {
-    }
-    
-    return uploadedUrls;
+    return await ImageUploadUtils.uploadMultipleImages(_images);
   }
 
   Future<void> _updatePost() async {
-    // Validate form
     if (!_validateForm()) return;
     
-    // Check if any changes were made
     final data = widget.post.data() as Map<String, dynamic>;
     bool hasChanges = false;
     
-    // Compare current values with original values
     if (_titleController.text.trim() != data['title'] ||
         _descriptionController.text.trim() != data['description'] ||
         double.parse(_priceController.text) != data['price'] ||
@@ -126,7 +117,6 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
       hasChanges = true;
     }
     
-    // If no changes were made, show message and return
     if (!hasChanges) {
       _showSnackBar('Aucune modification n\'a été effectuée');
       return;
@@ -135,46 +125,41 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
     setState(() => _isUploading = true);
     
     try {
-      // Show loading overlay
       LoadingOverlay.show(context);
       
-      // Upload new images
       final uploadedUrls = await _uploadImages();
       
-      // Combine existing and new image URLs
       final allImageUrls = [..._existingImageUrls, ...uploadedUrls];
       
-      // Update post in Firestore - change 'etat' to 'condition'
       await FirebaseFirestore.instance.collection('marketplace').doc(widget.post.id).update({
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'price': double.parse(_priceController.text),
         'images': allImageUrls,
-        'condition': _condition,  // Changed from 'etat' to 'condition'
+        'condition': _condition,
         'isValidated': false,
+        'isRejected': false, // Clear rejection status
+        'rejectionReason': null, // Clear rejection reason
+        'rejectedAt': null, // Clear rejection timestamp
         'lastModified': FieldValue.serverTimestamp(),
       });
 
-      // Hide loading overlay
       LoadingOverlay.hide();
 
       if (mounted) {
-        CustomDialog.show(
-          context: context,
-           title:"Succès",
-           message:"Votre publication a été modifiée avec succès ! Elle est maintenant en attente de validation.",
-          onConfirm: () => context.go('/clientHome/marketplace'),
+        CustomSnackBar.showSuccess(
+          context,
+          'Votre annonce a été modifiée avec succès ! Elle est maintenant en attente de validation.',
         );
+        context.go('/clientHome/marketplace'); // Navigate after showing snackbar
       }
     } catch (e) {
-      // Hide loading overlay
       LoadingOverlay.hide();
       
       if (mounted) {
-        CustomDialog.show(
-          context:context,
-          title: "Erreur",
-          message: "Une erreur est survenue lors de la modification: ${e.toString()}",
+        CustomSnackBar.showError(
+          context,
+          'Une erreur est survenue lors de la modification: ${e.toString()}',
         );
       }
     } finally {
@@ -182,32 +167,27 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
     }
   }
 
-  // Update the validateForm method to use snackbars like in ajouter_publication.dart
   bool _validateForm() {
     bool isValid = true;
     
-    // Reset errors
     setState(() {
       _titleError = null;
       _descriptionError = null;
       _priceError = null;
     });
     
-    // Validate title
     if (_titleController.text.trim().isEmpty) {
       setState(() => _titleError = 'Veuillez entrer un titre');
       _showSnackBar('Veuillez entrer un titre pour votre annonce');
       isValid = false;
     }
     
-    // Validate description
     if (_descriptionController.text.trim().isEmpty) {
       setState(() => _descriptionError = 'Veuillez entrer une description');
       _showSnackBar('Veuillez ajouter une description pour votre annonce');
       isValid = false;
     }
     
-    // Validate price
     if (_priceController.text.trim().isEmpty) {
       setState(() => _priceError = 'Veuillez entrer un prix');
       _showSnackBar('Veuillez indiquer un prix pour votre annonce');
@@ -222,9 +202,6 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
       }
     }
     
-    // Validate product condition - no need to validate since it has a default value
-    
-    // Validate images
     if (_existingImageUrls.isEmpty && _images.isEmpty) {
       _showSnackBar('Veuillez ajouter au moins une image');
       isValid = false;
@@ -233,22 +210,21 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
     return isValid;
   }
   
-  // Add the showSnackBar method like in ajouter_publication.dart
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           message,
-          style: GoogleFonts.poppins(),
+          style: AppTypography.bodyMedium(context).copyWith(color: AppColors.lightTextPrimary), // Use AppTypography and AppColors
         ),
         backgroundColor: Theme.of(context).brightness == Brightness.dark 
             ? AppColors.primaryGreen 
             : AppColors.primaryDarkGreen,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
         ),
-        margin: const EdgeInsets.all(10),
+        margin: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
       ),
     );
   }
@@ -258,406 +234,265 @@ class _ModifyPostPageState extends State<ModifyPostPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Changed to lightInputBackground
       appBar: CustomAppBar(
         title: 'Modifier l\'annonce',
         showBackButton: true,
+        // backgroundColor removed
+        // Removed explicit titleColor and iconColor to use CustomAppBar defaults for consistency
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title section
-              Text(
-                'Titre de l\'annonce',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _titleController,
-                style: GoogleFonts.poppins(
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Ex: iPhone 13 Pro Max',
-                  hintStyle: GoogleFonts.poppins(
-                    color: isDarkMode ? Colors.white38 : Colors.black38,
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  errorText: _titleError,
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Description section
-              Text(
-                'Description',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _descriptionController,
-                style: GoogleFonts.poppins(
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
-                maxLines: 5,
-                decoration: InputDecoration(
-                  hintText: 'Décrivez votre produit en détail...',
-                  hintStyle: GoogleFonts.poppins(
-                    color: isDarkMode ? Colors.white38 : Colors.black38,
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.all(16),
-                  errorText: _descriptionError,
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Price section
-              Text(
-                'Prix (DT)',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _priceController,
-                style: GoogleFonts.poppins(
-                  color: isDarkMode ? Colors.white : Colors.black,
-                ),
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Ex: 1200',
-                  hintStyle: GoogleFonts.poppins(
-                    color: isDarkMode ? Colors.white38 : Colors.black38,
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  prefixIcon: Icon(
-                    Icons.price_change,
-                    color: isDarkMode ? Colors.white54 : Colors.black54,
-                  ),
-                  errorText: _priceError,
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Product state section
-              Text(
-                'État du produit',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Update the product state options to match ajouter_publication.dart
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStateOption('Neuf', Icons.new_releases, 'Neuf'),
-                    // Changed value to match the label
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStateOption('Très bon', Icons.thumb_up, 'Très bon'),
-                    // Changed label and value to match ajouter_publication.dart
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStateOption('Bon', Icons.check_circle, 'Bon'),
-                    // Changed icon and value to match ajouter_publication.dart
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStateOption('Occasion', Icons.handyman, 'Occasion'),
-                    // Changed label and value to match ajouter_publication.dart
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              
-              // Images section
-              Text(
-                'Images',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Les images aident à vendre plus rapidement. Ajoutez jusqu\'à 5 photos.',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Existing images
-              if (_existingImageUrls.isNotEmpty) ...[
+      body: SingleChildScrollView( // Changed to SingleChildScrollView to avoid overflow with bottomSheet
+        padding: EdgeInsets.only(bottom: AppSpacing.buttonMedium + AppSpacing.lg), // Add padding for bottom sheet
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg), // Use AppSpacing
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title section
                 Text(
-                  'Images actuelles',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                  'Titre',
+                  style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _existingImageUrls.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                _existingImageUrls[index],
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeExistingImage(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                SizedBox(height: AppSpacing.sm), // Use AppSpacing
+                TextFormField(
+                  controller: _titleController,
+                  style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                   ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              
-              // New images
-              if (_images.isNotEmpty) ...[
-                Text(
-                  'Nouvelles images',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDarkMode ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _images.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                _images[index],
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeImage(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              
-              // Add image button
-              if (_existingImageUrls.length + _images.length < 5)
-                GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    width: double.infinity,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                  decoration: InputDecoration(
+                    hintText: 'Ex: iPhone 13 Pro Max',
+                    hintStyle: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightCardBackground, // Changed to lightCardBackground
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder, // Added border
                         width: 1,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add_photo_alternate,
-                          size: 32,
-                          color: isDarkMode ? Colors.white54 : Colors.black54,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ajouter des photos',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md), // Use AppSpacing
+                    errorText: _titleError,
                   ),
                 ),
-              
-              // Remove the preview section
-              const SizedBox(height: 30),
-              
-              // Submit button (keep this part)
-              CustomButton(
-                text: 'Mettre à jour l\'annonce',
-                onPressed: _isUploading ? null : _updatePost,
-                isLoading: _isUploading,
-                backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                textColor: Colors.white,
-                borderRadius: 10,
-                height: 50,
+                SizedBox(height: AppSpacing.lg), // Use AppSpacing
+                
+                // Description section
+                Text(
+                  'Description',
+                  style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                  ),
+                ),
+                SizedBox(height: AppSpacing.sm), // Use AppSpacing
+                TextFormField(
+                  controller: _descriptionController,
+                  style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                  ),
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText: 'Décrivez votre produit en détail...',
+                    hintStyle: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightCardBackground, // Changed to lightCardBackground
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder, // Added border
+                        width: 1,
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
+                    errorText: _descriptionError,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.lg), // Use AppSpacing
+                
+                // Price section
+                Text(
+                  'Prix (DT)',
+                  style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                  ),
+                ),
+                SizedBox(height: AppSpacing.sm), // Use AppSpacing
+                TextFormField(
+                  controller: _priceController,
+                  style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                    color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                  ),
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Ex: 1200',
+                    hintStyle: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightCardBackground, // Changed to lightCardBackground
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      borderSide: BorderSide(
+                        color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder, // Added border
+                        width: 1,
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md), // Use AppSpacing
+                    prefixIcon: Icon(
+                      Icons.price_change,
+                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
+                    ),
+                    errorText: _priceError,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.lg), // Use AppSpacing
+                      
+                      // Product state section
+                      Text(
+                        'État du produit',
+                        style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.md), // Use AppSpacing
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          _buildConditionChip('Neuf', isDarkMode),
+                          _buildConditionChip('Très bon', isDarkMode),
+                          _buildConditionChip('Bon', isDarkMode),
+                          _buildConditionChip('Satisfaisant', isDarkMode),
+                        ],
+                      ),
+                      SizedBox(height: AppSpacing.lg), // Use AppSpacing
+                      
+                      // Images section
+                      Text(
+                        'Images',
+                        style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.sm), // Use AppSpacing
+                      SizedBox(height: AppSpacing.md), // Use AppSpacing
+                      
+                      // Existing images
+                      if (_existingImageUrls.isNotEmpty) ...[
+                        ImageGalleryUtils.buildImageGallery(
+                          context,
+                          _existingImageUrls,
+                          isDarkMode: isDarkMode,
+                          onRemoveImage: (index) => _removeExistingImage(index),
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                      ],
+                      
+                      // New images
+                      if (_images.isNotEmpty) ...[
+                        ImageGalleryUtils.buildImageGallery(
+                          context,
+                          _images,
+                          isDarkMode: isDarkMode,
+                          onRemoveImage: (index) => _removeImage(index),
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                      ],
+                      
+                      // Add image button
+                      if (_existingImageUrls.length + _images.length < 5)
+                        Center( // Center the button
+                          child: CustomButton(
+                            text: 'Ajouter des photos',
+                            onPressed: _isUploading ? null : _pickImage,
+                            isLoading: _isUploading,
+                            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                            textColor: Colors.white,
+                            borderRadius: AppSpacing.radiusMd,
+                            height: 50,
+                          ),
+                        ),
+                      
+                      SizedBox(height: AppSpacing.xl), // Use AppSpacing
+                    ],
+                  ),
+                ),
               ),
-              
-              const SizedBox(height: 30),
-            ],
+            ),
+      bottomSheet: Container(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md), // Use AppSpacing
+        decoration: BoxDecoration(
+          color: isDarkMode ? AppColors.darkSurface : AppColors.lightSurface, // Use AppColors
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: CustomButton(
+            text: 'Mettre à jour l\'annonce',
+            onPressed: _isUploading ? null : _updatePost,
+            isLoading: _isUploading,
+            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use primaryDarkGreen for consistency with other buttons
+            textColor: Colors.white, // Keep text white for better contrast on primaryDarkGreen
+            borderRadius: AppSpacing.radiusMd,
+            height: AppSpacing.buttonMedium, // Use AppSpacing.buttonMedium (45)
+            width: double.infinity, // Make the button take full width
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStateOption(String title, IconData icon, String value) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final isSelected = _condition == value;
+  Widget _buildConditionChip(String condition, bool isDarkMode) {
+    final isSelected = _condition == condition;
     
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _condition = value;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _condition = condition;
+        });
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+              : (isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          border: Border.all(
             color: isSelected
-                ? (isDarkMode ? AppColors.primaryGreen.withOpacity(0.2) : AppColors.primaryDarkGreen.withOpacity(0.1))
-                : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
-            borderRadius: BorderRadius.circular(10),
-            border: isSelected
-                ? Border.all(
-                    color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                    width: 2,
-                  )
-                : Border.all(
-                    color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                    width: 1,
-                  ),
+                ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                : (isDarkMode ? AppColors.darkBorder : AppColors.lightBorder), // Changed to darkBorder/lightBorder
+            width: 1.5,
           ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: isSelected
-                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                    : (isDarkMode ? Colors.white70 : Colors.black54),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected
-                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                      : (isDarkMode ? Colors.white70 : Colors.black54),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+        ),
+        child: Text(
+          condition,
+          style: AppTypography.labelLarge(
+            context,
+            color: isSelected
+                ? Colors.white
+                : (isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
           ),
         ),
       ),
     );
   }
-  }
+}

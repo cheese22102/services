@@ -457,7 +457,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                  color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Changed to lightInputBackground
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Form(
@@ -466,44 +466,44 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 10), // Reduced spacing
                           
                           // Login Image
                           Container(
-                            height: 160, // Reduced from 240
+                            height: 120, // Reduced height
                             decoration: BoxDecoration(
-                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Image.asset(
                               "assets/images/login.png",
-                              height: 120, // Reduced from 150
+                              height: 100, // Reduced height
                               fit: BoxFit.contain,
                             ),
                           ),
-                          const SizedBox(height: 5), // Reduced spacing
+                          const SizedBox(height: 10), // Reduced spacing
                           
                           // App Title
                           Text(
                             "Services Pro",
                             style: GoogleFonts.poppins(
-                              fontSize: 22, // Reduced from 24
+                              fontSize: 24, // Reduced font size
                               fontWeight: FontWeight.bold,
                               color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
                           ),
-                          const SizedBox(height: 4), // Reduced from 8
+                          const SizedBox(height: 4), // Adjusted spacing
                           
                           // Subtitle
                           Text(
                             "Veuillez vous connecter pour continuer",
                             style: GoogleFonts.poppins(
-                              fontSize: 13, // Reduced from 14
+                              fontSize: 14, // Reduced font size
                               color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 16), // Reduced from 24
+                          const SizedBox(height: 24), // Reduced spacing
                           
                           // Email Field
                           CustomTextField(
@@ -528,7 +528,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Password Field
                           CustomTextField(
@@ -564,7 +564,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 4), // Reduced from 8
+                          const SizedBox(height: 4), // Adjusted spacing
                           
                           // Forgot Password Link
                           Align(
@@ -582,19 +582,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 'Mot de passe oublié?',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
-                                  color: isDarkMode ? Colors.white70 : const Color(0xFF4D8C3F),
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent color
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Remember Me Checkbox
                           Row(
                             children: [
                               SizedBox(
-                                height: 20, // Reduced from 24
-                                width: 20, // Reduced from 24
+                                height: 24, // Adjusted size
+                                width: 24, // Adjusted size
                                 child: Checkbox(
                                   value: _rememberMe,
                                   onChanged: (value) {
@@ -602,7 +602,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                       _rememberMe = value!;
                                     });
                                   },
-                                  activeColor: const Color(0xFF4D8C3F),
+                                  activeColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent color
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(4),
                                   ),
@@ -612,13 +612,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               Text(
                                 'Se souvenir de moi',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 13, // Reduced from 14
+                                  fontSize: 14, // Adjusted font size
                                   color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16), // Reduced from 24
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Login Button
                           CustomButton(
@@ -626,13 +626,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             onPressed: _login,
                             isLoading: _isLoading,
                             width: double.infinity,
-                            height: 45, // Reduced from default 50
+                            height: 50, // Adjusted height
                             useFullScreenLoader: true, // Enable full-screen loader
-                            backgroundColor: isDark 
-                                ? CustomTextField.getBorderColor(context) // Utiliser la couleur de bordure en mode sombre
-                                : null, // Garder la couleur par défaut en mode clair
+                            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent primary color
                           ),
-                          const SizedBox(height: 12), // Reduced from 16
+                          const SizedBox(height: 12), // Adjusted spacing
                           
                           // Divider
                           Row(
@@ -659,7 +657,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 16), // Reduced spacing
                           
                           // Social Login Buttons - Row with Google and Facebook
                           Row(
@@ -678,11 +676,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     color: isDarkMode ? Colors.white : null,
                                     colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
                                   ),
-                                  height: 45,
+                                  height: 50, // Adjusted height
                                   useFullScreenLoader: true, // Enable full-screen loader
+                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Consistent background
+                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary, // Consistent text color
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 16), // Increased spacing
                               // Facebook Sign In Button
                               Expanded(
                                 child: CustomButton(
@@ -703,12 +703,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     height: 20,
                                     width: 20,
                                   ),
-                                  height: 45,
+                                  height: 50, // Adjusted height
+                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Consistent background
+                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary, // Consistent text color
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 24), // Reduced spacing
                           
                           // Sign Up Link
                           Row(
@@ -735,7 +737,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: isDarkMode ? const Color(0xFF8BC34A) : const Color(0xFF4D8C3F),
+                                    color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Consistent color
                                   ),
                                 ),
                               ),

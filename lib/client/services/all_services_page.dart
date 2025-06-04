@@ -55,7 +55,7 @@ class _AllServicesPageState extends State<AllServicesPage> {
         showBackButton: false, // Change to false since we're showing sidebar
         showSidebar: true, // Add sidebar
         showNotifications: true, // Add notifications
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+        // backgroundColor removed to use default from CustomAppBar
       ),
       body: SafeArea(
         child: Padding(
@@ -150,6 +150,33 @@ class _AllServicesPageState extends State<AllServicesPage> {
       bottomNavigationBar: const CustomBottomNav(
         currentIndex: 1, // Set to 1 for Services tab
       ),
+      floatingActionButton: SizedBox( // Wrap with SizedBox to control size
+        width: 70, // 25% bigger than default 56
+        height: 70, // 25% bigger than default 56
+        child: Container( // Wrap FAB in a Container with solid color
+          decoration: BoxDecoration(
+            shape: BoxShape.circle, // Ensure container is also circular
+            color: AppColors.primaryGreen, // Solid green color
+            boxShadow: [ // Keep existing shadow
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            onPressed: () {
+              context.go('/clientHome/chatbot'); // Navigate to chatbot page
+            },
+            backgroundColor: Colors.transparent, // Make FAB transparent
+            elevation: 0, // Remove default elevation to avoid color overlap
+            shape: CircleBorder(), // Ensure it's perfectly rounded
+            child: Icon(Icons.smart_toy_rounded, color: Colors.white, size: 32), // Icon color remains white
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat, // Position at bottom right
     );
   }
   
@@ -165,77 +192,61 @@ class _AllServicesPageState extends State<AllServicesPage> {
       onTap: () {
         context.go('/clientHome/service-providers/$serviceName');
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDarkMode ? Colors.grey.shade800 : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Service image with improved styling
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  color: isDarkMode 
-                      ? AppColors.darkBackground 
-                      : AppColors.lightInputBackground,
-                ),
-                width: double.infinity,
-                child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(6.0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  icon,
-                                  size: 40,
-                                  color: primaryColor,
-                                ),
-                              );
-                            },
+      child: Column( // Removed Container, direct Column for centering
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 70, // Define a fixed size for the image container
+            height: 70,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12), // Rounded corners for the image
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2.0,
+                            color: primaryColor,
                           ),
-                        ),
-                      )
-                    : Center(
-                        child: Icon(
-                          icon,
-                          size: 40,
-                          color: primaryColor,
-                        ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: isDarkMode ? Colors.grey.shade800.withOpacity(0.5) : Colors.grey.shade200,
+                        child: Icon(icon, color: primaryColor, size: 35),
                       ),
-              ),
+                    )
+                  : Container(
+                      color: isDarkMode ? Colors.grey.shade800.withOpacity(0.5) : Colors.grey.shade200,
+                      child: Icon(icon, color: primaryColor, size: 35),
+                    ),
             ),
-            
-            // Service name with improved styling
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                serviceName,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8), // Spacing between image and text
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text(
+              serviceName,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 12, 
+                fontWeight: FontWeight.w500,
+                color: isDarkMode ? Colors.white70 : Colors.black87,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

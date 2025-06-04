@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../front/app_colors.dart';
+import '../../front/app_spacing.dart'; // Added AppSpacing import
+import '../../front/app_typography.dart'; // Added AppTypography import
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
 import '../../front/marketplace_card.dart';  // Changed from zoom_product to marketplace_card
@@ -61,7 +62,7 @@ class _FavorisPageState extends State<FavorisPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
       appBar: const CustomAppBar(
         title: 'Mes Favoris',
         showBackButton: true,
@@ -69,9 +70,12 @@ class _FavorisPageState extends State<FavorisPage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
             child: MarketplaceSearch(
               controller: _searchController,
+              onChanged: (value) {
+                setState(() => _searchQuery = value);
+              },
               onClear: () {
                 _searchController.clear();
                 setState(() => _searchQuery = '');
@@ -99,15 +103,14 @@ class _FavorisPageState extends State<FavorisPage> {
                       children: [
                         Icon(
                           Icons.error_outline,
-                          size: 64,
-                          color: isDarkMode ? Colors.white54 : Colors.black38,
+                          size: AppSpacing.iconXl,
+                          color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: AppSpacing.md),
                         Text(
                           'Une erreur est survenue',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
                           ),
                         ),
                       ],
@@ -127,36 +130,34 @@ class _FavorisPageState extends State<FavorisPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: EdgeInsets.all(AppSpacing.md),
                           decoration: BoxDecoration(
                             color: (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.favorite_border,
-                            size: 64,
+                            size: AppSpacing.iconXl,
                             color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: AppSpacing.lg),
                         Text(
                           "Aucun favori trouvé",
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
+                          style: AppTypography.h4(context).copyWith(
                             fontWeight: FontWeight.bold,
                             color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: AppSpacing.xs),
                         Text(
                           "Ajoutez des articles à vos favoris\npour les retrouver ici",
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: AppSpacing.lg),
                         SizedBox(
                           width: MediaQuery.of(context).size.width * 0.8, // 80% of screen width
                           child: CustomButton(
@@ -171,12 +172,12 @@ class _FavorisPageState extends State<FavorisPage> {
 
                 // Changed from GridView to match the marketplace page style
                 return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 0.8,  // Match the aspect ratio from marketplace page
+                    crossAxisSpacing: AppSpacing.lg,
+                    mainAxisSpacing: AppSpacing.lg,
+                    childAspectRatio: 0.7,  // Match the aspect ratio from marketplace page
                   ),
                   itemCount: posts.length,
                   itemBuilder: (context, index) {

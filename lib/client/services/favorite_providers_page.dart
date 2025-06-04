@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:geolocator/geolocator.dart'; // Added
 import 'package:go_router/go_router.dart';
 import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
+import '../../front/app_spacing.dart'; // Added
+import '../../front/app_typography.dart'; // Added
+import '../../front/marketplace_search.dart'; // Added for search bar consistency
 import 'dart:async';
 
 class FavoriteProvidersPage extends StatefulWidget {
@@ -20,6 +23,7 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _favoriteProviders = [];
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  Position? _currentPosition; // Added for location
   
   // Add a StreamSubscription to listen for changes
   StreamSubscription<QuerySnapshot>? _favoritesSubscription;
@@ -27,6 +31,7 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
   @override
   void initState() {
     super.initState();
+    _getCurrentLocation(); // Fetch location on init
     _setupFavoritesListener();
   }
 
@@ -147,12 +152,13 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
                   'providerId': providerId,
                   'firstName': userData['firstname'] ?? '',
                   'lastName': userData['lastname'] ?? '',
-                  'photoURL': userData['photoURL'] ?? '',
+                  'photoURL': userData['avatarUrl'] ?? '', // Changed to avatarUrl
                   'services': services,
                   'rating': rating,
                   'reviewCount': reviewCount,
                   'description': providerData['bio'] ?? 'Aucune description',
                   'serviceName': serviceName,
+                  'exactLocation': providerData['exactLocation'], // Added exactLocation
                 };
               }
             }
@@ -184,6 +190,67 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
     }
   }
 
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = null; // Explicitly set to null if service not enabled
+          });
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            setState(() {
+              _currentPosition = null; // Explicitly set to null if permission denied
+            });
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = null; // Explicitly set to null if permission denied forever
+          });
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    } catch (e) {
+      print('Error getting current location: $e');
+      if (mounted) {
+        setState(() {
+          _currentPosition = null; // Set to null on error
+        });
+      }
+    }
+  }
+
+  double _calculateDistance(GeoPoint providerLocation) {
+    if (_currentPosition == null) return double.infinity;
+    
+    final double lat1 = _currentPosition!.latitude;
+    final double lon1 = _currentPosition!.longitude;
+    final double lat2 = providerLocation.latitude;
+    final double lon2 = providerLocation.longitude;
+    
+    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000; // Convert to km
+  }
+
   List<Map<String, dynamic>> _getFilteredProviders() {
     if (_searchQuery.isEmpty) {
       return _favoriteProviders;
@@ -205,6 +272,7 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Consistent background
       appBar: CustomAppBar(
         title: 'Prestataires favoris',
         showBackButton: true,
@@ -213,30 +281,19 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
         children: [
           // Search bar
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
+            padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md), // Consistent padding
+            child: MarketplaceSearch( // Use MarketplaceSearch
               controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Rechercher un prestataire...',
-                hintStyle: GoogleFonts.poppins(
-                  color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                  fontSize: 14,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-                filled: true,
-                fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+              hintText: 'Rechercher un prestataire...',
               onChanged: (value) {
                 setState(() {
-                  _searchQuery = value;
+                  _searchQuery = value.toLowerCase();
+                });
+              },
+              onClear: () {
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
                 });
               },
             ),
@@ -271,26 +328,24 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
           children: [
             Icon(
               Icons.favorite_border,
-              size: 64,
-              color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+              size: AppSpacing.xxxl, // Corrected from iconLarge * 2 (64.0)
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
             ),
-            const SizedBox(height: 16),
+            AppSpacing.verticalSpacing(AppSpacing.md), // Use AppSpacing
             Text(
               'Aucun prestataire favori',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
+              style: AppTypography.headlineSmall(context).copyWith( // Use AppTypography
                 fontWeight: FontWeight.w500,
-                color: isDarkMode ? Colors.white : Colors.black,
+                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
               ),
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSpacing(AppSpacing.xs), // Use AppSpacing
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding), // Use AppSpacing
               child: Text(
                 'Ajoutez des prestataires à vos favoris pour les retrouver ici',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -301,7 +356,7 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
     }
     
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.screenPadding), // Use AppSpacing
       itemCount: filteredProviders.length,
       itemBuilder: (context, index) {
         final provider = filteredProviders[index];
@@ -309,160 +364,171 @@ class _FavoriteProvidersPageState extends State<FavoriteProvidersPage> {
         final firstName = provider['firstName'] as String;
         final lastName = provider['lastName'] as String;
         final photoURL = provider['photoURL'] as String;
-        final services = provider['services'] as List<String>? ?? [];
+        final services = provider['services'] as List<String>? ?? []; // Re-added services
         final rating = provider['rating'] as double;
         final reviewCount = provider['reviewCount'] as int;
         final description = provider['description'] as String;
         
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              context.push('/clientHome/provider-details/$providerId');
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+        String distanceText = 'N/A';
+        final locationData = provider['exactLocation'];
+        if (_currentPosition != null && locationData != null && locationData['latitude'] != null && locationData['longitude'] != null) {
+          final location = GeoPoint(locationData['latitude'], locationData['longitude']);
+          final distance = _calculateDistance(location);
+          distanceText = '${distance.toStringAsFixed(1)} km'; // Keep 1 decimal place for distance as in liste_prestataires
+        }
+
+        return _buildProviderCard(
+          context,
+          isDarkMode,
+          providerId,
+          '$firstName $lastName', // Combine name here
+          photoURL,
+          description,
+          rating,
+          reviewCount,
+          distanceText,
+          services, // Pass services
+        );
+      },
+    );
+  }
+
+  Widget _buildProviderCard(
+    BuildContext context,
+    bool isDarkMode,
+    String providerId,
+    String name,
+    String photoUrl,
+    String bio,
+    double rating,
+    int reviewCount,
+    String distanceText,
+    List<String> services, // Added services
+  ) {
+    return Card(
+      margin: EdgeInsets.only(bottom: AppSpacing.md), // Use AppSpacing
+      elevation: 0, // Consistent with marketplace cards
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+        side: BorderSide(
+          color: isDarkMode ? AppColors.darkBorderColor.withOpacity(0.2) : AppColors.lightBorderColor.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Consistent with marketplace cards
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+        onTap: () {
+          context.push('/clientHome/provider-details/$providerId');
+        },
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      // Provider photo
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                            width: 2,
-                          ),
-                          image: photoURL.isNotEmpty
-                              ? DecorationImage(
-                                  image: NetworkImage(photoURL),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
+                  Container(
+                    width: AppSpacing.xxl * 1.5, // Adjusted size (72.0)
+                    height: AppSpacing.xxl * 1.5, // Adjusted size (72.0)
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05), // Softer shadow
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
-                        child: photoURL.isEmpty
-                            ? Icon(
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
+                      child: photoUrl.isNotEmpty
+                          ? Image.network(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                child: Icon(
+                                  Icons.person,
+                                  size: AppSpacing.iconLg, // Use AppSpacing
+                                  color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                              child: Icon(
                                 Icons.person,
-                                size: 30,
-                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
-                      
-                      // Provider info
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$firstName $lastName',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: isDarkMode ? Colors.white : Colors.black87,
+                                size: AppSpacing.iconLg, // Use AppSpacing
+                                color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.star,
-                                  size: 16,
-                                  color: Colors.amber,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$rating',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDarkMode ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '($reviewCount avis)',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                                  ),
-                                ),
-                              ],
+                    ),
+                  ),
+                  AppSpacing.horizontalSpacing(AppSpacing.md), // Use AppSpacing
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: AppTypography.h4(context).copyWith( // Use AppTypography
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                        AppSpacing.verticalSpacing(AppSpacing.xxs), // Use AppSpacing
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.star,
+                              size: AppSpacing.iconXs, // Use AppSpacing
+                              color: Colors.amber,
+                            ),
+                            AppSpacing.horizontalSpacing(AppSpacing.xxs), // Use AppSpacing
+                            Text(
+                              '${rating.toStringAsFixed(2)} (${reviewCount} avis)', // Formatted to 2 decimal places
+                              style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                            AppSpacing.horizontalSpacing(AppSpacing.sm), // Use AppSpacing
+                            Icon(
+                              Icons.location_on_outlined, // Use outlined icon
+                              size: AppSpacing.iconXs, // Use AppSpacing
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                            ),
+                            AppSpacing.horizontalSpacing(AppSpacing.xxs), // Use AppSpacing
+                            Text(
+                              distanceText,
+                              style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Services
-                  if (services.isNotEmpty) ...[
-                    Text(
-                      'Services:',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: services.map((service) => Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDarkMode 
-                              ? AppColors.primaryGreen.withOpacity(0.2) 
-                              : AppColors.primaryDarkGreen.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                            width: 1,
+                        AppSpacing.verticalSpacing(AppSpacing.xxs), // Added spacing
+                        if (services.isNotEmpty) // Display services if available
+                          Text(
+                            'Services: ${services.join(', ')}',
+                            style: AppTypography.labelSmall(context).copyWith(
+                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        child: Text(
-                          service,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                          ),
-                        ),
-                      )).toList(),
-                    ),
-                  ],
-                  
-                  const SizedBox(height: 12),
-                  
-                  // Description
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
+              // Removed description
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

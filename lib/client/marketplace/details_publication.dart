@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../front/app_colors.dart';
@@ -11,6 +10,10 @@ import '../../front/custom_button.dart';
 import '../../front/custom_snackbar.dart';
 import '../../front/custom_dialog.dart';
 import '../../utils/image_gallery_utils.dart';
+import '../../front/app_spacing.dart';
+import '../../front/app_typography.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
 
 
 class PostDetailsPage extends StatefulWidget {
@@ -37,6 +40,12 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
   
   // Track current image index
   final ValueNotifier<int> _imageIndexNotifier = ValueNotifier<int>(0);
+
+  // Map related variables
+  LatLng? _postLatLng;
+  GoogleMapController? _mapController;
+  bool _isGeocoding = true;
+  String? _geocodingError;
   
   @override
   void initState() {
@@ -138,6 +147,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
   void dispose() {
     _pageController.dispose();
     _imageIndexNotifier.dispose();
+    _mapController?.dispose(); // Dispose map controller
     super.dispose();
   }
   
@@ -145,6 +155,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _isGeocoding = true; // Start geocoding
+      _geocodingError = null;
     });
     
     try {
@@ -167,12 +179,71 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         postData = docSnapshot.data() as Map<String, dynamic>;
         _isLoading = false;
       });
+
+      // Perform geocoding after post data is loaded
+      await _geocodeLocation(postData['location']);
+
     } catch (e) {
       setState(() {
         _isLoading = false;
         _hasError = true;
         _errorMessage = "Erreur lors du chargement: $e";
       });
+    }
+  }
+
+  Future<void> _geocodeLocation(String? locationString) async {
+    if (locationString == null || locationString.isEmpty) {
+      setState(() {
+        _isGeocoding = false;
+        _geocodingError = "Emplacement non spécifié.";
+      });
+      return;
+    }
+
+    try {
+      List<Location> locations = await locationFromAddress(locationString);
+      if (locations.isNotEmpty) {
+        setState(() {
+          _postLatLng = LatLng(locations.first.latitude, locations.first.longitude);
+          _isGeocoding = false;
+        });
+      } else {
+        setState(() {
+          _isGeocoding = false;
+          _geocodingError = "Impossible de trouver les coordonnées pour cet emplacement.";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isGeocoding = false;
+        _geocodingError = "Erreur de géocodage: $e";
+      });
+    }
+  }
+
+  Future<void> _openInGoogleMaps() async {
+    if (_postLatLng == null) {
+      CustomSnackbar.show(
+        context: context,
+        message: "Coordonnées de l'emplacement non disponibles.",
+        isError: true,
+      );
+      return;
+    }
+
+    final String googleMapsUrl = 
+        'https://www.google.com/maps/search/?api=1&query=${_postLatLng!.latitude},${_postLatLng!.longitude}';
+    
+    final Uri uri = Uri.parse(googleMapsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      CustomSnackbar.show(
+        context: context,
+        message: "Impossible d'ouvrir Google Maps.",
+        isError: true,
+      );
     }
   }
 
@@ -219,7 +290,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         sellerName = sellerName.trim().isNotEmpty ? sellerName : 'Vendeur';
       }
       
-      // Navigate to chat screen - no need to pass postId anymore
+      // Navigate to chat screen
       if (mounted) {
         setState(() => _isLoading = false);
         context.push('/clientHome/marketplace/chat/conversation/${postData['userId']}', extra: {
@@ -244,48 +315,48 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-        appBar: const CustomAppBar(title: 'Détails de l\'annonce'),
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Matched accueil_marketplace
+        appBar: CustomAppBar(title: 'Détails de l\'annonce'), // backgroundColor removed
+        body: Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)), // Use AppColors
       );
     }
     
     if (_hasError) {
       return Scaffold(
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-        appBar: const CustomAppBar(title: 'Détails de l\'annonce'),
+        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Matched accueil_marketplace
+        appBar: CustomAppBar(title: 'Détails de l\'annonce'), // backgroundColor removed
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 Icons.error_outline,
-                size: 64,
-                color: isDarkMode ? Colors.white54 : Colors.black38,
+                size: AppSpacing.iconXl, // Use AppSpacing
+                color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: AppSpacing.md), // Use AppSpacing
               Text(
                 'Erreur',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
+                style: AppTypography.h4(context).copyWith( // Use AppTypography
                   fontWeight: FontWeight.w500,
-                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                  color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: AppSpacing.sm), // Use AppSpacing
               Text(
                 _errorMessage,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.white54 : Colors.black45,
+                style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
+                  color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSpacing.lg), // Use AppSpacing
               CustomButton(
                 text: 'Retour',
                 onPressed: () => context.pop(),
-                width: 150,
+                width: 150, // Keep fixed width for now
+                height: AppSpacing.buttonMedium, // Use AppSpacing
+                backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
               ),
             ],
           ),
@@ -325,13 +396,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       child: CachedNetworkImage(
                         imageUrl: images[index],
                         fit: BoxFit.contain,
-                        placeholder: (context, url) => const Center(
-                          child: CircularProgressIndicator(),
+                        placeholder: (context, url) => Center(
+                          child: CircularProgressIndicator(color: AppColors.primaryGreen), // Use AppColors
                         ),
-                        errorWidget: (context, url, error) => const Icon(
+                        errorWidget: (context, url, error) => Icon(
                           Icons.error,
-                          color: Colors.white,
-                          size: 50,
+                          color: AppColors.errorLightRed, // Use AppColors
+                          size: AppSpacing.iconXl, // Use AppSpacing
                         ),
                       ),
                     ),
@@ -340,16 +411,16 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
               ),
               // Close button
               Positioned(
-                top: 40,
-                right: 20,
+                top: AppSpacing.xxl, // Use AppSpacing
+                right: AppSpacing.md, // Use AppSpacing
                 child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  icon: Icon(Icons.close, color: Colors.white, size: AppSpacing.iconLg), // Use AppSpacing
                   onPressed: _toggleFullScreen,
                 ),
               ),
               // Image counter
               Positioned(
-                bottom: 20,
+                bottom: AppSpacing.md, // Use AppSpacing
                 left: 0,
                 right: 0,
                 child: ValueListenableBuilder<int>(
@@ -360,9 +431,9 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       children: List.generate(
                         images.length,
                         (index) => Container(
-                          width: 10,
-                          height: 10,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: AppSpacing.sm, // Use AppSpacing
+                          height: AppSpacing.sm, // Use AppSpacing
+                          margin: EdgeInsets.symmetric(horizontal: AppSpacing.xs), // Use AppSpacing
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: currentIndex == index
@@ -382,14 +453,15 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     }
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Matched accueil_marketplace
       appBar: CustomAppBar(
         title: 'Détails de l\'annonce',
+        // backgroundColor removed
         actions: [
           IconButton(
             icon: Icon(
               Icons.share,
-              color: isDarkMode ? Colors.white : Colors.black87,
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
             ),
             onPressed: () {
               // Share functionality
@@ -416,7 +488,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                          images.length <= 4 ? 350 : 
                          400, // More height for 5+ images
                   width: double.infinity,
-                  child: ClipRect(
+                  child: ClipRRect( // Added ClipRRect for consistent border radius
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                     child: ImageGalleryUtils.buildImageGallery(
                       context,
                       images,
@@ -432,87 +505,54 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
               Container(
                 height: 250,
                 width: double.infinity,
-                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
                 child: Center(
                   child: Icon(
                     Icons.image_not_supported_outlined,
-                    size: 64,
-                    color: isDarkMode ? Colors.white38 : Colors.black26,
+                    size: AppSpacing.iconXl, // Use AppSpacing
+                    color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                   ),
                 ),
               ),
             
             // Product details
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(AppSpacing.lg), // Use AppSpacing
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title and price
                   Text(
                     title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
+                    style: AppTypography.h3(context).copyWith( // Use AppTypography
                       fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
+                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: AppSpacing.sm), // Use AppSpacing
                   Text(
                     '$price DT',
-                    style: GoogleFonts.poppins(
-                      fontSize: 24,
+                    style: AppTypography.h2(context).copyWith( // Use AppTypography
                       fontWeight: FontWeight.bold,
-                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                      color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Location and date
-                  // Around line 547, look for a Row that might contain text or widgets that are too wide
-                  // Replace that Row with this version that uses Expanded to prevent overflow
-                  
-              
-                  
-                  // Replace it with:
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 20,
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          postData['location'] ?? 'Emplacement non spécifié',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: AppSpacing.lg), // Use AppSpacing
                   
                   // Condition and category badges
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs), // Use AppSpacing
                         decoration: BoxDecoration(
                           color: condition == 'Neuf'
                               ? Colors.green.withOpacity(0.2)
                               : Colors.orange.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
                         ),
                         child: Text(
                           condition,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
+                          style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
                             fontWeight: FontWeight.w500,
                             color: condition == 'Neuf'
                                 ? Colors.green.shade800
@@ -520,7 +560,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: AppSpacing.sm), // Use AppSpacing
                       FutureBuilder<DocumentSnapshot>(
                         future: FirebaseFirestore.instance
                             .collection('services')
@@ -530,10 +570,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                           String categoryName = 'Catégorie inconnue';
                           
                           if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            return SizedBox(
+                              width: AppSpacing.md, // Use AppSpacing
+                              height: AppSpacing.md, // Use AppSpacing
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                              ),
                             );
                           }
                           
@@ -545,19 +588,18 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                           }
                           
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs), // Use AppSpacing
                             decoration: BoxDecoration(
                               color: isDarkMode 
-                                  ? Colors.grey.shade800 
-                                  : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(16),
+                                  ? AppColors.darkCardBackground 
+                                  : AppColors.lightCardBackground, // Use AppColors
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusLg), // Use AppSpacing
                             ),
                             child: Text(
                               categoryName,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
+                              style: AppTypography.labelSmall(context).copyWith( // Use AppTypography
                                 fontWeight: FontWeight.w500,
-                                color: isDarkMode ? Colors.white70 : Colors.black54,
+                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                               ),
                             ),
                           );
@@ -565,23 +607,22 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: AppSpacing.lg), // Use AppSpacing
                   
                   // Description section
                   Text(
                     'Description',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
+                    style: AppTypography.h4(context).copyWith( // Use AppTypography
                       fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black87,
+                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: AppSpacing.sm), // Use AppSpacing
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
                     decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey.shade900 : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
@@ -592,15 +633,79 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                     ),
                     child: Text(
                       description,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
+                      style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
                         height: 1.5,
-                        color: isDarkMode ? Colors.white70 : Colors.black87,
+                        color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextPrimary, // Use AppColors
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  
+                  SizedBox(height: AppSpacing.lg), // Use AppSpacing
+
+                  // Map Section (moved here)
+                  Text(
+                    'Emplacement',
+                    style: AppTypography.h4(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  _isGeocoding
+                      ? Center(
+                          child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+                        )
+                      : _geocodingError != null
+                          ? Center(
+                              child: Text(
+                                _geocodingError!,
+                                style: AppTypography.bodyMedium(context).copyWith(
+                                  color: AppColors.errorLightRed,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          : _postLatLng != null
+                              ? Container(
+                                  height: 200, // Fixed height for the map
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                                    border: Border.all(color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                                    child: GoogleMap(
+                                      initialCameraPosition: CameraPosition(
+                                        target: _postLatLng!,
+                                        zoom: 15,
+                                      ),
+                                      onMapCreated: (controller) {
+                                        _mapController = controller;
+                                      },
+                                      markers: {
+                                        Marker(
+                                          markerId: const MarkerId('postLocation'),
+                                          position: _postLatLng!,
+                                          infoWindow: InfoWindow(title: postData['location'] ?? 'Emplacement'),
+                                        ),
+                                      },
+                                      zoomControlsEnabled: false,
+                                      scrollGesturesEnabled: false,
+                                      rotateGesturesEnabled: false,
+                                      tiltGesturesEnabled: false,
+                                      onTap: (_) => _openInGoogleMaps(), // Open in Google Maps on tap
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    'Emplacement non disponible.',
+                                    style: AppTypography.bodyMedium(context).copyWith(
+                                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                                    ),
+                                  ),
+                                ),
+                  SizedBox(height: AppSpacing.lg), // Add spacing after the map
+
                   // Seller info section
                   FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance
@@ -609,7 +714,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         .get(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)); // Use AppColors
                       }
                       
                       String firstName = 'Utilisateur';
@@ -636,18 +741,17 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                         children: [
                           Text(
                             'Vendeur',
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.white : Colors.black87,
+                            style: AppTypography.h4(context).copyWith( // Use AppTypography
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: AppSpacing.sm), // Use AppSpacing
                           Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(AppSpacing.md), // Use AppSpacing
                             decoration: BoxDecoration(
-                              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),
@@ -657,72 +761,71 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                               ],
                             ),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start, // Align content to start
                               children: [
                                 Row(
                                   children: [
                                     // Try a different approach for the avatar
                                     sellerPhotoUrl != null && sellerPhotoUrl.isNotEmpty
                                     ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(30),
+                                        borderRadius: BorderRadius.circular(AppSpacing.radiusXl), // Use AppSpacing
                                         child: CachedNetworkImage(
                                           imageUrl: sellerPhotoUrl,
-                                          width: 60,
-                                          height: 60,
+                                          width: AppSpacing.xxl, // Use AppSpacing
+                                          height: AppSpacing.xxl, // Use AppSpacing
                                           fit: BoxFit.cover,
                                           placeholder: (context, url) => Container(
-                                            width: 60,
-                                            height: 60,
+                                            width: AppSpacing.xxl, // Use AppSpacing
+                                            height: AppSpacing.xxl, // Use AppSpacing
                                             color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                                            child: const Center(child: CircularProgressIndicator()),
+                                            child: Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)), // Use AppColors
                                           ),
                                           errorWidget: (context, url, error) {
                                             return Container(
-                                              width: 60,
-                                              height: 60,
+                                              width: AppSpacing.xxl, // Use AppSpacing
+                                              height: AppSpacing.xxl, // Use AppSpacing
                                               decoration: BoxDecoration(
                                                 color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                                                borderRadius: BorderRadius.circular(30),
+                                                borderRadius: BorderRadius.circular(AppSpacing.radiusXl), // Use AppSpacing
                                               ),
                                               child: Icon(
                                                 Icons.person,
-                                                size: 30,
-                                                color: isDarkMode ? Colors.white54 : Colors.black38,
+                                                size: AppSpacing.iconLg, // Use AppSpacing
+                                                color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                                               ),
                                             );
                                           },
                                         ),
                                       )
                                     : Container(
-                                        width: 60,
-                                        height: 60,
+                                        width: AppSpacing.xxl, // Use AppSpacing
+                                        height: AppSpacing.xxl, // Use AppSpacing
                                         decoration: BoxDecoration(
                                           color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                                          borderRadius: BorderRadius.circular(30),
+                                          borderRadius: BorderRadius.circular(AppSpacing.radiusXl), // Use AppSpacing
                                         ),
                                         child: Icon(
                                           Icons.person,
-                                          size: 30,
-                                          color: isDarkMode ? Colors.white54 : Colors.black38,
+                                          size: AppSpacing.iconLg, // Use AppSpacing
+                                          color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
                                         ),
                                       ),
-                                    const SizedBox(width: 16),
+                                    SizedBox(width: AppSpacing.md), // Use AppSpacing
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             '$firstName $lastName',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 18,
+                                            style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
                                               fontWeight: FontWeight.w600,
-                                              color: isDarkMode ? Colors.white : Colors.black87,
+                                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                                             ),
                                           ),
                                           Text(
                                             'Membre depuis ${createdAt?.year ?? 'inconnu'}',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 14,
-                                              color: isDarkMode ? Colors.white70 : Colors.black54,
+                                            style: AppTypography.bodySmall(context).copyWith( // Use AppTypography
+                                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
                                             ),
                                           ),
                                         ],
@@ -730,11 +833,12 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
+                                SizedBox(height: AppSpacing.md), // Use AppSpacing
                                 if (phoneNumber.isNotEmpty)
                                   SizedBox(
                                     width: double.infinity,
-                                    child: ElevatedButton.icon(
+                                    child: CustomButton( // Use CustomButton
+                                      text: 'Appeler le vendeur',
                                       onPressed: () {
                                         final Uri phoneUri = Uri(
                                           scheme: 'tel',
@@ -742,19 +846,9 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                                         );
                                         launchUrl(phoneUri);
                                       },
-                                      icon: const Icon(Icons.phone),
-                                      label: Text(
-                                        'Appeler le vendeur',
-                                        style: GoogleFonts.poppins(),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
+                                      icon: const Icon(Icons.phone), // Pass Icon widget
+                                      height: AppSpacing.buttonMedium, // Use AppSpacing
+                                      backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
                                     ),
                                   ),
                               ],
@@ -765,7 +859,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                     },
                   ),
                   
-                  const SizedBox(height: 100), // Space for bottom buttons
+                  SizedBox(height: AppSpacing.xxl), // Space for bottom buttons, adjusted
                 ],
               ),
             ),
@@ -773,9 +867,9 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
         ),
       ),
       bottomSheet: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md), // Use AppSpacing
         decoration: BoxDecoration(
-          color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+          color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Match AppBar/BottomNav
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -797,11 +891,11 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                           // Navigate to edit page with post data
                           context.push('/clientHome/marketplace/edit/${widget.postId}', extra: post);
                         },
-                        height: 50,
-                        backgroundColor: isDarkMode ? Colors.blue.shade700 : Colors.blue,
+                        height: AppSpacing.buttonMedium, // Use AppSpacing
+                        backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors (replaced accentBlue)
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: AppSpacing.md), // Use AppSpacing
                     // Delete button
                     Expanded(
                       child: CustomButton(
@@ -840,7 +934,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                             }
                           }
                         },
-                       
+                        height: AppSpacing.buttonMedium, // Use AppSpacing
+                        backgroundColor: AppColors.errorLightRed, // Use AppColors
                       ),
                     ),
                   ],
@@ -848,40 +943,44 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
               // Other users viewing the post - show favorite and contact buttons
               : Row(
                   children: [
-                    // Favorite button
+                    // Contact button (now first)
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Contacter le vendeur',
+                        onPressed: _contactSeller,
+                        height: AppSpacing.buttonMedium, // Use AppSpacing
+                        backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.md), // Use AppSpacing
+                    // Favorite button (now second)
                     Container(
-                      width: 50,
-                      height: 50,
+                      width: AppSpacing.buttonMedium, // Use AppSpacing for width
+                      height: AppSpacing.buttonMedium, // Use AppSpacing for height
                       decoration: BoxDecoration(
-                        color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(16),
+                        color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
                       ),
                       child: _isCheckingFavorite
-                          ? const Center(
+                          ? Center(
                               child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                width: AppSpacing.iconMd, // Use AppSpacing
+                                height: AppSpacing.iconMd, // Use AppSpacing
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen, // Use AppColors
+                                ),
                               ),
                             )
                           : IconButton(
                               icon: Icon(
                                 _isFavorite ? Icons.favorite : Icons.favorite_border,
                                 color: _isFavorite
-                                    ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                                    : (isDarkMode ? Colors.white70 : Colors.black54),
+                                    ? Colors.red // Favorite color is now red
+                                    : (isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), 
                               ),
                               onPressed: _toggleFavorite,
                             ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Contact button
-                    Expanded(
-                      child: CustomButton(
-                        text: 'Contacter le vendeur',
-                        onPressed: _contactSeller,
-                        height: 50,
-                      ),
                     ),
                   ],
                 )

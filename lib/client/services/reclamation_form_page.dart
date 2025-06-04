@@ -2,15 +2,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:go_router/go_router.dart';
 import '../../front/app_colors.dart';
 import '../../front/custom_app_bar.dart';
 import '../../front/custom_button.dart';
 import '../../front/custom_text_field.dart';
-import '../../utils/cloudinary_service.dart';
+import '../../front/app_spacing.dart';
+import '../../front/app_typography.dart';
+import '../../utils/image_upload_utils.dart'; // Import ImageUploadUtils
+import '../../utils/image_gallery_utils.dart'; // Import ImageGalleryUtils
+import '../../front/loading_overlay.dart'; // Import LoadingOverlay
 
 class ReclamationFormPage extends StatefulWidget {
   final String reservationId;
@@ -30,11 +32,9 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
   final _descriptionController = TextEditingController();
   
   bool _isLoading = false;
-  Map<String, dynamic>? _reservationData;
-  String? _targetId; // The ID of the provider or client who is the target of the reclamation
+  String? _targetId; 
   
-  List<File> _evidenceImages = [];
-  final _picker = ImagePicker();
+  final List<File> _evidenceImages = [];
   
   @override
   void initState() {
@@ -63,7 +63,10 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
       if (!reservationDoc.exists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Réservation introuvable')),
+          SnackBar(
+            content: Text('Réservation introuvable', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+            backgroundColor: AppColors.errorRed,
+          ),
           );
           context.pop();
         }
@@ -83,7 +86,6 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
       }
       
       setState(() {
-        _reservationData = data;
         _isLoading = false;
       });
     } catch (e) {
@@ -92,7 +94,10 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text('Erreur: $e', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+            backgroundColor: AppColors.errorRed,
+          ),
         );
       }
     }
@@ -100,31 +105,33 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
   
   Future<void> _pickImage() async {
     try {
-      final pickedFiles = await _picker.pickMultiImage(
-        imageQuality: 70,
-        maxWidth: 1200,
-        maxHeight: 1200,
-      );
+      final pickedFiles = await ImageUploadUtils.pickMultipleImagesWithOptions(context, isDarkMode: Theme.of(context).brightness == Brightness.dark);
       
       if (pickedFiles.isNotEmpty) {
         if (_evidenceImages.length + pickedFiles.length > 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Maximum 3 images autorisées')),
-          );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum 3 images autorisées', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
           final remainingSlots = 3 - _evidenceImages.length;
           final filesToAdd = pickedFiles.take(remainingSlots).toList();
           setState(() {
-            _evidenceImages.addAll(filesToAdd.map((file) => File(file.path)));
+            _evidenceImages.addAll(filesToAdd);
           });
         } else {
           setState(() {
-            _evidenceImages.addAll(pickedFiles.map((file) => File(file.path)));
+            _evidenceImages.addAll(pickedFiles);
           });
         }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors de la sélection des images: $e')),
+        SnackBar(
+          content: Text('Erreur lors de la sélection des images: $e', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+          backgroundColor: AppColors.errorRed,
+        ),
       );
     }
   }
@@ -143,27 +150,70 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vous devez être connecté pour soumettre une réclamation')),
+        SnackBar(
+          content: Text('Vous devez être connecté pour soumettre une réclamation', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+          backgroundColor: AppColors.errorRed,
+        ),
       );
       return;
     }
     
     if (_targetId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible de déterminer le destinataire de la réclamation')),
+        SnackBar(
+          content: Text('Impossible de déterminer le destinataire de la réclamation', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+          backgroundColor: AppColors.errorRed,
+        ),
       );
       return;
     }
+
+    // Confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
+          title: Text(
+            'Confirmer la soumission',
+            style: AppTypography.headlineMedium(context),
+          ),
+          content: Text(
+            'Êtes-vous sûr de vouloir soumettre cette réclamation?',
+            style: AppTypography.bodyMedium(context),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Annuler',
+                style: AppTypography.button(context, color: AppColors.primaryDarkGreen),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Confirmer',
+                style: AppTypography.button(context, color: AppColors.errorRed),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) {
+      return; // User cancelled submission
+    }
     
-    setState(() {
-      _isLoading = true;
-    });
+    LoadingOverlay.show(context); // Show loading overlay
     
     try {
       // Upload images if any
       List<String> imageUrls = [];
       if (_evidenceImages.isNotEmpty) {
-        imageUrls = await CloudinaryService.uploadImages(_evidenceImages);
+        imageUrls = await ImageUploadUtils.uploadMultipleImages(_evidenceImages); // Use ImageUploadUtils
       }
       
       // Create reclamation ID
@@ -194,33 +244,27 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
         'hasReclamation': true,
       });
       
-      // Send notification to admin
-      await FirebaseFirestore.instance
-          .collection('admin_notifications')
-          .add({
-        'type': 'reclamation',
-        'reclamationId': reclamationId,
-        'reservationId': widget.reservationId,
-        'title': 'Nouvelle réclamation',
-        'body': 'Une nouvelle réclamation a été soumise',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-      });
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Réclamation soumise avec succès')),
+          SnackBar(
+            content: Text('Réclamation soumise avec succès', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+            backgroundColor: AppColors.primaryDarkGreen,
+          ),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de la soumission: $e')),
+          SnackBar(
+            content: Text('Erreur lors de la soumission: $e', style: AppTypography.bodyMedium(context).copyWith(color: Colors.white)),
+            backgroundColor: AppColors.errorRed,
+          ),
         );
       }
     } finally {
       if (mounted) {
+        LoadingOverlay.hide(); // Hide loading overlay
         setState(() {
           _isLoading = false;
         });
@@ -233,6 +277,7 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Consistent background
       appBar: CustomAppBar(
         title: 'Soumettre une réclamation',
         showBackButton: true,
@@ -244,62 +289,21 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
               ),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.screenPadding), // Use AppSpacing
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Reservation info card
-                    if (_reservationData != null)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Réservation',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _reservationData!['serviceName'] ?? 'Service non spécifié',
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    
-                    const SizedBox(height: 24),
-                    
                     // Title field
                     Text(
                       'Titre de la réclamation',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
+                      style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
                         fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                        color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    AppSpacing.verticalSpacing(AppSpacing.xs), // Use AppSpacing
                     CustomTextField(
                       labelText: 'Titre',
                       controller: _titleController,
@@ -312,18 +316,17 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
                       },
                     ),
                     
-                    const SizedBox(height: 24),
+                    AppSpacing.verticalSpacing(AppSpacing.sectionSpacing), // Use AppSpacing
                     
                     // Description field
                     Text(
                       'Description détaillée',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
+                      style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
                         fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                        color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    AppSpacing.verticalSpacing(AppSpacing.xs), // Use AppSpacing
                     CustomTextField(
                       labelText: 'Description',
                       controller: _descriptionController,
@@ -339,121 +342,75 @@ class _ReclamationFormPageState extends State<ReclamationFormPage> {
                       },
                     ),
                     
-                    const SizedBox(height: 24),
+                    AppSpacing.verticalSpacing(AppSpacing.sectionSpacing), // Use AppSpacing
                     
                     // Evidence images
                     Text(
                       'Photos (optionnel)',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
+                      style: AppTypography.bodyLarge(context).copyWith( // Use AppTypography
                         fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                        color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary, // Use AppColors
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    AppSpacing.verticalSpacing(AppSpacing.xs), // Use AppSpacing
                     Text(
                       'Ajoutez jusqu\'à 3 photos pour illustrer votre problème',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
+                      style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
                         color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    AppSpacing.verticalSpacing(AppSpacing.md), // Use AppSpacing
                     
                     // Image picker
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? AppColors.darkInputBackground : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          // Selected images
-                          if (_evidenceImages.isNotEmpty)
-                            SizedBox(
-                              height: 100,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _evidenceImages.length,
-                                itemBuilder: (context, index) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: Stack(
-                                      children: [
-                                        Container(
-                                          width: 100,
-                                          height: 100,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(8),
-                                            image: DecorationImage(
-                                              image: FileImage(_evidenceImages[index]),
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 4,
-                                          right: 4,
-                                          child: GestureDetector(
-                                            onTap: () => _removeImage(index),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.red,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                Icons.close,
-                                                size: 16,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          
-                          if (_evidenceImages.isNotEmpty)
-                            const SizedBox(height: 16),
-                          
-                          // Add image button
-                          if (_evidenceImages.length < 3)
-                            ElevatedButton.icon(
-                              onPressed: _pickImage,
-                              icon: const Icon(Icons.add_photo_alternate),
-                              label: const Text('Ajouter des photos'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                                foregroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                side: BorderSide(
-                                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                    ImageGalleryUtils.buildImageGallery( // Use ImageGalleryUtils
+                      context,
+                      _evidenceImages,
+                      isDarkMode: isDarkMode,
+                      fixedHeight: 100, // Fixed height for the horizontal list
+                      onRemoveImage: _removeImage,
                     ),
+                    AppSpacing.verticalSpacing(AppSpacing.md), // Spacing after gallery
                     
-                    const SizedBox(height: 32),
+                    // Add image button
+                    if (_evidenceImages.length < 3)
+                      CustomButton(
+                        text: 'Ajouter des photos',
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
+                        isPrimary: false,
+                        backgroundColor: isDarkMode ? AppColors.darkInputBackground : AppColors.lightInputBackground,
+                        textColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        height: AppSpacing.buttonMedium,
+                        borderRadius: AppSpacing.radiusMd,
+                      ),
                     
-                    // Submit button
-                    CustomButton(
-                      text: 'Soumettre la réclamation',
-                      onPressed: _submitReclamation,
-                      backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                    ),
+                    AppSpacing.verticalSpacing(AppSpacing.xxl), // Use AppSpacing
+                    
+                    // Submit button (moved to bottomNavigationBar)
+                    // CustomButton(
+                    //   text: 'Soumettre la réclamation',
+                    //   onPressed: _submitReclamation,
+                    //   backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                    //   height: AppSpacing.buttonLarge,
+                    //   borderRadius: AppSpacing.radiusMd,
+                    // ),
                   ],
                 ),
               ),
             ),
+      bottomNavigationBar: Container(
+        color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Same as CustomAppBar background
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: SafeArea(
+          child: CustomButton(
+            text: 'Soumettre la réclamation',
+            onPressed: _submitReclamation,
+            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            height: AppSpacing.buttonLarge,
+            borderRadius: AppSpacing.radiusMd,
+          ),
+        ),
+      ),
     );
   }
 }

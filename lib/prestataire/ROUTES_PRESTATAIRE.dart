@@ -11,6 +11,7 @@ import '../chat/conversation_marketplace.dart';
 import '../chat/provider_list_conversations.dart';
 import 'provider_reclamations_page.dart';
 import 'provider_reclamation_details_page.dart';
+import '../../client/services/reclamation_form_page.dart'; // New import
 
 final prestataireRoutes = GoRoute(
   path: '/prestataireHome',
@@ -18,7 +19,10 @@ final prestataireRoutes = GoRoute(
   routes: [
     GoRoute(
       path: 'registration',
-      builder: (context, state) => const ProviderRegistrationForm(),
+      builder: (context, state) {
+        final initialData = state.extra as Map<String, dynamic>?;
+        return ProviderRegistrationForm(initialData: initialData);
+      },
     ),
     GoRoute(
       path: 'notifications',
@@ -97,11 +101,18 @@ final prestataireRoutes = GoRoute(
         return const ProviderReclamationsPage();
       },
     ),
-        GoRoute(
+    GoRoute(
       path: 'reclamation/details/:reclamationId',
       builder: (BuildContext context, GoRouterState state) {
         final reclamationId = state.pathParameters['reclamationId'] ?? '';
         return ProviderReclamationDetailsPage(reclamationId: reclamationId);
+      },
+    ),
+    GoRoute(
+      path: 'reclamation/create/:reservationId', // New route
+      builder: (BuildContext context, GoRouterState state) {
+        final reservationId = state.pathParameters['reservationId'] ?? '';
+        return ReclamationFormPage(reservationId: reservationId);
       },
     ),
   ],

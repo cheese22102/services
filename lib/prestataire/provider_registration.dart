@@ -4,20 +4,44 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../front/app_colors.dart';
 import 'models/provider_models.dart';
 import 'utils/provider_utils.dart';
 import '../front/custom_button.dart';
 import '../front/custom_text_field.dart';
+import '../utils/cloudinary_service.dart';
+import '../utils/image_upload_utils.dart'; // Import the new utility
+import '../front/custom_app_bar.dart';
+import '../front/app_spacing.dart';
+import '../front/app_typography.dart';
+import '../front/custom_snackbar.dart';
+import '../front/loading_overlay.dart'; // Import LoadingOverlay
 
+class ServiceItem {
+  final String name;
+  final String? imageUrl;
+
+  ServiceItem({required this.name, this.imageUrl});
+}
+
+class CertificationInput {
+  final TextEditingController nameController;
+  File? file; // For new uploads
+
+  CertificationInput({required this.nameController, this.file});
+
+  void dispose() {
+    nameController.dispose();
+  }
+}
 
 class ProviderRegistrationForm extends StatefulWidget {
-  const ProviderRegistrationForm({super.key});
+  final Map<String, dynamic>? initialData; // New: Optional initial data
+
+  const ProviderRegistrationForm({super.key, this.initialData});
 
   @override
   State<ProviderRegistrationForm> createState() => _ProviderRegistrationFormState();
@@ -28,30 +52,32 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
   final _picker = ImagePicker();
   final _pageController = PageController();
   int _currentPage = 0;
+  final int _totalSteps = 6;
   
   // Controllers
   final _bioController = TextEditingController();
-  final _yearsController = TextEditingController();
-  final _certificationController = TextEditingController();
   final _workingAreaController = TextEditingController();
+  Map<String, TextEditingController> _experienceControllers = {}; // New: Map for experience controllers
   
   // Form data
-  List<String> selectedServices = [];
+  List<ServiceItem> selectedServices = [];
   List<Experience> experiences = [];
-  List<String> certifications = [];
-  List<File> certificationFiles = [];
-  File? idCardFile;
-  File? selfieWithIdFile;
-  File? patenteFile;
-  List<File> projectPhotoFiles = [];
+  Map<String, CertificationInput> _certificationInputs = {}; // New: Map for certification inputs
+  File? idCardFile; // For new upload
+  String? idCardUrl; // For existing URL
+  File? selfieWithIdFile; // For new upload
+  String? selfieWithIdUrl; // For existing URL
+  File? patenteFile; // For new upload
+  String? patenteUrl; // For existing URL
+  List<dynamic> projectPhotoFiles = []; // Changed to dynamic to hold File or String (URL)
 
-  bool _isLoading = false;
-  List<String> availableServices = [];
+  List<ServiceItem> availableServices = [];
   
   // Map functionality
   LatLng? _selectedLocation;
   String _locationAddress = '';
-  final MapController _mapController = MapController();
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
   bool _isLoadingLocation = false;
   
   // Working hours
@@ -67,30 +93,162 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     // Initialize working days and hours
     _workingDays = ProviderUtils.initializeWorkingDays();
     _workingHours = ProviderUtils.initializeWorkingHours();
+    
+    // Load initial data if provided
+    if (widget.initialData != null) {
+      _prefillForm(widget.initialData!);
+    }
+
+    // Initialize experience controllers for initially selected services (if any)
+    _updateExperienceControllers();
+    // Initialize certification inputs for initially selected services (if any)
+    _updateCertificationInputs();
+  }
+
+  void _prefillForm(Map<String, dynamic> data) {
+    _bioController.text = data['bio'] ?? '';
+    _workingAreaController.text = data['workingArea'] ?? '';
+
+    // Prefill experiences
+    final List<dynamic> experienceData = data['experiences'] ?? [];
+    for (var exp in experienceData) {
+      final serviceName = exp['service'] as String;
+      final int years = exp['years'] as int? ?? 0; // Years are now stored as int
+      String experienceRangeString = '';
+      switch (years) {
+        case 1:
+          experienceRangeString = '<1-1';
+          break;
+        case 2:
+          experienceRangeString = '2-3';
+          break;
+        case 3:
+          experienceRangeString = '3-4';
+          break;
+        case 5:
+          experienceRangeString = '5+';
+          break;
+        default:
+          experienceRangeString = '';
+      }
+      _experienceControllers[serviceName] = TextEditingController(text: experienceRangeString);
+    }
+
+    // Prefill certifications
+    final List<String> certNames = List<String>.from(data['certifications'] ?? []);
+    for (int i = 0; i < certNames.length; i++) {
+      final String certName = certNames[i];
+      _certificationInputs[certName] = CertificationInput(
+        nameController: TextEditingController(text: certName),
+        file: null, // Files cannot be prefilled from URLs directly, user has to re-upload
+      );
+    }
+
+    // Prefill image URLs for display (not File objects)
+    idCardUrl = data['idCardUrl'] as String?;
+    selfieWithIdUrl = data['selfieWithIdUrl'] as String?;
+    patenteUrl = data['patenteUrl'] as String?;
+    projectPhotoFiles = List<dynamic>.from(data['projectPhotos'] ?? []); // Prefill with URLs
+
+    // Prefill location
+    final exactLocation = data['exactLocation'] as Map<String, dynamic>?;
+    if (exactLocation != null) {
+      _selectedLocation = LatLng(
+        exactLocation['latitude'] as double,
+        exactLocation['longitude'] as double,
+      );
+      _locationAddress = exactLocation['address'] as String;
+      _workingAreaController.text = _locationAddress;
+      _updateMarker(_selectedLocation!); // Update marker on map
+    }
+
+    // Prefill working hours and days
+    // Explicitly cast values to bool to avoid _TypeError
+    _workingDays = (data['workingDays'] as Map<String, dynamic>?)?.map(
+      (key, value) => MapEntry(key, value as bool),
+    ) ?? ProviderUtils.initializeWorkingDays();
+
+    // Explicitly cast values to Map<String, String> to avoid _TypeError
+    _workingHours = (data['workingHours'] as Map<String, dynamic>?)?.map(
+      (key, value) => MapEntry(key, Map<String, String>.from(value as Map<String, dynamic>)),
+    ) ?? ProviderUtils.initializeWorkingHours();
+
+    // Trigger UI update
+    setState(() {}); 
+  }
+
+  // New method to manage experience controllers based on selected services
+  void _updateExperienceControllers() {
+    final newControllers = <String, TextEditingController>{};
+    for (var serviceItem in selectedServices) {
+      // Reuse existing controller if it exists, otherwise create a new one
+      newControllers[serviceItem.name] = _experienceControllers[serviceItem.name] ?? TextEditingController();
+    }
+    // Dispose controllers that are no longer needed
+    _experienceControllers.forEach((serviceName, controller) {
+      if (!newControllers.containsKey(serviceName)) {
+        controller.dispose();
+      }
+    });
+    _experienceControllers = newControllers;
+  }
+
+  // New method to manage certification inputs based on selected services
+  void _updateCertificationInputs() {
+    final newInputs = <String, CertificationInput>{};
+    for (var serviceItem in selectedServices) {
+      // Reuse existing input if it exists, otherwise create a new one
+      newInputs[serviceItem.name] = _certificationInputs[serviceItem.name] ??
+          CertificationInput(nameController: TextEditingController());
+    }
+    // Dispose inputs that are no longer needed
+    _certificationInputs.forEach((serviceName, input) {
+      if (!newInputs.containsKey(serviceName)) {
+        input.dispose();
+      }
+    });
+    _certificationInputs = newInputs;
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _bioController.dispose();
-    _yearsController.dispose();
-    _certificationController.dispose();
     _workingAreaController.dispose();
+    _experienceControllers.forEach((key, controller) => controller.dispose()); // Dispose all experience controllers
+    _certificationInputs.forEach((key, input) => input.dispose()); // Dispose all certification inputs
     super.dispose();
   }
 
   Future<void> _loadServices() async {
     final snapshot = await FirebaseFirestore.instance.collection('services').get();
     setState(() {
-      availableServices = snapshot.docs.map((doc) => doc['name'] as String).toList();
+      availableServices = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return ServiceItem(
+          name: data['name'] as String? ?? 'Unknown Service',
+          imageUrl: data['imageUrl'] as String?,
+        );
+      }).toList();
+
+      // If initial data was provided, and services are now loaded, prefill selected services
+      if (widget.initialData != null && selectedServices.isEmpty) {
+        final List<String> serviceNames = List<String>.from(widget.initialData!['services'] ?? []);
+        selectedServices = availableServices.where((service) => serviceNames.contains(service.name)).toList();
+        _updateExperienceControllers();
+        _updateCertificationInputs();
+      }
     });
   }
 
   Future<void> _pickProjectPhoto() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
+    final List<File> images = await ImageUploadUtils.pickMultipleImagesWithOptions(
+      context,
+      isDarkMode: Theme.of(context).brightness == Brightness.dark,
+    );
+    if (images.isNotEmpty) {
       setState(() {
-        projectPhotoFiles.add(File(image.path));
+        projectPhotoFiles.addAll(images);
       });
     }
   }
@@ -176,9 +334,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       // Update map and address
       _updateLocation(LatLng(position.latitude, position.longitude));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur de localisation: $e')),
-      );
+      CustomSnackbar.showError(context: context, message: 'Erreur de localisation: $e');
     } finally {
       setState(() => _isLoadingLocation = false);
     }
@@ -192,7 +348,10 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     
     try {
       // Move map to selected position
-      _mapController.move(position, 15.0);
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(position, 15.0),
+      );
+      _updateMarker(position);
       
       // Get address from coordinates
       final address = await ProviderUtils.getAddressFromCoordinates(position);
@@ -206,6 +365,18 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     } finally {
       setState(() => _isLoadingLocation = false);
     }
+  }
+  
+  void _updateMarker(LatLng point) {
+    setState(() {
+      _markers = {
+        Marker(
+          markerId: const MarkerId('selected_location'),
+          position: point,
+          infoWindow: const InfoWindow(title: 'Selected Location'),
+        ),
+      };
+    });
   }
 
   Future<void> _pickImage(ImageSource source, Function(File) onImagePicked) async {
@@ -304,22 +475,6 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     });
   }
 
-  Future<void> _addCertification() async {
-    if (_certificationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez entrer le nom de la certification')),
-      );
-      return;
-    }
-
-    _showImageSourceOptions(context, (file) {
-      setState(() {
-        certifications.add(_certificationController.text);
-        certificationFiles.add(file);
-        _certificationController.clear();
-      });
-    });
-  }
 
   Future<void> _selectTime(BuildContext context, String day, String type) async {
     final TimeOfDay initialTime = ProviderUtils.parseTimeString(_workingHours[day]![type]!);
@@ -353,41 +508,33 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
         final formattedMinute = pickedTime.minute.toString().padLeft(2, '0');
         final timeString = '$formattedHour:$formattedMinute';
         
-        // If setting start time, ensure it's before end time
-        if (type == 'start') {
-          final endTime = ProviderUtils.parseTimeString(_workingHours[day]!['end']!);
-          if (pickedTime.hour > endTime.hour || 
-              (pickedTime.hour == endTime.hour && pickedTime.minute >= endTime.minute)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('L\'heure de début doit être avant l\'heure de fin')),
-            );
-            return;
-          }
-          
-          // Check if total hours would exceed 12
-          if (ProviderUtils.calculateHoursDifference(pickedTime, endTime) > 12) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Maximum 12 heures de travail par jour')),
-            );
-            return;
-          }
-        } 
+          // If setting start time, ensure it's before end time
+          if (type == 'start') {
+            final endTime = ProviderUtils.parseTimeString(_workingHours[day]!['end']!);
+            if (pickedTime.hour > endTime.hour || 
+                (pickedTime.hour == endTime.hour && pickedTime.minute >= endTime.minute)) {
+              CustomSnackbar.showError(context: context, message: 'L\'heure de début doit être avant l\'heure de fin');
+              return;
+            }
+            
+            // Check if total hours would exceed 12
+            if (ProviderUtils.calculateHoursDifference(pickedTime, endTime) > 12) {
+              CustomSnackbar.showError(context: context, message: 'Maximum 12 heures de travail par jour');
+              return;
+            }
+          } 
         // If setting end time, ensure it's after start time
         else if (type == 'end') {
           final startTime = ProviderUtils.parseTimeString(_workingHours[day]!['start']!);
           if (pickedTime.hour < startTime.hour || 
               (pickedTime.hour == startTime.hour && pickedTime.minute <= startTime.minute)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('L\'heure de fin doit être après l\'heure de début')),
-            );
+            CustomSnackbar.showError(context: context, message: 'L\'heure de fin doit être après l\'heure de début');
             return;
           }
           
           // Check if total hours would exceed 12
           if (ProviderUtils.calculateHoursDifference(startTime, pickedTime) > 12) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Maximum 12 heures de travail par jour')),
-            );
+            CustomSnackbar.showError(context: context, message: 'Maximum 12 heures de travail par jour');
             return;
           }
         }
@@ -415,49 +562,57 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     switch (_currentPage) {
       case 0: // Services page
         if (selectedServices.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sélectionnez au moins un service')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Sélectionnez au moins un service');
           return false;
         }
         return true;
       case 1: // Professional info page
+        // Validate years of experience for each selected service
+        for (var serviceItem in selectedServices) {
+          final controller = _experienceControllers[serviceItem.name];
+          if (controller == null || controller.text.isEmpty) {
+            CustomSnackbar.showError(context: context, message: 'Veuillez sélectionner les années d\'expérience pour ${serviceItem.name}');
+            return false;
+          }
+        }
+        // Validate certifications for each selected service
+        for (var serviceItem in selectedServices) { // Changed to serviceItem
+          final certificationInput = _certificationInputs[serviceItem.name]; // Use serviceItem.name
+          if (certificationInput == null || certificationInput.nameController.text.isEmpty) {
+            CustomSnackbar.showError(context: context, message: 'Veuillez entrer le nom de la certification pour ${serviceItem.name}'); // Use serviceItem.name
+            return false;
+          }
+          if (certificationInput.file == null) {
+            CustomSnackbar.showError(context: context, message: 'Veuillez ajouter une photo pour la certification de ${serviceItem.name}'); // Use serviceItem.name
+            return false;
+          }
+        }
         return _formKey.currentState?.validate() ?? false;
       case 2: // Documents page
         if (idCardFile == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Photo de carte d\'identité requise')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Photo de carte d\'identité requise');
           return false;
         }
         if (selfieWithIdFile == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Selfie avec carte d\'identité requis')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Selfie avec carte d\'identité requis');
           return false;
         }
         return true;
       case 3: // Project photos page
         if (projectPhotoFiles.length < 2) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ajoutez au moins 2 photos de projets')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Ajoutez au moins 2 photos de projets');
           return false;
         }
         return true;
       case 4: // Location page
         if (_selectedLocation == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Veuillez sélectionner votre localisation sur la carte')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Veuillez sélectionner votre localisation sur la carte');
           return false;
         }
         return _formKey.currentState?.validate() ?? false;
       case 5: // Working hours page
         if (!_workingDays.values.any((isWorking) => isWorking)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sélectionnez au moins un jour de travail')),
-          );
+          CustomSnackbar.showError(context: context, message: 'Sélectionnez au moins un jour de travail');
           return false;
         }
         return true;
@@ -473,66 +628,108 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     bool confirmed = await _showConfirmationDialog();
     if (!confirmed) return;
     
-    setState(() => _isLoading = true);
+    LoadingOverlay.show(context); // Show loading overlay
 
     try {
       final userId = FirebaseAuth.instance.currentUser!.uid;
 
       // Upload ID Card
-      final idCardUrl = await ProviderUtils.uploadFileToCloudinary(idCardFile!);
-      if (idCardUrl == null) throw Exception("Échec upload pièce d'identité");
+      final idCardUrlToSave = idCardFile != null ? await CloudinaryService.uploadImage(idCardFile!) : (widget.initialData?['idCardUrl'] as String?);
+      if (idCardUrlToSave == null) throw Exception("Échec upload pièce d'identité");
       
       // Upload Selfie with ID
-      final selfieWithIdUrl = await ProviderUtils.uploadFileToCloudinary(selfieWithIdFile!);
-      if (selfieWithIdUrl == null) throw Exception("Échec upload selfie avec pièce d'identité");
+      final selfieWithIdUrlToSave = selfieWithIdFile != null ? await CloudinaryService.uploadImage(selfieWithIdFile!) : (widget.initialData?['selfieWithIdUrl'] as String?);
+      if (selfieWithIdUrlToSave == null) throw Exception("Échec upload selfie avec pièce d'identité");
 
       // Upload project photos
-      List<String> projectPhotoUrls = [];
-      for (var file in projectPhotoFiles) {
-        final url = await ProviderUtils.uploadFileToCloudinary(file);
-        if (url != null) {
-          projectPhotoUrls.add(url);
+      List<String> finalProjectPhotoUrls = [];
+      for (var item in projectPhotoFiles) {
+        if (item is File) {
+          final url = await ImageUploadUtils.uploadSingleImage(item);
+          if (url != null) {
+            finalProjectPhotoUrls.add(url);
+          }
+        } else if (item is String) {
+          finalProjectPhotoUrls.add(item); // Already a URL
         }
       }
-
-      // ... rest of the method
+      if (finalProjectPhotoUrls.isEmpty && projectPhotoFiles.isNotEmpty) {
+        throw Exception("Échec de l'upload des photos de projets");
+      }
 
       // Upload Patente (optional)
-      String? patenteUrl;
+      String? patenteUrlToSave;
       if (patenteFile != null) {
-        patenteUrl = await ProviderUtils.uploadFileToCloudinary(patenteFile!);
+        patenteUrlToSave = await ImageUploadUtils.uploadSingleImage(patenteFile!);
+      } else {
+        patenteUrlToSave = widget.initialData?['patenteUrl'] as String?;
       }
 
       // Upload Certifications
+      List<String> certificationNames = [];
       List<String> certificationUrls = [];
-      for (var file in certificationFiles) {
-        final url = await ProviderUtils.uploadFileToCloudinary(file);
-        if (url != null) certificationUrls.add(url);
+      for (var entry in _certificationInputs.entries) {
+        final input = entry.value;
+        if (input.nameController.text.isNotEmpty) { // Check if name is not empty
+          if (input.file != null) { // If new file is provided, upload it
+            final url = await ImageUploadUtils.uploadSingleImage(input.file!);
+            if (url != null) {
+              certificationNames.add(input.nameController.text);
+              certificationUrls.add(url);
+            }
+          } else { // If no new file, try to use existing URL from initialData
+            final initialCertFiles = List<String>.from(widget.initialData?['certificationFiles'] ?? []);
+            final initialCertNames = List<String>.from(widget.initialData?['certifications'] ?? []);
+            
+            // Find the URL for this certification name from initial data
+            int initialIndex = initialCertNames.indexOf(input.nameController.text);
+            if (initialIndex != -1 && initialIndex < initialCertFiles.length) {
+              certificationNames.add(input.nameController.text);
+              certificationUrls.add(initialCertFiles[initialIndex]);
+            }
+          }
+        }
       }
 
-      // Create experiences from years of experience
-      final yearsOfExperience = int.tryParse(_yearsController.text) ?? 0;
-      final experiences = selectedServices.map((service) => 
-        Experience(
-          service: service,
-          years: yearsOfExperience,
-        )
-      ).toList();
+      // Create experiences from collected data
+      final experiences = _experienceControllers.entries.map((entry) {
+        int yearsValue;
+        switch (entry.value.text) {
+          case '<1-1':
+            yearsValue = 1;
+            break;
+          case '2-3':
+            yearsValue = 2;
+            break;
+          case '3-4':
+            yearsValue = 3;
+            break;
+          case '5+':
+            yearsValue = 5;
+            break;
+          default:
+            yearsValue = 0; // Fallback for unexpected values
+        }
+        return Experience(
+          service: entry.key,
+          years: yearsValue,
+        );
+      }).toList();
 
       // Create provider data with only the required fields
       final providerData = {
         'userId': userId,
-        'services': selectedServices,
+        'services': selectedServices.map((s) => s.name).toList(), // Convert ServiceItem to String
         'experiences': experiences.map((e) => e.toMap()).toList(),
-        'certifications': certifications,
-        'certificationFiles': certificationUrls,
+        'certifications': certificationNames, // Use the new list of names
+        'certificationFiles': certificationUrls, // Use the new list of URLs
         'bio': _bioController.text,
-        'idCardUrl': idCardUrl,
-        'selfieWithIdUrl': selfieWithIdUrl,
-        'patenteUrl': patenteUrl,
+        'idCardUrl': idCardUrlToSave, // Use the uploaded URL or existing
+        'selfieWithIdUrl': selfieWithIdUrlToSave, // Use the uploaded URL or existing
+        'patenteUrl': patenteUrlToSave, // Use the uploaded URL or existing
         'status': 'pending',
         'submissionDate': FieldValue.serverTimestamp(),
-        'projectPhotos': projectPhotoUrls,
+        'projectPhotos': finalProjectPhotoUrls, // Use the final list of URLs
         // Add location data
         'exactLocation': {
           'latitude': _selectedLocation!.latitude,
@@ -545,58 +742,35 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
         'workingDays': _workingDays,
       };
 
-      // Create provider in Firestore
+      // If this is a resubmission of a rejected application, remove rejection fields
+      if (widget.initialData?['status'] == 'rejected') {
+        providerData['rejectionDate'] = FieldValue.delete();
+        providerData['rejectionReason'] = FieldValue.delete();
+      }
+
+      // Create or update provider in Firestore, merging with existing data
       await FirebaseFirestore.instance
           .collection('providers')
           .doc(userId)
-          .set(providerData);
+          .set(providerData, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Demande soumise avec succès. En attente de validation.'),
-            duration: Duration(seconds: 3),
-          ),
+        CustomSnackbar.showSuccess(
+          context: context,
+          message: 'Demande soumise avec succès. En attente de validation.',
         );
         context.go('/prestataireHome');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
+        CustomSnackbar.showError(context: context, message: 'Erreur: $e');
       }
     } finally {
-      setState(() => _isLoading = false);
+      LoadingOverlay.hide(); // Hide loading overlay
     }
   }
 
   // Helper method to build section headers
-  Widget _buildSectionHeader(String title, String subtitle) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title, 
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold, 
-            fontSize: 20,
-            color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          subtitle,
-          style: GoogleFonts.poppins(
-            fontSize: 14, 
-            color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-          ),
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
 
   Widget _buildServicesPage() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -605,55 +779,54 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Services proposés', 
-            'Choisissez les services que vous proposez à vos clients (1-3)'
+          Text(
+            'Choisissez les services que vous proposez à vos clients (1-3)',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
           ),
+          const SizedBox(height: 24),
           
           if (availableServices.isEmpty)
             const Center(child: CircularProgressIndicator())
           else
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: availableServices.map((service) {
-                final isSelected = selectedServices.contains(service);
-                return FilterChip(
-                  label: Text(
-                    service, 
-                    style: GoogleFonts.poppins(
-                      color: isSelected 
-                        ? Colors.white 
-                        : (isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
-                    ),
-                  ),
-                  selected: isSelected,
-                  checkmarkColor: Colors.white,
-                  selectedColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.grey.shade200,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: isSelected 
-                        ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-                        : Colors.transparent,
-                    ),
-                  ),
-                  onSelected: selectedServices.length >= 3 && !isSelected
-                      ? null
-                      : (selected) {
-                          setState(() {
-                            if (selected) {
-                              selectedServices.add(service);
-                            } else {
-                              selectedServices.remove(service);
-                            }
-                          });
-                        },
-                  showCheckmark: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3, // 3 items per row
+                childAspectRatio: 0.8, // Adjust aspect ratio as needed
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: availableServices.length,
+              itemBuilder: (context, index) {
+                final serviceItem = availableServices[index];
+                final isSelected = selectedServices.any((s) => s.name == serviceItem.name); // Check by name
+                
+                return _buildServiceSelectionItem(
+                  context,
+                  serviceItem,
+                  isSelected,
+                  isDarkMode,
+                  (selected) {
+                    setState(() {
+                      if (selected) {
+                        if (selectedServices.length < 3) { // Limit to 3 services
+                          selectedServices.add(serviceItem);
+                        } else {
+                          CustomSnackbar.showError(context: context, message: 'Vous ne pouvez sélectionner que 3 services maximum.');
+                        }
+                      } else {
+                        selectedServices.removeWhere((s) => s.name == serviceItem.name); // Remove by name
+                      }
+                      _updateExperienceControllers();
+                      _updateCertificationInputs();
+                    });
+                  },
                 );
-              }).toList(),
+              },
             ),
           
           if (selectedServices.isEmpty)
@@ -701,7 +874,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...selectedServices.map((service) => Padding(
+                ...selectedServices.map((serviceItem) => Padding( // Changed to serviceItem
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
                     children: [
@@ -712,7 +885,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        service,
+                        serviceItem.name, // Use serviceItem.name
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
@@ -734,10 +907,14 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Informations professionnelles', 
-            'Parlez-nous de votre expérience et vos compétences'
+          Text(
+            'Parlez-nous de votre expérience et vos compétences',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
           ),
+          const SizedBox(height: 24),
           
           CustomTextField(
             controller: _bioController,
@@ -748,125 +925,212 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
           
           const SizedBox(height: 16),
           
-         const SizedBox(height: 16),
-          
-          Text(
-            'Années d\'expérience',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _buildExperienceButton('1-2 ans', '1'),
-              _buildExperienceButton('2-4 ans', '3'),
-              _buildExperienceButton('5+ ans', '5'),
-              _buildExperienceButton('10+ ans', '10'),
-            ],
-          ),
-          
-          const SizedBox(height: 24),
-          
-          const SizedBox(height: 24),
-          
-          Text(
-            'Certifications (optionnel)',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          Row(
-            children: [
-              Expanded(
-                child: CustomTextField(
-                  controller: _certificationController,
-                  labelText: 'Nom de la certification',
-                  hintText: 'Ex: Diplôme, Formation...',
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(
-                  Icons.add_circle,
-                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                  size: 36,
-                ),
-                onPressed: _addCertification,
-              ),
-            ],
-          ),
-          
           const SizedBox(height: 16),
           
-          if (certifications.isNotEmpty) ...[
-            Text(
-              'Certifications ajoutées:',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...List.generate(certifications.length, (index) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? AppColors.darkInputBackground : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
+          // Dynamic years of experience input for each selected service
+          ...(selectedServices.isNotEmpty
+              ? [
+                  Card(
+                    elevation: 2,
+                    color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            certifications[index],
+                            'Années d\'expérience par service',
                             style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                               color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Document ajouté',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                            ),
-                          ),
+                          const SizedBox(height: 12),
+                          ...selectedServices.map((serviceItem) {
+                            final List<String> experienceRanges = ['>1-1', '2-3', '3-4', '5+'];
+                            final String? selectedRange = _experienceControllers[serviceItem.name]?.text;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Années d\'expérience pour ${serviceItem.name}:',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8.0, // horizontal spacing
+                                    runSpacing: 8.0, // vertical spacing
+                                    children: experienceRanges.map((range) {
+                                      final bool isSelected = selectedRange == range;
+                                      return ElevatedButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _experienceControllers[serviceItem.name] = TextEditingController(text: range);
+                                          });
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isSelected
+                                              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                              : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+                                          foregroundColor: isSelected
+                                              ? Colors.white
+                                              : (isDarkMode ? Colors.white70 : Colors.black87),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            side: BorderSide(
+                                              color: isSelected
+                                                  ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                                  : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                        ),
+                                        child: Text(
+                                          range,
+                                          style: GoogleFonts.poppins(fontSize: 14),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        setState(() {
-                          certifications.removeAt(index);
-                          certificationFiles.removeAt(index);
-                        });
-                      },
+                  ),
+                ]
+              : [
+                  const SizedBox(height: 24), // Spacing if no services selected
+                ]),
+          
+          // Dynamic certifications input for each selected service
+          ...(selectedServices.isNotEmpty
+              ? [
+                  Card(
+                    elevation: 2,
+                    color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Certifications par service (optionnel)', // Updated title
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ...selectedServices.map((serviceItem) { // Changed to serviceItem
+                            // Safely get the certification input, providing a dummy if null
+                            final currentInput = _certificationInputs[serviceItem.name] ?? CertificationInput(nameController: TextEditingController(text: 'ERROR: Missing controller for ${serviceItem.name}')); // Use serviceItem.name
+                            
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: Row( // Use Row to place text field and button side-by-side
+                                children: [
+                                  Expanded(
+                                    child: CustomTextField(
+                                      controller: currentInput.nameController,
+                                      labelText: 'Certification pour ${serviceItem.name}', // Use serviceItem.name
+                                      hintText: 'Nom de la certification',
+                                      validator: (value) => null, // Validation will be in _validateCurrentPage
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8), // Spacing between text field and button
+                                  // Small button with image+ icon
+                                  SizedBox(
+                                    width: 48, // Fixed width for the button
+                                    height: 48, // Fixed height for the button
+                                    child: ElevatedButton(
+                                      onPressed: () => _showImageSourceOptions(context, (file) {
+                                        setState(() {
+                                          currentInput.file = file; // Assign file to the current input
+                                        });
+                                      }),
+                                      style: ElevatedButton.styleFrom(
+                                        padding: EdgeInsets.zero, // Remove default padding
+                                        backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        currentInput.file != null ? Icons.image : Icons.add_photo_alternate, // Change icon if image is picked
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                  // Display selected image thumbnail if available
+                                  if (currentInput.file != null) ...[
+                                    const SizedBox(width: 8),
+                                    Stack(
+                                      children: [
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(8),
+                                            image: DecorationImage(
+                                              image: FileImage(currentInput.file!), // Safe due to outer if
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: -8,
+                                          right: -8,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                currentInput.file = null; // Set file to null
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.black54,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.close,
+                                                size: 16,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              );
-            }),
-          ],
+                  ),
+                ]
+              : [
+                  const SizedBox(height: 24), // Spacing if no services selected
+                ]),
         ],
       ),
     );
@@ -879,16 +1143,21 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Documents d\'identité', 
-            'Nous avons besoin de vérifier votre identité'
+          Text(
+            'Nous avons besoin de vérifier votre identité',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
           ),
+          const SizedBox(height: 24),
           
           // ID Card
           Card(
             elevation: 2,
             color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
             margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -951,6 +1220,37 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                         ),
                       ],
                     )
+                  else if (idCardUrl != null && idCardUrl!.isNotEmpty)
+                    Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              idCardUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() {
+                              idCardUrl = null; // Clear URL if user wants to re-upload
+                            });
+                          },
+                        ),
+                      ],
+                    )
                   else
                     CustomButton(
                       text: 'Ajouter une photo',
@@ -968,6 +1268,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
             elevation: 2,
             color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
             margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -1030,6 +1331,37 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                         ),
                       ],
                     )
+                  else if (selfieWithIdUrl != null && selfieWithIdUrl!.isNotEmpty)
+                    Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              selfieWithIdUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() {
+                              selfieWithIdUrl = null; // Clear URL if user wants to re-upload
+                            });
+                          },
+                        ),
+                      ],
+                    )
                   else
                     CustomButton(
                       text: 'Ajouter une photo',
@@ -1047,6 +1379,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
             elevation: 2,
             color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
             margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -1109,6 +1442,37 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                         ),
                       ],
                     )
+                  else if (patenteUrl != null && patenteUrl!.isNotEmpty)
+                    Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              patenteUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() {
+                              patenteUrl = null; // Clear URL if user wants to re-upload
+                            });
+                          },
+                        ),
+                      ],
+                    )
                   else
                     CustomButton(
                       text: 'Ajouter une photo',
@@ -1133,41 +1497,6 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       ),
     );
   }
-  Widget _buildExperienceButton(String label, String value) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final isSelected = _yearsController.text == value;
-    
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _yearsController.text = value;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected 
-            ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-            : (isDarkMode ? AppColors.darkInputBackground : Colors.grey.shade200),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected 
-              ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
-              : Colors.transparent,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected 
-              ? Colors.white 
-              : (isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
-          ),
-        ),
-      ),
-    );
-  }
   Widget _buildLocationPage() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return SingleChildScrollView(
@@ -1175,10 +1504,14 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Localisation', 
-            'Définissez votre zone de travail'
+          Text(
+            'Définissez votre zone de travail',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
           ),
+          const SizedBox(height: 24),
           
           // Map widget
           Container(
@@ -1191,34 +1524,23 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      center: _selectedLocation ?? const LatLng(36.8065, 10.1815), // Default to Tunis
+                  child: GoogleMap(
+                    mapType: MapType.normal,
+                    initialCameraPosition: CameraPosition(
+                      target: _selectedLocation ?? const LatLng(36.8065, 10.1815), // Default to Tunis
                       zoom: 13.0,
-                      onTap: (tapPosition, point) => _updateLocation(point),
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.app',
-                      ),
-                      if (_selectedLocation != null)
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              width: 40.0,
-                              height: 40.0,
-                              point: _selectedLocation!,
-                              builder: (context) => Icon(
-                                Icons.location_on,
-                                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                                size: 40.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
+                    onMapCreated: (GoogleMapController controller) {
+                      _mapController = controller;
+                      if (_selectedLocation != null) {
+                        _updateMarker(_selectedLocation!);
+                      }
+                    },
+                    onTap: _updateLocation,
+                    markers: _markers,
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
                   ),
                 ),
                 Positioned(
@@ -1306,118 +1628,61 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Photos de projets', 
-            'Ajoutez des photos de vos projets ou de votre logo (minimum 2 photos)'
-          ),
-          
-          // Grid of photos
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.0,
+          Text(
+            'Ajoutez des photos de vos projets ou de votre logo (minimum 2 photos)',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
             ),
-            itemCount: projectPhotoFiles.length + 1, // +1 for the add button
-            itemBuilder: (context, index) {
-              if (index == projectPhotoFiles.length) {
-                // Add button
-                return InkWell(
-                  onTap: _pickProjectPhoto,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.add_photo_alternate,
-                        size: 40,
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
-                      ),
-                    ),
-                  ),
-                );
-              } else {
-                // Photo preview
-                return Stack(
+          ),
+          const SizedBox(height: 24),
+          
+          ImageUploadUtils.buildImagePickerPreview(
+            images: projectPhotoFiles,
+            onRemoveImage: _removeProjectPhoto,
+            onAddImages: _pickProjectPhoto,
+            isLoading: false, // No longer using local _isLoading
+            isDarkMode: isDarkMode,
+            height: 120, // Adjust height as needed
+          ),
+
+          // Warning if not enough photos
+          if (projectPhotoFiles.length < 2)
+            Card(
+              elevation: 2,
+              color: isDarkMode ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
+              margin: const EdgeInsets.only(top: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: FileImage(projectPhotoFiles[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.amber.shade800,
                     ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: InkWell(
-                        onTap: () => _removeProjectPhoto(index),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.black54,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            size: 16,
-                            color: Colors.white,
-                          ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ajoutez au moins 2 photos de projets', // Corrected message
+                        style: GoogleFonts.poppins(
+                          color: Colors.amber.shade800,
                         ),
                       ),
                     ),
                   ],
-                );
-              }
-            },
-          ),
-          
-          // Warning if not enough photos
-          if (projectPhotoFiles.length < 2)
-            Container(
-              margin: const EdgeInsets.only(top: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDarkMode ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.amber.shade800,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Veuillez ajouter au moins 2 photos',
-                      style: GoogleFonts.poppins(
-                        color: Colors.amber.shade800,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Tips for good photos
           Card(
             elevation: 2,
             color: isDarkMode ? AppColors.darkInputBackground : Colors.white,
             margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -1488,10 +1753,14 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            'Horaires de travail', 
-            'Définissez vos heures de disponibilité'
+          Text(
+            'Définissez vos heures de disponibilité',
+            style: GoogleFonts.poppins(
+              fontSize: 14, 
+              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+            ),
           ),
+          const SizedBox(height: 24),
           
           // Working days selection with improved UI
           Card(
@@ -1651,29 +1920,30 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
           }).toList()),
           
           if (!_workingDays.values.any((isWorking) => isWorking))
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDarkMode ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.red.shade400,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Veuillez sélectionner au moins un jour de travail',
-                      style: GoogleFonts.poppins(
-                        color: Colors.red.shade400,
+            Card(
+              elevation: 2,
+              color: isDarkMode ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50,
+              margin: const EdgeInsets.only(top: 16, bottom: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red.shade400,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Veuillez sélectionner au moins un jour de travail',
+                        style: GoogleFonts.poppins(
+                          color: Colors.red.shade400,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
         ],
@@ -1681,38 +1951,66 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
     );
   }
 
+  // Helper method to get step title
+  String _getStepTitle() {
+    switch (_currentPage) {
+      case 0:
+        return 'Services proposés';
+      case 1:
+        return 'Informations professionnelles';
+      case 2:
+        return 'Documents d\'identité';
+      case 3:
+        return 'Photos de projets';
+      case 4:
+        return 'Localisation';
+      case 5:
+        return 'Horaires de travail';
+      default:
+        return '';
+    }
+  }
+
     @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Inscription Prestataire',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      appBar: CustomAppBar(
+        title: 'Inscription Prestataire',
+        showBackButton: true,
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Form(
+      body: Form( // Removed _isLoading check here
               key: _formKey,
               child: Column(
                 children: [
                   // Progress indicator
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: SmoothPageIndicator(
-                      controller: _pageController,
-                      count: 6, // Update from 5 to 6 to include project photos page
-                      effect: WormEffect(
-                        dotHeight: 10,
-                        dotWidth: 10,
-                        activeDotColor: AppColors.primaryGreen,
-                        dotColor: Colors.grey.shade300,
-                      ),
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: List.generate(_totalSteps, (index) {
+                            return Expanded(
+                              child: Container(
+                                height: 4,
+                                margin: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                                decoration: BoxDecoration(
+                                  color: index <= _currentPage
+                                      ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                                      : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        SizedBox(height: AppSpacing.sm),
+                        Text(
+                          _getStepTitle(),
+                          style: AppTypography.h4(context),
+                        ),
+                      ],
                     ),
                   ),
                   
@@ -1720,6 +2018,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                   Expanded(
                     child: PageView(
                       controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(), // Corrected typo here
                       onPageChanged: (index) {
                         setState(() {
                           _currentPage = index;
@@ -1742,7 +2041,7 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDarkMode ? AppColors.darkBackground : Colors.white,
+                color: isDarkMode ? Colors.grey.shade900 : Colors.white,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -1764,13 +2063,11 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                   else
                     const SizedBox(width: 120),
                     
-                  _isLoading
-                      ? const CircularProgressIndicator()
-                      : CustomButton(
-                          text: _currentPage == 4 ? 'Soumettre' : 'Suivant',
+                  CustomButton( // Removed _isLoading check here
+                          text: _currentPage == _totalSteps - 1 ? 'Soumettre' : 'Suivant',
                           onPressed: () {
                             if (_validateCurrentPage()) {
-                              if (_currentPage < 4) {
+                              if (_currentPage < _totalSteps - 1) {
                                 _nextPage();
                               } else {
                                 _submitForm();
@@ -1783,6 +2080,132 @@ class _ProviderRegistrationFormState extends State<ProviderRegistrationForm> {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getServiceIcon(String serviceName) {
+    switch (serviceName.toLowerCase()) {
+      case 'plomberie':
+        return Icons.plumbing;
+      case 'électricité':
+        return Icons.electrical_services;
+      case 'jardinage':
+        return Icons.yard;
+      case 'ménage':
+        return Icons.cleaning_services;
+      case 'peinture':
+        return Icons.format_paint;
+      case 'menuiserie':
+        return Icons.handyman;
+      case 'informatique':
+        return Icons.computer;
+      case 'déménagement':
+        return Icons.local_shipping;
+      case 'réparation':
+        return Icons.build;
+      default:
+        return Icons.miscellaneous_services;
+    }
+  }
+
+  Widget _buildServiceSelectionItem(
+    BuildContext context,
+    ServiceItem serviceItem,
+    bool isSelected,
+    bool isDarkMode,
+    Function(bool) onSelected,
+  ) {
+    final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
+    final serviceIcon = _getServiceIcon(serviceItem.name);
+
+    return GestureDetector(
+      onTap: () {
+        onSelected(!isSelected); // Toggle selection
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDarkMode ? AppColors.primaryGreen.withOpacity(0.2) : AppColors.primaryDarkGreen.withOpacity(0.2))
+              : (isDarkMode ? AppColors.darkInputBackground : Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? (isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)
+                : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        child: Stack( // Wrap the content in a Stack
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 70, // Define a fixed size for the image container
+                  height: 70,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12), // Rounded corners for the image
+                    child: serviceItem.imageUrl != null && serviceItem.imageUrl!.isNotEmpty
+                        ? Image.network(
+                            serviceItem.imageUrl!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2.0,
+                                  color: primaryColor,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: isDarkMode ? Colors.grey.shade800.withOpacity(0.5) : Colors.grey.shade200,
+                              child: Icon(serviceIcon, color: primaryColor, size: 35),
+                            ),
+                          )
+                        : Container(
+                            color: isDarkMode ? Colors.grey.shade800.withOpacity(0.5) : Colors.grey.shade200,
+                            child: Icon(serviceIcon, color: primaryColor, size: 35),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 8), // Spacing between image and text
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Text(
+                    serviceItem.name,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12, 
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? Colors.white70 : Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            if (isSelected) // Show checkmark if selected
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  Icons.check_circle,
+                  color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                  size: 20,
+                ),
+              ),
           ],
         ),
       ),

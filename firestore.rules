@@ -166,6 +166,7 @@ service cloud.firestore {
 
     // Add rules for reclamations collection
     match /reclamations/{reclamationId} {
+      allow list: if isAuthenticated(); // Allow listing/querying
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.submitterId || 
         request.auth.uid == resource.data.targetId ||

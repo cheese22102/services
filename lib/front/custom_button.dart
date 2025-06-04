@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_spacing.dart'; // Added import
+import 'app_typography.dart'; // Added import
 import 'loading_overlay.dart';
 
 class CustomButton extends StatelessWidget {
@@ -15,6 +16,7 @@ class CustomButton extends StatelessWidget {
   final bool useFullScreenLoader;
   final Color? backgroundColor;
   final Color? textColor;
+  final TextStyle? textStyle; // New parameter
 
   const CustomButton({
     Key? key,
@@ -24,11 +26,12 @@ class CustomButton extends StatelessWidget {
     this.isLoading = false,
     this.icon,
     this.width,
-    this.height = 50,
-    this.borderRadius = 24,
+    this.height = AppSpacing.buttonMedium, // Using AppSpacing
+    this.borderRadius = AppSpacing.radiusXxl, // Using AppSpacing
     this.useFullScreenLoader = false,
     this.backgroundColor,
     this.textColor,
+    this.textStyle, // Initialize new parameter
   }) : super(key: key);
 
   @override
@@ -72,7 +75,7 @@ class CustomButton extends StatelessWidget {
           foregroundColor: MaterialStateProperty.all(txtColor),
           elevation: MaterialStateProperty.all(isPrimary ? 2 : 0),
           padding: MaterialStateProperty.all(
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm), // Using AppSpacing
           ),
           shape: MaterialStateProperty.all(
             RoundedRectangleBorder(
@@ -85,8 +88,8 @@ class CustomButton extends StatelessWidget {
         ),
         child: isLoading && !useFullScreenLoader
             ? SizedBox(
-                width: 24,
-                height: 24,
+                width: AppSpacing.iconMd, // Using AppSpacing
+                height: AppSpacing.iconMd, // Using AppSpacing
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(
@@ -98,18 +101,19 @@ class CustomButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (icon != null) ...[
-                    icon!,
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    text,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: txtColor,
+                  if (icon != null) icon!,
+                  if (text.isNotEmpty) ...[
+                    if (icon != null) const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: Text(
+                        text,
+                        style: textStyle ?? AppTypography.button(context, color: txtColor),
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
       ),

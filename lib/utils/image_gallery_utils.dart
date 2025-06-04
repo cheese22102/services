@@ -1,39 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/app_colors.dart';
-
+import 'dart:io'; // Import for File
 
 class ImageGalleryUtils {
   /// Builds a Facebook-like image gallery that adapts based on the number of images
   static Widget buildImageGallery(
     BuildContext context,
-    List<String> imageUrls, {
+    List<dynamic> images, { // Changed to dynamic to accept File or String
     bool isDarkMode = false,
     double? fixedHeight,
+    Function(int)? onRemoveImage, // Added onRemoveImage callback
   }) {
     // If fixedHeight is provided, wrap in a SizedBox to constrain height
     Widget gallery;
     
     // Facebook-like gallery layout
-    switch (imageUrls.length) {
+    switch (images.length) {
       case 0:
         gallery = const SizedBox.shrink(); // No images
         break;
       case 1:
         // Single image - show full width
-        gallery = _buildSingleImage(context, imageUrls[0], isDarkMode);
+        gallery = _buildSingleImage(context, images[0], isDarkMode, onRemoveImage != null ? () => onRemoveImage(0) : null);
         break;
       case 2:
         // Two images - side by side
-        gallery = _buildTwoImages(context, imageUrls, isDarkMode);
+        gallery = _buildTwoImages(context, images, isDarkMode, onRemoveImage);
         break;
       case 3:
         // Three images - one large, two small
-        gallery = _buildThreeImages(context, imageUrls, isDarkMode);
+        gallery = _buildThreeImages(context, images, isDarkMode, onRemoveImage);
         break;
       default:
         // 4 or more images - grid with "more" indicator
-        gallery = _buildFourPlusImages(context, imageUrls, isDarkMode);
+        gallery = _buildFourPlusImages(context, images, isDarkMode, onRemoveImage);
         break;
     }
     
@@ -48,64 +49,29 @@ class ImageGalleryUtils {
     return gallery;
   }
 
-  // Single image layout
-  static Widget _buildSingleImage(BuildContext context, String imageUrl, bool isDarkMode) {
-    return GestureDetector(
-      onTap: () => showFullScreenImage(context, imageUrl),
-      child: Container(
-        height: 250,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: _buildNetworkImage(imageUrl, isDarkMode),
-        ),
-      ),
-    );
-  }
-
-  // Two images layout
-  static Widget _buildTwoImages(BuildContext context, List<String> imageUrls, bool isDarkMode) {
-    return Row(
+  // Helper to add delete button overlay
+  static Widget _wrapWithDeleteButton(BuildContext context, Widget imageWidget, bool isDarkMode, Function()? onDelete) {
+    if (onDelete == null) {
+      return imageWidget;
+    }
+    return Stack(
       children: [
-        Expanded(
+        imageWidget,
+        Positioned(
+          top: 4,
+          right: 4,
           child: GestureDetector(
-            onTap: () => showFullScreenImage(context, imageUrls[0]),
+            onTap: onDelete,
             child: Container(
-              height: 200,
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                ),
+                color: Colors.black.withOpacity(0.7),
+                shape: BoxShape.circle,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _buildNetworkImage(imageUrls[0], isDarkMode),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => showFullScreenImage(context, imageUrls[1]),
-            child: Container(
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _buildNetworkImage(imageUrls[1], isDarkMode),
+              child: const Icon(
+                Icons.close,
+                color: Colors.white,
+                size: 16,
               ),
             ),
           ),
@@ -114,67 +80,163 @@ class ImageGalleryUtils {
     );
   }
 
+  // Single image layout
+  static Widget _buildSingleImage(BuildContext context, dynamic image, bool isDarkMode, Function()? onDelete) {
+    return _wrapWithDeleteButton(
+      context,
+      GestureDetector(
+        onTap: () => showFullScreenImage(context, image),
+        child: Container(
+          height: 250,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _buildImageProvider(image, isDarkMode),
+          ),
+        ),
+      ),
+      isDarkMode,
+      onDelete,
+    );
+  }
+
+  // Two images layout
+  static Widget _buildTwoImages(BuildContext context, List<dynamic> images, bool isDarkMode, Function(int)? onRemoveImage) {
+    return Row(
+      children: [
+        Expanded(
+          child: _wrapWithDeleteButton(
+            context,
+            GestureDetector(
+              onTap: () => showFullScreenImage(context, images[0]),
+              child: Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _buildImageProvider(images[0], isDarkMode),
+                ),
+              ),
+            ),
+            isDarkMode,
+            onRemoveImage != null ? () => onRemoveImage(0) : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _wrapWithDeleteButton(
+            context,
+            GestureDetector(
+              onTap: () => showFullScreenImage(context, images[1]),
+              child: Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _buildImageProvider(images[1], isDarkMode),
+                ),
+              ),
+            ),
+            isDarkMode,
+            onRemoveImage != null ? () => onRemoveImage(1) : null,
+          ),
+        ),
+      ],
+    );
+  }
+
   // Three images layout
-  static Widget _buildThreeImages(BuildContext context, List<String> imageUrls, bool isDarkMode) {
+  static Widget _buildThreeImages(BuildContext context, List<dynamic> images, bool isDarkMode, Function(int)? onRemoveImage) {
     return Column(
       children: [
         // First image (large)
-        GestureDetector(
-          onTap: () => showFullScreenImage(context, imageUrls[0]),
-          child: Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+        _wrapWithDeleteButton(
+          context,
+          GestureDetector(
+            onTap: () => showFullScreenImage(context, images[0]),
+            child: Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildImageProvider(images[0], isDarkMode),
               ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: _buildNetworkImage(imageUrls[0], isDarkMode),
-            ),
           ),
+          isDarkMode,
+          onRemoveImage != null ? () => onRemoveImage(0) : null,
         ),
         const SizedBox(height: 8),
         // Second row with two images
         Row(
           children: [
             Expanded(
-              child: GestureDetector(
-                onTap: () => showFullScreenImage(context, imageUrls[1]),
-                child: Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () => showFullScreenImage(context, images[1]),
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildImageProvider(images[1], isDarkMode),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildNetworkImage(imageUrls[1], isDarkMode),
-                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(1) : null,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: GestureDetector(
-                onTap: () => showFullScreenImage(context, imageUrls[2]),
-                child: Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () => showFullScreenImage(context, images[2]),
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildImageProvider(images[2], isDarkMode),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildNetworkImage(imageUrls[2], isDarkMode),
-                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(2) : null,
               ),
             ),
           ],
@@ -184,47 +246,57 @@ class ImageGalleryUtils {
   }
 
   // Four or more images layout
-  static Widget _buildFourPlusImages(BuildContext context, List<String> imageUrls, bool isDarkMode) {
+  static Widget _buildFourPlusImages(BuildContext context, List<dynamic> images, bool isDarkMode, Function(int)? onRemoveImage) {
     return Column(
       children: [
         // First row with two images
         Row(
           children: [
             Expanded(
-              child: GestureDetector(
-                onTap: () => showFullScreenImage(context, imageUrls[0]),
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () => showFullScreenImage(context, images[0]),
+                  child: Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildImageProvider(images[0], isDarkMode),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildNetworkImage(imageUrls[0], isDarkMode),
-                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(0) : null,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: GestureDetector(
-                onTap: () => showFullScreenImage(context, imageUrls[1]),
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () => showFullScreenImage(context, images[1]),
+                  child: Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildImageProvider(images[1], isDarkMode),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildNetworkImage(imageUrls[1], isDarkMode),
-                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(1) : null,
               ),
             ),
           ],
@@ -234,66 +306,76 @@ class ImageGalleryUtils {
         Row(
           children: [
             Expanded(
-              child: GestureDetector(
-                onTap: () => showFullScreenImage(context, imageUrls[2]),
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () => showFullScreenImage(context, images[2]),
+                  child: Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildImageProvider(images[2], isDarkMode),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildNetworkImage(imageUrls[2], isDarkMode),
-                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(2) : null,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  // Show all images in a gallery view
-                  showImageGallery(context, imageUrls);
-                },
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 150,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              child: _wrapWithDeleteButton(
+                context,
+                GestureDetector(
+                  onTap: () {
+                    // Show all images in a gallery view
+                    showImageGallery(context, images);
+                  },
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 150,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _buildImageProvider(images[3], isDarkMode),
                         ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: _buildNetworkImage(imageUrls[3], isDarkMode),
-                      ),
-                    ),
-                    if (imageUrls.length > 4)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '+${imageUrls.length - 3}',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
+                      if (images.length > 4)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '+${images.length - 3}',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
+                isDarkMode,
+                onRemoveImage != null ? () => onRemoveImage(3) : null, // Pass index 3 for this image
               ),
             ),
           ],
@@ -302,10 +384,19 @@ class ImageGalleryUtils {
     );
   }
 
-  // Helper method to build network image with loading and error handling
-  static Widget _buildNetworkImage(String imageUrl, bool isDarkMode) {
-    return Image.network(
-      imageUrl,
+  // Helper method to build ImageProvider based on type (File or String)
+  static Widget _buildImageProvider(dynamic image, bool isDarkMode) {
+    ImageProvider imageProvider;
+    if (image is File) {
+      imageProvider = FileImage(image);
+    } else if (image is String) {
+      imageProvider = NetworkImage(image);
+    } else {
+      imageProvider = const AssetImage('assets/images/placeholder.png'); // Fallback
+    }
+
+    return Image(
+      image: imageProvider,
       fit: BoxFit.cover,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
@@ -336,7 +427,7 @@ class ImageGalleryUtils {
   }
 
   // Show a single image in full screen
-  static void showFullScreenImage(BuildContext context, String imageUrl) {
+  static void showFullScreenImage(BuildContext context, dynamic image) { // Made public
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     Navigator.of(context).push(
@@ -356,8 +447,8 @@ class ImageGalleryUtils {
             minScale: 0.5,
             maxScale: 4,
             child: Center(
-              child: Image.network(
-                imageUrl,
+              child: Image(
+                image: image is File ? FileImage(image) : NetworkImage(image),
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
@@ -400,10 +491,8 @@ class ImageGalleryUtils {
     );
   }
 
-
-
   // Show all images in a gallery view
-  static void showImageGallery(BuildContext context, List<String> imageUrls) {
+  static void showImageGallery(BuildContext context, List<dynamic> images) { // Made public
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     Navigator.of(context).push(
@@ -425,16 +514,26 @@ class ImageGalleryUtils {
             ),
           ),
           body: PageView.builder(
-            itemCount: imageUrls.length,
+            itemCount: images.length,
             itemBuilder: (context, index) {
+              final item = images[index];
+              ImageProvider imageProvider;
+              if (item is File) {
+                imageProvider = FileImage(item);
+              } else if (item is String) {
+                imageProvider = NetworkImage(item);
+              } else {
+                imageProvider = const AssetImage('assets/images/placeholder.png'); // Fallback
+              }
+
               return InteractiveViewer(
                 panEnabled: true,
                 boundaryMargin: const EdgeInsets.all(20),
                 minScale: 0.5,
                 maxScale: 4,
                 child: Center(
-                  child: Image.network(
-                    imageUrls[index],
+                  child: Image(
+                    image: imageProvider,
                     fit: BoxFit.contain,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
@@ -483,30 +582,28 @@ class ImageGalleryUtils {
   /// Opens a full-screen image gallery with the provided images
   static void openImageGallery(
     BuildContext context,
-    List<String> imageUrls, {
+    List<dynamic> images, { // Changed to dynamic
     int initialIndex = 0,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _FullScreenGallery(
-          imageUrls: imageUrls,
+          images: images, // Pass dynamic list
           initialIndex: initialIndex,
         ),
       ),
     );
   }
-
-  static uploadMultipleImages(pickedImages, String s) {}
 }
 
 /// Full screen gallery widget for viewing images
 class _FullScreenGallery extends StatefulWidget {
-  final List<String> imageUrls;
+  final List<dynamic> images; // Changed to dynamic
   final int initialIndex;
 
   const _FullScreenGallery({
-    required this.imageUrls,
+    required this.images,
     this.initialIndex = 0,
   });
 
@@ -541,7 +638,7 @@ class _FullScreenGalleryState extends State<_FullScreenGallery> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
-          '${_currentIndex + 1}/${widget.imageUrls.length}',
+          '${_currentIndex + 1}/${widget.images.length}',
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontSize: 16,
@@ -556,19 +653,29 @@ class _FullScreenGalleryState extends State<_FullScreenGallery> {
       ),
       body: PageView.builder(
         controller: _pageController,
-        itemCount: widget.imageUrls.length,
+        itemCount: widget.images.length,
         onPageChanged: (index) {
           setState(() {
             _currentIndex = index;
           });
         },
         itemBuilder: (context, index) {
+          final item = widget.images[index];
+          ImageProvider imageProvider;
+          if (item is File) {
+            imageProvider = FileImage(item);
+          } else if (item is String) {
+            imageProvider = NetworkImage(item);
+          } else {
+            imageProvider = const AssetImage('assets/images/placeholder.png'); // Fallback
+          }
+
           return InteractiveViewer(
             minScale: 0.5,
             maxScale: 3.0,
             child: Center(
-              child: Image.network(
-                widget.imageUrls[index],
+              child: Image(
+                image: imageProvider,
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
