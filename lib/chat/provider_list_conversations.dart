@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../front/app_colors.dart';
-import '../front/custom_app_bar.dart';
 import '../front/marketplace_search.dart';
-import '../prestataire/prestataire_sidebar.dart';
 
 class ProviderChatListScreen extends StatefulWidget {
   const ProviderChatListScreen({super.key});
@@ -47,7 +45,6 @@ class ProviderChatListScreen extends StatefulWidget {
 
 class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-  final int _selectedIndex = 3;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -105,215 +102,201 @@ class _ProviderChatListScreenState extends State<ProviderChatListScreen> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
-        context.go('/prestataireHome');
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightBackground,
-        drawer: const PrestataireSidebar(),
-        appBar: CustomAppBar(
-          title: 'Messages',
-          showBackButton: false,
-          showSidebar: true,
-          showNotifications: true,
-          currentIndex: _selectedIndex,
-          backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: MarketplaceSearch(
-                controller: _searchController,
-                hintText: 'Rechercher une conversation...',
-                onChanged: (value) {
-                  // Listener handles this
-                },
-                onClear: () {
-                  _searchController.clear();
-                  setState(() => _searchQuery = '');
-                },
-              ),
+    return Scaffold(
+      body: Column(
+        children: [
+          // The search bar and filter options should be directly in the Column,
+          // not wrapped in an extra Padding that might cause double spacing.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: MarketplaceSearch(
+              controller: _searchController,
+              hintText: 'Rechercher une conversation...',
+              onChanged: (value) {
+                // Listener handles this
+              },
+              onClear: () {
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+              },
             ),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('conversations')
-                    .where('participants', arrayContains: currentUserId)
-                    .orderBy('lastMessageTime', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 48, color: isDarkMode ? Colors.redAccent : Colors.red),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Une erreur est survenue',
-                            style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Impossible de charger les conversations.',
-                            style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('conversations')
+                  .where('participants', arrayContains: currentUserId)
+                  .orderBy('lastMessageTime', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: isDarkMode ? Colors.redAccent : Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Une erreur est survenue',
+                          style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Impossible de charger les conversations.',
+                          style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                  final conversations = snapshot.data?.docs ?? [];
-                  if (conversations.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.chat_bubble_outline, size: 64, color: isDarkMode ? Colors.white54 : Colors.black38),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Aucune conversation',
-                            style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Commencez à discuter avec un client',
-                            style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  
-                  if (_searchQuery.isNotEmpty) {
-                    return FutureBuilder<List<Widget>>(
-                      future: Future.wait(conversations.map((doc) async {
-                        final conversation = doc.data() as Map<String, dynamic>;
-                        final participants = List<String>.from(conversation['participants']);
-                        final otherUserId = participants.firstWhere((id) => id != currentUserId);
-                        
-                        final userInfo = await _getUserInfo(otherUserId);
-                        final userName = userInfo['name'].toString().toLowerCase();
-                        
-                        if (userName.contains(_searchQuery.toLowerCase())) {
-                          final lastMessage = conversation['lastMessage']?.toString() ?? 'Pas encore de messages';
-                          final timestamp = conversation['lastMessageTime']?.toDate();
-                          final isLastMessageFromMe = conversation['lastMessageSenderId'] == currentUserId;
-                          
-                          // Fix the type casting issue
-                          final unreadCountValue = (conversation['unreadCount'] ?? {})[currentUserId];
-                          final currentUserUnreadCount = unreadCountValue != null ? unreadCountValue.toInt() : 0;
-                          
-                          final conversationId = doc.id;
-                          
-                          return _buildConversationItem(
-                            otherUserId,
-                            lastMessage,
-                            timestamp,
-                            isLastMessageFromMe,
-                            currentUserUnreadCount,
-                            conversationId,
-                            isDarkMode,
-                          );
-                        } else {
-                          return const SizedBox.shrink();
-                        }
-                      })),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        
-                        final filteredWidgets = snapshot.data!.where((widget) => widget is! SizedBox).toList();
-                        
-                        if (filteredWidgets.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.search_off, size: 64, color: isDarkMode ? Colors.white54 : Colors.black38),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Aucun résultat',
-                                  style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Essayez avec un autre terme de recherche',
-                                  style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                        
-                        return ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filteredWidgets.length,
-                          separatorBuilder: (context, index) => Divider(
-                            color: isDarkMode ? Colors.white12 : Colors.black12,
-                            height: 24,
-                          ),
-                          itemBuilder: (context, index) => filteredWidgets[index],
-                        );
-                      },
-                    );
-                  }
-                  
+                final conversations = snapshot.data?.docs ?? [];
+                if (conversations.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 64, color: isDarkMode ? Colors.white54 : Colors.black38),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Aucune conversation',
+                          style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Commencez à discuter avec un client',
+                          style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                if (_searchQuery.isNotEmpty) {
                   return FutureBuilder<List<Widget>>(
                     future: Future.wait(conversations.map((doc) async {
                       final conversation = doc.data() as Map<String, dynamic>;
                       final participants = List<String>.from(conversation['participants']);
                       final otherUserId = participants.firstWhere((id) => id != currentUserId);
                       
-                      final lastMessage = conversation['lastMessage']?.toString() ?? 'Pas encore de messages';
-                      final timestamp = conversation['lastMessageTime']?.toDate();
-                      final isLastMessageFromMe = conversation['lastMessageSenderId'] == currentUserId;
+                      final userInfo = await _getUserInfo(otherUserId);
+                      final userName = userInfo['name'].toString().toLowerCase();
                       
-                      // Fix the type casting issue
-                      final unreadCountValue = (conversation['unreadCount'] ?? {})[currentUserId];
-                      final currentUserUnreadCount = unreadCountValue != null ? unreadCountValue.toInt() : 0;
-                      
-                      final conversationId = doc.id;
-                      
-                      return _buildConversationItem(
-                        otherUserId,
-                        lastMessage,
-                        timestamp,
-                        isLastMessageFromMe,
-                        currentUserUnreadCount,
-                        conversationId,
-                        isDarkMode,
-                      );
+                      if (userName.contains(_searchQuery.toLowerCase())) {
+                        final lastMessage = conversation['lastMessage']?.toString() ?? 'Pas encore de messages';
+                        final timestamp = conversation['lastMessageTime']?.toDate();
+                        final isLastMessageFromMe = conversation['lastMessageSenderId'] == currentUserId;
+                        
+                        // Fix the type casting issue
+                        final unreadCountValue = (conversation['unreadCount'] ?? {})[currentUserId];
+                        final currentUserUnreadCount = unreadCountValue != null ? unreadCountValue.toInt() : 0;
+                        
+                        final conversationId = doc.id;
+                        
+                        return _buildConversationItem(
+                          otherUserId,
+                          lastMessage,
+                          timestamp,
+                          isLastMessageFromMe,
+                          currentUserUnreadCount,
+                          conversationId,
+                          isDarkMode,
+                        );
+                      } else {
+                        return const SizedBox.shrink();
+                      }
                     })),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
                       
+                      final filteredWidgets = snapshot.data!.where((widget) => widget is! SizedBox).toList();
+                      
+                      if (filteredWidgets.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off, size: 64, color: isDarkMode ? Colors.white54 : Colors.black38),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Aucun résultat',
+                                style: GoogleFonts.poppins(fontSize: 18, color: isDarkMode ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Essayez avec un autre terme de recherche',
+                                style: GoogleFonts.poppins(fontSize: 14, color: isDarkMode ? Colors.white54 : Colors.black45),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      
                       return ListView.separated(
                         padding: const EdgeInsets.all(16),
-                        itemCount: snapshot.data!.length,
+                        itemCount: filteredWidgets.length,
                         separatorBuilder: (context, index) => Divider(
                           color: isDarkMode ? Colors.white12 : Colors.black12,
                           height: 24,
                         ),
-                        itemBuilder: (context, index) => snapshot.data![index],
+                        itemBuilder: (context, index) => filteredWidgets[index],
                       );
                     },
                   );
-                },
-              ),
+                }
+                
+                return FutureBuilder<List<Widget>>(
+                  future: Future.wait(conversations.map((doc) async {
+                    final conversation = doc.data() as Map<String, dynamic>;
+                    final participants = List<String>.from(conversation['participants']);
+                    final otherUserId = participants.firstWhere((id) => id != currentUserId);
+                    
+                    final lastMessage = conversation['lastMessage']?.toString() ?? 'Pas encore de messages';
+                    final timestamp = conversation['lastMessageTime']?.toDate();
+                    final isLastMessageFromMe = conversation['lastMessageSenderId'] == currentUserId;
+                    
+                    // Fix the type casting issue
+                    final unreadCountValue = (conversation['unreadCount'] ?? {})[currentUserId];
+                    final currentUserUnreadCount = unreadCountValue != null ? unreadCountValue.toInt() : 0;
+                    
+                    final conversationId = doc.id;
+                    
+                    return _buildConversationItem(
+                      otherUserId,
+                      lastMessage,
+                      timestamp,
+                      isLastMessageFromMe,
+                      currentUserUnreadCount,
+                      conversationId,
+                      isDarkMode,
+                    );
+                  })),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: snapshot.data!.length,
+                      separatorBuilder: (context, index) => Divider(
+                        color: isDarkMode ? Colors.white12 : Colors.black12,
+                        height: 24,
+                      ),
+                      itemBuilder: (context, index) => snapshot.data![index],
+                    );
+                  },
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

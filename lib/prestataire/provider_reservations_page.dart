@@ -7,9 +7,7 @@ import 'dart:async';
 import '../front/app_colors.dart';
 import '../front/app_spacing.dart';
 import '../front/app_typography.dart';
-import '../front/custom_app_bar.dart';
 import '../front/marketplace_search.dart';
-
 class ProviderReservationsPage extends StatefulWidget {
   const ProviderReservationsPage({super.key});
 
@@ -216,19 +214,17 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      appBar: CustomAppBar(
-        title: 'Mes réservations',
-        showBackButton: true,
-      ),
       body: Column(
         children: [
+          // The search bar and filter options should be directly in the Column,
+          // not wrapped in an extra Padding that might cause double spacing.
           Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             child: Column(
               children: [
                 MarketplaceSearch(
                   controller: _searchController,
-                  hintText: 'Rechercher par service ou client...', // Changed hint text
+                  hintText: 'Rechercher par service ou client...',
                   onChanged: _onSearchChanged,
                   onClear: _clearSearch,
                 ),
@@ -359,12 +355,11 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
 
                           final reservation = _filteredAndSortedReservations[index];
                           final reservationId = reservation['id'] as String;
-                          final userName = reservation['fetchedUserName'] as String?; // Changed to userName
-                          final userPhotoURL = reservation['fetchedUserPhotoURL'] as String?; // Changed to userPhotoURL
+                          final userName = reservation['fetchedUserName'] as String?;
+                          final userPhotoURL = reservation['fetchedUserPhotoURL'] as String?;
                           
                           return GestureDetector(
                             onTap: () {
-                              // Navigate to provider's reservation details page
                               context.go('/prestataireHome/reservation-details/$reservationId');
                             },
                             child: Card(
@@ -409,14 +404,14 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200,
-                                            image: userPhotoURL != null && userPhotoURL.isNotEmpty // Changed to userPhotoURL
+                                            image: userPhotoURL != null && userPhotoURL.isNotEmpty
                                                 ? DecorationImage(
-                                                    image: NetworkImage(userPhotoURL), // Changed to userPhotoURL
+                                                    image: NetworkImage(userPhotoURL),
                                                     fit: BoxFit.cover,
                                                   )
                                                 : null,
                                           ),
-                                          child: (userPhotoURL == null || userPhotoURL.isEmpty) // Changed to userPhotoURL
+                                          child: (userPhotoURL == null || userPhotoURL.isEmpty)
                                               ? Icon(
                                                   Icons.person,
                                                   color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
@@ -430,7 +425,7 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Client: ${userName ?? 'Non spécifié'}', // Changed to Client and userName
+                                                'Client: ${userName ?? 'Non spécifié'}',
                                                 style: AppTypography.labelLarge(context).copyWith(
                                                   fontWeight: FontWeight.w500,
                                                   color: isDarkMode ? Colors.white : Colors.black87,
@@ -463,23 +458,33 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
     );
   }
   
-  Widget _buildStatusBadge(BuildContext context, String status, bool isDarkMode, {dynamic providerCompletionStatus = false}) {
+  Widget _buildStatusBadge(BuildContext context, String status, bool isDarkMode, {dynamic providerCompletionStatus}) {
     Color badgeColor;
     String statusText;
     
-    bool isProviderCompleted = false;
-    if (providerCompletionStatus is bool) {
-      isProviderCompleted = providerCompletionStatus;
-    } else if (providerCompletionStatus is String) {
-      isProviderCompleted = providerCompletionStatus == 'true';
+    bool isProviderMarkedCompleted = false;
+    if (providerCompletionStatus is String) {
+      isProviderMarkedCompleted = providerCompletionStatus == 'completed'; // Check for 'completed' string
+    } else if (providerCompletionStatus is bool) {
+      // For potential backward compatibility if it was stored as boolean
+      isProviderMarkedCompleted = providerCompletionStatus; 
     }
-    
-    if (status == 'approved' && isProviderCompleted) {
+
+    // Prioritize the 'waiting_confirmation' status if it's explicitly set
+    if (status == 'waiting_confirmation') {
+      badgeColor = Colors.purple;
+      statusText = 'À confirmer'; // Provider sees "Waiting for client to confirm"
+    } 
+    // Fallback: if status is 'approved' but provider has marked it as completed internally.
+    // This state implies it's waiting for client confirmation.
+    else if (status == 'approved' && isProviderMarkedCompleted) {
       badgeColor = Colors.purple;
       statusText = 'À confirmer';
-    } else {
+    } 
+    // Handle other standard statuses
+    else {
       switch (status) {
-        case 'approved':
+        case 'approved': // Provider has approved, but not yet marked as completed by themselves
           badgeColor = Colors.green;
           statusText = 'Acceptée';
           break;
@@ -491,7 +496,7 @@ class _ProviderReservationsPageState extends State<ProviderReservationsPage> {
           badgeColor = Colors.red;
           statusText = 'Refusée';
           break;
-        case 'completed':
+        case 'completed': // This means client has confirmed, intervention is fully done
           badgeColor = Colors.blue;
           statusText = 'Terminée';
           break;

@@ -639,73 +639,6 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       ),
                     ),
                   ),
-                  SizedBox(height: AppSpacing.lg), // Use AppSpacing
-
-                  // Map Section (moved here)
-                  Text(
-                    'Emplacement',
-                    style: AppTypography.h4(context).copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.sm),
-                  _isGeocoding
-                      ? Center(
-                          child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
-                        )
-                      : _geocodingError != null
-                          ? Center(
-                              child: Text(
-                                _geocodingError!,
-                                style: AppTypography.bodyMedium(context).copyWith(
-                                  color: AppColors.errorLightRed,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            )
-                          : _postLatLng != null
-                              ? Container(
-                                  height: 200, // Fixed height for the map
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                                    border: Border.all(color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                                    child: GoogleMap(
-                                      initialCameraPosition: CameraPosition(
-                                        target: _postLatLng!,
-                                        zoom: 15,
-                                      ),
-                                      onMapCreated: (controller) {
-                                        _mapController = controller;
-                                      },
-                                      markers: {
-                                        Marker(
-                                          markerId: const MarkerId('postLocation'),
-                                          position: _postLatLng!,
-                                          infoWindow: InfoWindow(title: postData['location'] ?? 'Emplacement'),
-                                        ),
-                                      },
-                                      zoomControlsEnabled: false,
-                                      scrollGesturesEnabled: false,
-                                      rotateGesturesEnabled: false,
-                                      tiltGesturesEnabled: false,
-                                      onTap: (_) => _openInGoogleMaps(), // Open in Google Maps on tap
-                                    ),
-                                  ),
-                                )
-                              : Center(
-                                  child: Text(
-                                    'Emplacement non disponible.',
-                                    style: AppTypography.bodyMedium(context).copyWith(
-                                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
-                                    ),
-                                  ),
-                                ),
-                  SizedBox(height: AppSpacing.lg), // Add spacing after the map
-
                   // Seller info section
                   FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance
@@ -858,6 +791,71 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
                       );
                     },
                   ),
+                  SizedBox(height: AppSpacing.lg), // Add spacing after the seller section
+
+                  // Map Section (moved here)
+                  Text(
+                    'Emplacement',
+                    style: AppTypography.h4(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  _isGeocoding
+                      ? Center(
+                          child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+                        )
+                      : _geocodingError != null
+                          ? Center(
+                              child: Text(
+                                _geocodingError!,
+                                style: AppTypography.bodyMedium(context).copyWith(
+                                  color: AppColors.errorLightRed,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          : _postLatLng != null
+                              ? Container(
+                                  height: 200, // Fixed height for the map
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                                    border: Border.all(color: isDarkMode ? AppColors.darkBorder : AppColors.lightBorder),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                                    child: GoogleMap(
+                                      initialCameraPosition: CameraPosition(
+                                        target: _postLatLng!,
+                                        zoom: 15,
+                                      ),
+                                      onMapCreated: (controller) {
+                                        _mapController = controller;
+                                      },
+                                      markers: {
+                                        Marker(
+                                          markerId: const MarkerId('postLocation'),
+                                          position: _postLatLng!,
+                                          infoWindow: InfoWindow(title: postData['location'] ?? 'Emplacement'),
+                                        ),
+                                      },
+                                      zoomControlsEnabled: false,
+                                      scrollGesturesEnabled: false,
+                                      rotateGesturesEnabled: false,
+                                      tiltGesturesEnabled: false,
+                                      onTap: (_) => _openInGoogleMaps(), // Open in Google Maps on tap
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    'Emplacement non disponible.',
+                                    style: AppTypography.bodyMedium(context).copyWith(
+                                      color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                                    ),
+                                  ),
+                                ),
                   
                   SizedBox(height: AppSpacing.xxl), // Space for bottom buttons, adjusted
                 ],

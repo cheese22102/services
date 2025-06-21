@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../models/reclamation_model.dart';
-import '../front/app_colors.dart'; // Import AppColors
+import '../front/app_colors.dart';
 
 class ReclamationDetailsPage extends StatefulWidget {
   final String reclamationId;

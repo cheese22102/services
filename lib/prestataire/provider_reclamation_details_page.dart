@@ -94,69 +94,6 @@ class _ProviderReclamationDetailsPageState extends State<ProviderReclamationDeta
     }
   }
   
-  Future<void> _updateReclamationStatus(String status) async {
-    if (_reclamation == null) return;
-    
-    setState(() {
-      _isLoading = true;
-    });
-    
-    try {
-      // Update reclamation status
-      await FirebaseFirestore.instance
-          .collection('reclamations')
-          .doc(widget.reclamationId)
-          .update({'status': status});
-      
-      // Create notification for submitter
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_reclamation!.submitterId)
-          .collection('notifications')
-          .add({
-        'title': status == 'resolved' 
-            ? 'Réclamation résolue' 
-            : 'Réclamation rejetée',
-        'body': status == 'resolved'
-            ? 'Votre réclamation a été résolue'
-            : 'Votre réclamation a été rejetée',
-        'type': 'reclamation_update',
-        'read': false,
-        'timestamp': FieldValue.serverTimestamp(),
-        'data': {
-          'reclamationId': widget.reclamationId,
-          'status': status,
-        },
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              status == 'resolved'
-                  ? 'Réclamation marquée comme résolue'
-                  : 'Réclamation rejetée',
-            ),
-            backgroundColor: status == 'resolved' ? Colors.green : Colors.red,
-          ),
-        );
-        
-        setState(() {
-          _reclamation = _reclamation!.copyWith(status: status);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
   
   Widget _buildStatusBadge(bool isDarkMode) {
     if (_reclamation == null) return const SizedBox();
@@ -227,10 +164,10 @@ class _ProviderReclamationDetailsPageState extends State<ProviderReclamationDeta
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: _submitterData!['photoURL'] != null
-                    ? NetworkImage(_submitterData!['photoURL'])
+                backgroundImage: _submitterData!['avatarURL'] != null
+                    ? NetworkImage(_submitterData!['avatarURL'])
                     : null,
-                child: _submitterData!['photoURL'] == null
+                child: _submitterData!['avatarURL'] == null
                     ? const Icon(Icons.person)
                     : null,
               ),
@@ -497,29 +434,6 @@ class _ProviderReclamationDetailsPageState extends State<ProviderReclamationDeta
                   
                   const SizedBox(height: 32),
                   
-                  // Action buttons
-                  if (_reclamation?.status == 'pending')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CustomButton(
-                            text: 'Rejeter',
-                            onPressed: () => _updateReclamationStatus('rejected'),
-                            backgroundColor: Colors.red,
-                            textColor: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: CustomButton(
-                            text: 'Résoudre',
-                            onPressed: () => _updateReclamationStatus('resolved'),
-                            backgroundColor: Colors.green,
-                            textColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),

@@ -249,7 +249,7 @@ class _AccountsManagementPageState extends State<AccountsManagementPage> {
                     final firstName = userData['firstname'] ?? 'N/A';
                     final lastName = userData['lastname'] ?? 'N/A';
                     final email = userData['email'] ?? 'N/A';
-                    final photoURL = userData['photoURL'] as String?;
+                    final avatarUrl = userData['avatarUrl'] as String?;
 
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -260,13 +260,13 @@ class _AccountsManagementPageState extends State<AccountsManagementPage> {
                       color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundImage: photoURL != null && photoURL.isNotEmpty
-                              ? NetworkImage(photoURL)
+                          backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                              ? NetworkImage(avatarUrl)
                               : null,
-                          child: photoURL == null || photoURL.isEmpty
+                          child: avatarUrl == null || avatarUrl.isEmpty
                               ? Icon(Icons.person, color: isDarkMode ? Colors.white : Colors.blueGrey)
                               : null,
-                          backgroundColor: photoURL == null || photoURL.isEmpty
+                          backgroundColor: avatarUrl == null || avatarUrl.isEmpty
                               ? (isDarkMode ? Colors.blueGrey.shade700 : Colors.blueGrey.shade200)
                               : null,
                         ),

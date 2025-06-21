@@ -466,23 +466,32 @@ class _ClientReservationsPageState extends State<ClientReservationsPage> { // Re
     );
   }
   
-  Widget _buildStatusBadge(BuildContext context, String status, bool isDarkMode, {dynamic providerCompletionStatus = false}) {
+  Widget _buildStatusBadge(BuildContext context, String status, bool isDarkMode, {dynamic providerCompletionStatus}) {
     Color badgeColor;
     String statusText;
-    
-    bool isProviderCompleted = false;
-    if (providerCompletionStatus is bool) {
-      isProviderCompleted = providerCompletionStatus;
-    } else if (providerCompletionStatus is String) {
-      isProviderCompleted = providerCompletionStatus == 'true';
+
+    bool isProviderMarkedCompleted = false;
+    if (providerCompletionStatus is String) {
+      isProviderMarkedCompleted = providerCompletionStatus == 'completed'; // Check for 'completed' string
+    } else if (providerCompletionStatus is bool) {
+      // For potential backward compatibility
+      isProviderMarkedCompleted = providerCompletionStatus;
     }
-    
-    if (status == 'approved' && isProviderCompleted) {
+
+    // Prioritize the 'waiting_confirmation' status if it's explicitly set
+    if (status == 'waiting_confirmation') {
       badgeColor = Colors.purple;
-      statusText = 'À confirmer';
-    } else {
+      statusText = 'En attente de votre confirmation'; // Client sees this text
+    }
+    // Fallback: if status is 'approved' but provider has marked it as completed internally.
+    else if (status == 'approved' && isProviderMarkedCompleted) {
+      badgeColor = Colors.purple;
+      statusText = 'En attente de votre confirmation'; // Client sees this text
+    }
+    // Handle other standard statuses
+    else {
       switch (status) {
-        case 'approved':
+        case 'approved': // Client sees 'approved' when provider accepted but not yet marked done
           badgeColor = Colors.green;
           statusText = 'Acceptée';
           break;
@@ -494,7 +503,7 @@ class _ClientReservationsPageState extends State<ClientReservationsPage> { // Re
           badgeColor = Colors.red;
           statusText = 'Refusée';
           break;
-        case 'completed':
+        case 'completed': // Intervention fully completed and confirmed by client
           badgeColor = Colors.blue;
           statusText = 'Terminée';
           break;
@@ -505,7 +514,7 @@ class _ClientReservationsPageState extends State<ClientReservationsPage> { // Re
           break;
       }
     }
-    
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
       decoration: BoxDecoration(

@@ -387,7 +387,7 @@ class _ReservationPageState extends State<ReservationPage> {
       
       // Create notification for provider
       await FirebaseFirestore.instance
-          .collection('provider_requests')
+          .collection('users')
           .doc(widget.providerId)
           .collection('notifications')
           .add({

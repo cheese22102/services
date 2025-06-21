@@ -1,4 +1,4 @@
-name: plateforme_services
+name: AiDomi
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -63,6 +63,7 @@ dependencies:
   google_generative_ai: ^0.1.0
   connectivity_plus: ^5.0.2
   uuid: ^4.5.1
+  firebase_app_check: ^0.3.2+5
   flutter_localizations:
     sdk: flutter
 
@@ -77,11 +78,18 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: "^0.13.1" # Add this line
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/login.png"
+  min_sdk_android: 21 # set to min_sdk_android of your project
+
 flutter:
   generate: true # Enable Flutter's localization generation
   # The following line ensures that the Material Icons font is

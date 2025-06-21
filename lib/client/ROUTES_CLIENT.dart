@@ -22,6 +22,7 @@ import 'services/reservation_details_page.dart';
 import 'services/reclamation_form_page.dart';
 import 'services/client_reclamations_page.dart';
 import 'services/client_reclamation_details_page.dart';
+import '../front/changer_mot_de_passe_page.dart'; // Added import
 
 
 final clientRoutes = GoRoute(
@@ -167,6 +168,10 @@ final clientRoutes = GoRoute(
     GoRoute(
       path: 'profile',
       builder: (context, state) => const ProfileEditPage(),
+    ),
+    GoRoute(
+      path: 'change-password', // New route for changing password
+      builder: (context, state) => const ChangerMotDePassePage(),
     ),
     GoRoute(
       path: 'notifications',

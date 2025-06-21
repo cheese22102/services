@@ -7,10 +7,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../front/app_colors.dart';
-import '../front/app_typography.dart'; // Import AppTypography
+import '../front/app_typography.dart';
 import '../front/custom_app_bar.dart';
 import '../front/custom_button.dart';
-import '../front/app_spacing.dart'; // Import AppSpacing
+import '../front/app_spacing.dart';
 import '../utils/image_gallery_utils.dart';
 
 class ReservationDetailsPage extends StatefulWidget {
@@ -241,35 +241,17 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       if (await canLaunchUrl(phoneUri)) {
         await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
       } else {
-        throw 'Could not launch $phoneUri';
+        // This case means no app can handle the URI, or permissions are missing.
+        // Provide a more user-friendly message.
+        throw 'Aucune application de téléphone trouvée ou permissions manquantes.';
       }
     } catch (e) {
       if (mounted) {
-        _showCustomSnackBar(context, 'Impossible d\'ouvrir le composeur téléphonique: $e', isError: true);
+        _showCustomSnackBar(context, 'Erreur lors de l\'appel: ${e.toString().contains('No Activity found') ? 'Veuillez vérifier si une application de téléphone est installée et que les permissions sont accordées.' : e.toString()}', isError: true);
       }
     }
   }
 
-  Future<void> _openInGoogleMaps() async {
-    if (_latitude == null || _longitude == null) {
-      if (mounted) {
-        _showCustomSnackBar(context, 'Coordonnées de l\'utilisateur non disponibles');
-      }
-      return;
-    }
-    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$_latitude,$_longitude');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch $url';
-      }
-    } catch (e) {
-      if (mounted) {
-        _showCustomSnackBar(context, 'Impossible d\'ouvrir Maps: $e', isError: true);
-      }
-    }
-  }
   
   // Add a new method to navigate to chat
   Future<void> _navigateToChat() async {
@@ -382,8 +364,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return isDarkMode ? Colors.red.shade800 : Colors.red.shade600;
       case 'completed':
         return isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600;
-      case 'waiting_confirmation': // New status
-        return Colors.purple.shade600;
+      case 'waiting_confirmation': 
+        return Colors.purple.shade600; // Purple color for waiting_confirmation
       case 'pending':
       default:
         return isDarkMode ? Colors.orange.shade700 : Colors.orange.shade600;
@@ -398,8 +380,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return Icons.cancel;
       case 'completed':
         return Icons.task_alt;
-      case 'waiting_confirmation': // New status
-        return Icons.pending_actions_rounded; // Changed icon
+      case 'waiting_confirmation': 
+        return Icons.pending_actions_rounded; 
       case 'pending':
       default:
         return Icons.pending;
@@ -414,8 +396,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return 'Demande refusée';
       case 'completed':
         return 'Intervention terminée';
-      case 'waiting_confirmation': // New status
-        return 'En attente confirmation client';
+      case 'waiting_confirmation': 
+        return 'En attente confirmation client'; // Text for provider side
       case 'pending':
       default:
         return 'En attente de confirmation';
@@ -497,7 +479,6 @@ void _navigateToCompletionPage() async {
     final isImmediate = _reservationData!['isImmediate'] as bool? ?? false;
     final serviceName = _reservationData!['serviceName'] as String? ?? 'Service non spécifié';
     final status = _reservationData!['status'] as String? ?? 'pending';
-    final providerCompletionStatus = _reservationData!['providerCompletionStatus'] as String? ?? '';
     
     // Format date and time
     final reservationTimestamp = _reservationData!['reservationDateTime'] as Timestamp?;
@@ -514,7 +495,7 @@ void _navigateToCompletionPage() async {
         ? '${_userData!['firstname'] ?? ''} ${_userData!['lastname'] ?? ''}'.trim()
         : 'Utilisateur inconnu';
     final userPhone = _userData?['phone'] as String? ?? 'Non spécifié';
-    final userPhoto = _userData?['photoURL'] as String? ?? '';
+    final userPhoto = _userData?['avatarUrl'] as String? ?? '';
     
     return Scaffold(
       appBar: CustomAppBar(
@@ -813,22 +794,16 @@ void _navigateToCompletionPage() async {
             if (_latitude != null && _longitude != null) ...[
               const SizedBox(height: 24),
               Text(
-                'Localisation de l\'utilisateur',
+                'Localisation du client',
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
-              const SizedBox(height: 12),
-              CustomButton(
-                text: 'Ouvrir dans Maps',
-                onPressed: _openInGoogleMaps,
-                backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                textColor: Colors.white,
-                icon: const Icon(Icons.map_outlined, color: Colors.white),
-              ),
-              const SizedBox(height: 16),
+              // const SizedBox(height: 12), // Removed SizedBox before button
+              // CustomButton for 'Ouvrir dans Maps' removed as per request
+              const SizedBox(height: 16), // Keeping this SizedBox for spacing before the map
               Container(
                 height: 200, // Fixed height for the map
                 decoration: BoxDecoration(
@@ -898,10 +873,9 @@ void _navigateToCompletionPage() async {
   }
 
   Widget _buildBottomNavigationBar(bool isDarkMode) {
-    final status = _reservationData?['status'];
-    final providerCompletionStatus = _reservationData?['providerCompletionStatus'];
+    final status = _reservationData?['status'] as String?;
+    final providerCompletionStatus = _reservationData?['providerCompletionStatus'] as String?; // Assuming this field exists
     final bool canSubmitReclamation = !_hasPendingReclamation;
-
 
     List<Widget> buttons = [];
 
@@ -916,7 +890,7 @@ void _navigateToCompletionPage() async {
           ),
         ),
       );
-      buttons.add(const SizedBox(width: 16));
+      buttons.add(const SizedBox(width: AppSpacing.sm)); // Consistent spacing
       buttons.add(
         Expanded(
           child: CustomButton(
@@ -928,29 +902,24 @@ void _navigateToCompletionPage() async {
         ),
       );
     } else if (status == 'approved') {
-      bool marquerTermineePresent = false;
-      // Only show "Marquer comme terminée" if status is 'approved' AND provider hasn't marked it yet.
-      // If status is 'waiting_confirmation', provider has already marked it.
-      if (providerCompletionStatus != 'completed' && status == 'approved') { 
+      // Provider has not yet marked the intervention as done
+      if (providerCompletionStatus != 'completed') {
         buttons.add(
           Expanded(
             child: CustomButton(
               text: 'Marquer comme terminée',
-              onPressed: _navigateToCompletionPage,
+              onPressed: _navigateToCompletionPage, // This should lead to updating status to 'waiting_confirmation'
               backgroundColor: isDarkMode ? Colors.blue.shade700 : Colors.blue.shade600,
               textColor: Colors.white,
             ),
           ),
         );
-        marquerTermineePresent = true;
-      }
-
-      if (canSubmitReclamation && status != 'waiting_confirmation') { // Don't show reclamation button if waiting for client
-        if (marquerTermineePresent) { // Small square icon button (only if "Marquer terminée" is also shown)
-          buttons.add(const SizedBox(width: 16));
+        // Small orange square reclamation button next to "Marquer comme terminée"
+        if (canSubmitReclamation) {
+          buttons.add(const SizedBox(width: AppSpacing.sm));
           buttons.add(
             SizedBox(
-              width: AppSpacing.buttonMedium,
+              width: AppSpacing.buttonMedium, // Ensure this is a good size for a square button
               height: AppSpacing.buttonMedium,
               child: ElevatedButton(
                 onPressed: () {
@@ -960,20 +929,21 @@ void _navigateToCompletionPage() async {
                   backgroundColor: AppColors.warningOrange,
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm), // Smaller radius for square feel
                   ),
                 ),
-                child: const Icon(Icons.report_problem, color: Colors.white, size: 24.0),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24.0), // Triangle with ! icon
               ),
             ),
           );
-        } else { // Full width button with text (if "Marquer terminée" is not shown, but can submit reclamation)
-                 // This case applies if status is 'approved' but providerCompletionStatus IS 'completed'
-                 // OR if status is 'completed' (though this part of the 'if' is for 'approved')
-          if (buttons.isNotEmpty) { 
-             buttons.add(const SizedBox(width: 16));
-          }
-          buttons.add(
+        }
+      } else {
+        // This case implies providerCompletionStatus == 'completed' but status is still 'approved'.
+        // This might happen if the status update to 'waiting_confirmation' hasn't propagated yet or if there's a different flow.
+        // For now, let's assume if providerCompletionStatus is 'completed', the status should ideally be 'waiting_confirmation'.
+        // If for some reason it's 'approved' and 'completed', we show the reclamation button.
+        if (canSubmitReclamation) {
+           buttons.add(
             Expanded(
               child: CustomButton(
                 text: 'Soumettre une réclamation',
@@ -990,7 +960,27 @@ void _navigateToCompletionPage() async {
           );
         }
       }
-    } else if (status == 'completed') { // This is when client has confirmed
+    } else if (status == 'waiting_confirmation') {
+      // Provider has marked as done, client needs to confirm. Provider can submit reclamation.
+      if (canSubmitReclamation) {
+        buttons.add(
+          Expanded(
+            child: CustomButton(
+              text: 'Soumettre une réclamation',
+              icon: const Icon(Icons.report_problem, color: Colors.white), // Using report_problem as a general reclamation icon
+              onPressed: () {
+                context.push('/prestataireHome/reclamation/create/${widget.reservationId}');
+              },
+              isPrimary: false, // It's an orange button
+              backgroundColor: AppColors.warningOrange,
+              textColor: Colors.white,
+              height: AppSpacing.buttonMedium, // Full width
+            ),
+          ),
+        );
+      }
+    } else if (status == 'completed') {
+      // Intervention is fully completed and confirmed by client. Provider can submit reclamation.
       if (canSubmitReclamation) {
         buttons.add(
           Expanded(
@@ -1015,11 +1005,11 @@ void _navigateToCompletionPage() async {
     }
 
     return Container(
-      color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Same as CustomAppBar background
-      padding: const EdgeInsets.all(16),
+      color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm), // Standard padding
       child: SafeArea(
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: buttons.length == 1 ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween, // Center if one button
           children: buttons,
         ),
       ),

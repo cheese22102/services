@@ -12,8 +12,8 @@ import '../../utils/image_gallery_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../front/provider_rating_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../front/app_spacing.dart'; // Added AppSpacing import
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // Added for map
+import '../../front/app_spacing.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class ReservationDetailsPage extends StatefulWidget {
   final String reservationId;
@@ -104,13 +104,17 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
               .get();
               
           if (userDoc.exists) {
+            final userDocData = userDoc.data();
+            // Prioritize avatarUrl/avatarURL, then photoURL for the provider's image
+            final String providerImageURL = userDocData?['avatarUrl'] ?? userDocData?['avatarURL'] ?? userDocData?['photoURL'] ?? '';
+            
             // Merge user data into provider data for easy access
             setState(() {
               _providerData!.addAll({
-                'firstname': userDoc.data()?['firstname'] ?? '',
-                'lastname': userDoc.data()?['lastname'] ?? '',
-                'phone': userDoc.data()?['phone'] ?? '',
-                'photoURL': userDoc.data()?['photoURL'] ?? '',
+                'firstname': userDocData?['firstname'] ?? '',
+                'lastname': userDocData?['lastname'] ?? '',
+                'phone': userDocData?['phone'] ?? '',
+                'photoURL': providerImageURL, // Use the determined image URL
               });
             });
           }
@@ -247,35 +251,34 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         ? '${_providerData!['firstname']} ${_providerData!['lastname']}'
         : 'Prestataire';
     
-    // Navigate to the ProviderRatingDialog page instead of showing a dialog
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProviderRatingDialog(
+    // Show ProviderRatingDialog using showDialog for correct scrim behavior
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must submit or cancel
+      barrierColor: Colors.black.withOpacity(0.5), // Explicitly set semi-transparent scrim
+      builder: (BuildContext dialogContext) {
+        return ProviderRatingDialog(
           providerId: providerId,
           providerName: providerName,
           reservationId: widget.reservationId,
           onRatingSubmitted: () {
-            // Update the reservation to mark it as rated
+            // This callback is executed after the dialog is popped by _submitRating in ProviderRatingDialog
             FirebaseFirestore.instance
                 .collection('reservations')
                 .doc(widget.reservationId)
                 .update({'rated': true})
                 .then((_) {
-                  // Refresh the reservation data
-                  _fetchReservationDetails();
+                  if (mounted) {
+                    _fetchReservationDetails(); // Refresh the details on the underlying page
+                  }
                 });
-                
-            // Show success message
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Merci pour votre évaluation!'),
-                backgroundColor: AppColors.successGreen,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            
+            // The SnackBar is already shown within ProviderRatingDialog upon successful submission.
+            // If an additional SnackBar is needed here, ensure context is valid.
+            // For now, relying on the SnackBar from ProviderRatingDialog.
           },
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -424,9 +427,11 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       final providerId = _reservationData?['providerId'];
       if (providerId != null) {
         await FirebaseFirestore.instance
-            .collection('notifications')
+            .collection('users')         // Target the 'users' collection
+            .doc(providerId)             // The document ID is the provider's user ID
+            .collection('notifications') // The subcollection for notifications
             .add({
-          'userId': providerId,
+          'userId': providerId, // Field indicating who this notification is for (the provider)
           'title': 'Réservation annulée',
           'body': 'Le client a annulé la réservation',
           'createdAt': FieldValue.serverTimestamp(),
@@ -864,36 +869,36 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                         
                         AppSpacing.verticalSpacing(AppSpacing.xxl),
                         
-                        // View reclamation button if one exists (remains in body)
-                        if (_reservationData?['hasReclamation'] == true) ...[  
-                          AppSpacing.verticalSpacing(AppSpacing.lg),
-                          SizedBox(
-                            width: double.infinity,
-                            child: CustomButton(
-                              onPressed: () async {
-                                // Fetch the reclamation ID
-                                final reclamationsSnapshot = await FirebaseFirestore.instance
-                                    .collection('reclamations')
-                                    .where('reservationId', isEqualTo: widget.reservationId)
-                                    .limit(1)
-                                    .get();
-                              
-                                if (reclamationsSnapshot.docs.isNotEmpty) {
-                                  final reclamationId = reclamationsSnapshot.docs.first.id;
-                                  if (mounted) {
-                                    context.push('/clientHome/reclamations/details/$reclamationId');
-                                  }
-                                }
-                              },
-                              text: 'Voir ma réclamation',
-                              icon: const Icon(Icons.visibility, color: Colors.white),
-                              isPrimary: true,
-                              backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
-                              textColor: AppColors.darkTextColor, // This will be overridden by foregroundColor in CustomButton
-                              height: AppSpacing.buttonMedium,
-                            ),
-                          ),
-                        ],
+                        // View reclamation button if one exists (remains in body) - REMOVED AS PER REQUEST
+                        // if (_reservationData?['hasReclamation'] == true) ...[  
+                        //   AppSpacing.verticalSpacing(AppSpacing.lg),
+                        //   SizedBox(
+                        //     width: double.infinity,
+                        //     child: CustomButton(
+                        //       onPressed: () async {
+                        //         // Fetch the reclamation ID
+                        //         final reclamationsSnapshot = await FirebaseFirestore.instance
+                        //             .collection('reclamations')
+                        //             .where('reservationId', isEqualTo: widget.reservationId)
+                        //             .limit(1)
+                        //             .get();
+                        //       
+                        //         if (reclamationsSnapshot.docs.isNotEmpty) {
+                        //           final reclamationId = reclamationsSnapshot.docs.first.id;
+                        //           if (mounted) {
+                        //             context.push('/clientHome/reclamations/details/$reclamationId');
+                        //           }
+                        //         }
+                        //       },
+                        //       text: 'Voir ma réclamation',
+                        //       icon: const Icon(Icons.visibility, color: Colors.white),
+                        //       isPrimary: true,
+                        //       backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                        //       textColor: AppColors.darkTextColor, // This will be overridden by foregroundColor in CustomButton
+                        //       height: AppSpacing.buttonMedium,
+                        //     ),
+                        //   ),
+                        // ],
                       ],
                     ),
                   ),
@@ -952,8 +957,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return AppColors.errorRed;
       case 'cancelled':
         return isDarkMode ? Colors.white : AppColors.lightBorder; // White in dark mode, light grey in light mode
-      case 'waiting_confirmation': // New status
-        return Colors.purple.shade600;
+      case 'waiting_confirmation': 
+        return Colors.purple.shade600; // Purple for waiting for client's confirmation
       default:
         return isDarkMode ? AppColors.darkBorder : AppColors.lightBorder;
     }
@@ -971,8 +976,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return 'Refusée';
       case 'cancelled':
         return 'Annulée';
-      case 'waiting_confirmation': // New status
-        return 'En attente de votre confirmation';
+      case 'waiting_confirmation': 
+        return 'En attente de confirmation'; // Text for client side
       default:
         return 'Statut inconnu';
     }
@@ -990,8 +995,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         return Icons.cancel_rounded;
       case 'cancelled':
         return Icons.highlight_off_rounded;
-      case 'waiting_confirmation': // New status
-        return Icons.pending_actions_rounded;
+      case 'waiting_confirmation': 
+        return Icons.pending_actions_rounded; // Icon for client side
       default:
         return Icons.info_outline_rounded;
     }
@@ -1012,43 +1017,32 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   }
 
   Widget _buildBottomNavigationBar(bool isDarkMode) {
-    final status = _reservationData?['status'];
-    final hasProviderCompletion = _reservationData?['providerCompletionStatus'] == 'completed';
-    final hasReclamation = _reservationData?['hasReclamation'] == true; // This might need to be updated to check for pending reclamations like in prestataire page
-    final bool isRated = _reservationData?['rated'] == true;
-
+    final status = _reservationData?['status'] as String?;
+    // 'providerCompletionStatus' is relevant for client to know if provider marked as done.
+    // Let's assume 'providerCompletionStatus' == 'completed' means the status should be 'waiting_confirmation'.
+    // final bool isProviderMarkedDone = _reservationData?['providerCompletionStatus'] == 'completed';
+    final bool canSubmitReclamation = _reservationData?['hasReclamation'] != true; // Assuming 'hasReclamation' means an active one exists.
 
     List<Widget> buttons = [];
 
+    if (status == 'pending') {
+      buttons.add(
+        Expanded(
+          child: CustomButton(
+            text: 'Annuler la réservation',
+            icon: const Icon(Icons.cancel, color: Colors.white),
+            onPressed: _cancelReservation,
+            isPrimary: false,
             backgroundColor: AppColors.errorRed,
-            textColor: AppColors.darkTextColor,
+            textColor: Colors.white, // Ensure text is white on red button
             height: AppSpacing.buttonMedium,
           ),
         ),
       );
     } else if (status == 'approved') {
-      // Button for "Marquer terminée"
-      if (!hasProviderCompletion) {
-        buttons.add(
-          Expanded(
-            child: CustomButton(
-              text: 'Marquer terminée',
-              icon: const Icon(Icons.check_circle, color: Colors.white),
-              onPressed: _confirmCompletion,
-              isPrimary: true,
-              backgroundColor: AppColors.primaryGreen,
-              textColor: AppColors.darkTextColor,
-              height: AppSpacing.buttonMedium,
-            ),
-          ),
-        );
-      }
-      // Button for "Soumettre une réclamation" (full width)
-      if (!hasReclamation) {
-        // Add spacing only if there's a "Marquer terminée" button before it
-        if (buttons.isNotEmpty) {
-          buttons.add(AppSpacing.horizontalSpacing(AppSpacing.sm));
-        }
+      // If reservation is approved by provider, but provider has NOT YET marked it as done.
+      // Client sees an orange button to submit a reclamation.
+      if (canSubmitReclamation) {
         buttons.add(
           Expanded(
             child: CustomButton(
@@ -1057,17 +1051,57 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
               onPressed: () {
                 context.push('/clientHome/reclamations/create/${widget.reservationId}');
               },
-              isPrimary: false,
+              isPrimary: false, // It's an orange button
               backgroundColor: AppColors.warningOrange,
-              textColor: AppColors.darkTextColor,
+              textColor: Colors.white, // Ensure text is white
               height: AppSpacing.buttonMedium,
+            ),
+          ),
+        );
+      }
+    } else if (status == 'waiting_confirmation') {
+      // Provider has marked as done, client needs to confirm.
+      // Client sees "Confirmer l'achèvement" and a small square reclamation icon button.
+      buttons.add(
+        Expanded(
+          child: CustomButton(
+            text: "Confirmer", // Shortened text
+            icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+            onPressed: _confirmCompletion, // This will change status to 'completed' and trigger rating
+            isPrimary: true, // Main action button
+            backgroundColor: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+            textColor: Colors.white,
+            height: AppSpacing.buttonMedium,
+          ),
+        ),
+      );
+
+      if (canSubmitReclamation) {
+        buttons.add(AppSpacing.horizontalSpacing(AppSpacing.sm)); // Spacing
+        buttons.add(
+          SizedBox(
+            width: AppSpacing.buttonMedium, // Square button
+            height: AppSpacing.buttonMedium,
+            child: ElevatedButton(
+              onPressed: () {
+                context.push('/clientHome/reclamations/create/${widget.reservationId}');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.warningOrange,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24.0), // Triangle with !
             ),
           ),
         );
       }
     } else if (status == 'completed') {
-      // Button for "Soumettre une réclamation" (full width)
-      if (!hasReclamation) {
+      // Intervention is fully completed and confirmed by client. Client can submit reclamation.
+      // (Rating should have already occurred when transitioning to 'completed')
+      if (canSubmitReclamation) {
         buttons.add(
           Expanded(
             child: CustomButton(
@@ -1078,24 +1112,25 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
               },
               isPrimary: false,
               backgroundColor: AppColors.warningOrange,
-              textColor: AppColors.darkTextColor,
+              textColor: Colors.white,
               height: AppSpacing.buttonMedium,
             ),
           ),
         );
       }
     }
+    // No buttons for 'rejected' or 'cancelled' status in the bottom bar as per current logic.
 
     if (buttons.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
-      color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Same as CustomAppBar background
-      padding: const EdgeInsets.all(AppSpacing.md),
+      color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       child: SafeArea(
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: buttons.length == 1 ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
           children: buttons,
         ),
       ),

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.plateforme_services"
+    namespace = "com.example.AiDomi"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -23,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.plateforme_services"
+        applicationId = "com.example.AiDomi"
         minSdk = 23
         targetSdk = 35
         versionCode = flutter.versionCode

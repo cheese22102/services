@@ -120,7 +120,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
       );
     }
 
-    final photoURL = userData['photoURL'] as String?;
+    final photoURL = userData['avatarUrl'] as String?; // Changed from photoURL to avatarUrl
     final firstName = userData['firstname'] as String? ?? 'Non spécifié';
     final lastName = userData['lastname'] as String? ?? 'Non spécifié';
     final email = userData['email'] as String? ?? 'Non spécifié';

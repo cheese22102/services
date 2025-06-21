@@ -235,7 +235,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           // Create new user document
           await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
             'email': userCredential.user!.email,
-            'photoURL': userCredential.user!.photoURL,
+            'avatarURL': userCredential.user!.photoURL,
             'createdAt': FieldValue.serverTimestamp(),
             'lastLogin': FieldValue.serverTimestamp(),
             'role': 'client', // Default role
@@ -382,14 +382,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           
                           // Signup Image
                           Container(
-                            height: 120, // Reduced height
-                            decoration: BoxDecoration(
-                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
+                            height: 150, 
                             child: Image.asset(
                               "assets/images/login.png", // Using login image for consistency
-                              height: 100, // Reduced height
+                              height: 130, 
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -397,11 +393,11 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           
                           // App Title
                           Text(
-                            "Services Pro",
+                            "AiDomi",
                             style: GoogleFonts.poppins(
                               fontSize: 24, // Reduced font size
                               fontWeight: FontWeight.bold,
-                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                             ),
                           ),
                           const SizedBox(height: 4), // Consistent spacing
@@ -613,55 +609,28 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 16), // Reduced spacing
                           
-                          // Social Login Buttons
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              // Google Button
-                              Expanded(
-                                child: CustomButton(
-                                  text: 'Google',
-                                  onPressed: _isLoading ? null : _signInWithGoogle,
-                                  isPrimary: false,
-                                  isLoading: _isLoading,
-                                  icon: Image.asset(
-                                    'assets/images/google.png',
-                                    height: 20,
-                                    width: 20,
-                                    color: isDarkMode ? Colors.white : null,
-                                    colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                                  ),
-                                  height: 50, // Consistent height
-                                  useFullScreenLoader: true,
-                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary,
+                          // Social Login Button - Google
+                          Center(
+                            child: SizedBox( // Use SizedBox to maintain the original button size
+                              width: 200, // Approximate width of one Expanded button
+                              child: CustomButton(
+                                text: 'Google',
+                                onPressed: _isLoading ? null : _signInWithGoogle,
+                                isPrimary: false,
+                                isLoading: _isLoading,
+                                icon: Image.asset(
+                                  'assets/images/google.png',
+                                  height: 20,
+                                  width: 20,
+                                  color: isDarkMode ? Colors.white : null,
+                                  colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
                                 ),
+                                height: 50, // Consistent height
+                                useFullScreenLoader: true,
+                                backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
+                                textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary,
                               ),
-                              const SizedBox(width: 16),
-                              // Facebook Button
-                              Expanded(
-                                child: CustomButton(
-                                  text: 'Facebook',
-                                  onPressed: _isLoading ? null : () {
-                                    CustomSnackbar.showInfo(
-                                      context: context,
-                                      message: 'La connexion avec Facebook sera bientôt disponible',
-                                    );
-                                  },
-                                  isPrimary: false,
-                                  icon: Image.asset(
-                                    isDarkMode 
-                                        ? 'assets/images/facebook_dark.png' 
-                                        : 'assets/images/facebook.png',
-                                    height: 20,
-                                    width: 20,
-                                  ),
-                                  height: 50, // Consistent height
-                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white,
-                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                           const SizedBox(height: 24), // Reduced spacing
                           

@@ -1,4 +1,4 @@
-package com.example.plateforme_services
+package com.example.AiDomi
 
 import io.flutter.embedding.android.FlutterActivity
 

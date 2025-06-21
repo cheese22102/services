@@ -11,6 +11,7 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -43,8 +44,8 @@ Future<void> updateFcmTokenIfNeeded() async {
             .doc(user.uid)
             .update({'fcmToken': newToken});
       });
+    // ignore: empty_catches
     } catch (e) {
-      print('Failed to update FCM token: $e');
     }
   }
 }
@@ -57,8 +58,6 @@ Future<void> main() async {
     if (kIsWeb) {
       // For web, we need to initialize Firebase with web options
       await Firebase.initializeApp(
-        // You can omit options for web if you've initialized Firebase in index.html
-        // But providing them here as well ensures proper initialization
         options: const FirebaseOptions(
           apiKey: "AIzaSyDaghSyR8_TISxbwN1T2HVt_waYOO0A9II",
           authDomain: "plateformeservices-72c64.firebaseapp.com",
@@ -68,28 +67,31 @@ Future<void> main() async {
           appId: "1:710615234824:web:8775e718f54818309ed4bd"
         ),
       );
-      print("Firebase initialized for web");
     } else {
       // For other platforms, use the platform-specific options
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      print("Firebase initialized for non-web platform");
     }
     
+    // Initialize Firebase App Check
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug, // Use debug provider for Android
+      // appleProvider: AppleProvider.debug, // Uncomment for iOS debug
+    );
+
     // Configure Cloudinary
     cloudinary.config.urlConfig.secure = true;
     
     // Only initialize notifications on non-web platforms
     if (!kIsWeb) {
       await NotificationsService.initialize();
-      await updateFcmTokenIfNeeded(); // <-- Add this line
+      await updateFcmTokenIfNeeded();
     }
     
     final isFirstLaunch = await checkFirstLaunch();
     runApp(MyApp(isFirstLaunch: isFirstLaunch));
   } catch (e) {
-    print('Error initializing app: $e');
     // Fallback to run the app even if Firebase fails
     final isFirstLaunch = await checkFirstLaunch();
     runApp(MyApp(isFirstLaunch: isFirstLaunch));
@@ -110,9 +112,9 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp.router(
-            routerConfig: router,
+            routerConfig: AppRouter.createRouter(isFirstLaunch),
             debugShowCheckedModeBanner: false,
-            title: 'Services App', // Restored original title
+            title: 'Services App',
             theme: themeProvider.getLightTheme(),
             darkTheme: themeProvider.getDarkTheme(),
             themeMode: themeProvider.themeMode,

@@ -28,11 +28,8 @@ class AddPostPage extends StatefulWidget {
 }
 
 class _AddPostPageState extends State<AddPostPage> {
-  // Étapes du walkthrough
   final int _totalSteps = 5;
   int _currentStep = 0;
-  
-  // Contrôleurs et variables pour les données du formulaire
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
@@ -345,6 +342,7 @@ class _AddPostPageState extends State<AddPostPage> {
         'images': imageUrls,
         'userId': user.uid,
         'isValidated': false,
+        'isRejected': false, // Initialize isRejected to false
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -742,7 +740,7 @@ class _AddPostPageState extends State<AddPostPage> {
         CustomTextField(
           controller: _titleController,
           labelText: 'Titre',
-          hintText: 'Ex: iPhone 13 Pro Max 256GB',
+          hintText: 'Que voulez-vous vendre ?',
           maxLength: 50,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
@@ -784,7 +782,7 @@ class _AddPostPageState extends State<AddPostPage> {
         CustomTextField(
           controller: _priceController,
           labelText: 'Prix (TND)',
-          hintText: 'Ex: 299.99',
+          hintText: 'Ex: 100',
           prefixIcon: const Icon(Icons.wallet),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           validator: (value) {

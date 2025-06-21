@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:plateforme_services/notifications_service.dart';
+import 'package:AiDomi/notifications_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/message_bubble.dart';
 import '../front/app_colors.dart';
@@ -302,7 +302,7 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
             final userData = snapshot.data;
             final firstName = userData?['firstname'] ?? '';
             final lastName = userData?['lastname'] ?? '';
-            final photoURL = userData?['avatarUrl'] ?? userData?['photoURL'];
+            final avatarURL = userData?['avatarUrl'] ?? userData?['avatarURL'];
             
             return Row(
               children: [
@@ -312,10 +312,10 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
                   backgroundColor: isDarkMode
                       ? AppColors.primaryGreen.withOpacity(0.15)
                       : AppColors.primaryDarkGreen.withOpacity(0.08),
-                  backgroundImage: photoURL != null && photoURL.toString().isNotEmpty
-                      ? NetworkImage(photoURL.toString())
+                  backgroundImage: avatarURL != null && avatarURL.toString().isNotEmpty
+                      ? NetworkImage(avatarURL.toString())
                       : null,
-                  child: photoURL == null || photoURL.toString().isEmpty
+                  child: avatarURL == null || avatarURL.toString().isEmpty
                       ? Icon(
                           Icons.person,
                           color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
@@ -416,26 +416,6 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Attachment button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDarkMode 
-                          ? AppColors.darkInputBackground.withOpacity(0.5) 
-                          : Colors.grey.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.add,
-                        color: isDarkMode 
-                            ? AppColors.primaryGreen 
-                            : AppColors.primaryDarkGreen,
-                        size: 22,
-                      ),
-                      onPressed: () {
-                      },
-                    ),
-                  ),
                   // Text input field with container
                   Expanded(
                     child: Container(
@@ -469,9 +449,7 @@ class _ChatScreenPageState extends State<ChatScreenPage> {
                           contentPadding: const EdgeInsets.symmetric(vertical: 10),
                           isDense: true,
                           filled: true,
-                          fillColor: isDarkMode 
-                              ? AppColors.darkInputBackground.withOpacity(0.5) 
-                              : Colors.grey.shade100,
+                          fillColor: Colors.transparent, // Make TextField's own fill transparent
                         ),
                         onSubmitted: (_) => _sendMessage(),
                       ),

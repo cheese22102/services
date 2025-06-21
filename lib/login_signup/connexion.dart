@@ -14,6 +14,7 @@ import '../front/custom_button.dart';
 import '../front/loading_overlay.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../front/page_transition.dart';
+import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -333,7 +334,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         // Create new user document
         await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
           'email': userCredential.user!.email,
-          'photoURL': userCredential.user!.photoURL,
+          'avatarURL': userCredential.user!.photoURL,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLogin': FieldValue.serverTimestamp(),
           'role': 'client',
@@ -470,14 +471,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           
                           // Login Image
                           Container(
-                            height: 120, // Reduced height
-                            decoration: BoxDecoration(
-                              color: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
+                            height: 150, 
                             child: Image.asset(
                               "assets/images/login.png",
-                              height: 100, // Reduced height
+                              height: 130, 
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -485,11 +482,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           
                           // App Title
                           Text(
-                            "Services Pro",
+                            "AiDomi",
                             style: GoogleFonts.poppins(
                               fontSize: 24, // Reduced font size
                               fontWeight: FontWeight.bold,
-                              color: isDarkMode ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
                             ),
                           ),
                           const SizedBox(height: 4), // Adjusted spacing
@@ -659,56 +656,28 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 16), // Reduced spacing
                           
-                          // Social Login Buttons - Row with Google and Facebook
-                          Row(
-                            children: [
-                              // Google Sign In Button
-                              Expanded(
-                                child: CustomButton(
-                                  text: 'Google',
-                                  onPressed: _signInWithGoogle,
-                                  isPrimary: false,
-                                  isLoading: _isLoading,
-                                  icon: Image.asset(
-                                    'assets/images/google.png',
-                                    height: 20,
-                                    width: 20,
-                                    color: isDarkMode ? Colors.white : null,
-                                    colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                                  ),
-                                  height: 50, // Adjusted height
-                                  useFullScreenLoader: true, // Enable full-screen loader
-                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Consistent background
-                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary, // Consistent text color
+                          // Social Login Button - Google
+                          Center(
+                            child: SizedBox( // Use SizedBox to maintain the original button size
+                              width: 200, // Approximate width of one Expanded button
+                              child: CustomButton(
+                                text: 'Google',
+                                onPressed: _signInWithGoogle,
+                                isPrimary: false,
+                                isLoading: _isLoading,
+                                icon: Image.asset(
+                                  'assets/images/google.png',
+                                  height: 20,
+                                  width: 20,
+                                  color: isDarkMode ? Colors.white : null,
+                                  colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
                                 ),
+                                height: 50, // Adjusted height
+                                useFullScreenLoader: true, // Enable full-screen loader
+                                backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Consistent background
+                                textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary, // Consistent text color
                               ),
-                              const SizedBox(width: 16), // Increased spacing
-                              // Facebook Sign In Button
-                              Expanded(
-                                child: CustomButton(
-                                  text: 'Facebook',
-                                  onPressed: () {
-                                    if (mounted) {  // Add this check
-                                      CustomSnackbar.showInfo(
-                                        context: context,
-                                        message: 'Connexion Facebook à venir',
-                                      );
-                                    }
-                                  },
-                                  isPrimary: false,
-                                  icon: Image.asset(
-                                    isDarkMode 
-                                      ? 'assets/images/facebook_dark.png'
-                                      : 'assets/images/facebook.png',
-                                    height: 20,
-                                    width: 20,
-                                  ),
-                                  height: 50, // Adjusted height
-                                  backgroundColor: isDarkMode ? AppColors.darkInputBackground : Colors.white, // Consistent background
-                                  textColor: isDarkMode ? Colors.white : AppColors.lightTextPrimary, // Consistent text color
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                           const SizedBox(height: 24), // Reduced spacing
                           
@@ -743,7 +712,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
-                        ],
+                      ],
                       ),
                     ),
                   ),

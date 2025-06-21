@@ -126,7 +126,7 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
       );
     }
     
-    final photoURL = userData['photoURL'] as String?;
+    final avatarURL = userData['avatarURL'] as String?;
     final firstName = userData['firstname'] as String? ?? 'Non spécifié';
     final lastName = userData['lastname'] as String? ?? 'Non spécifié';
     final email = userData['email'] as String? ?? 'Non spécifié';
@@ -150,14 +150,14 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // User photo
-                if (photoURL != null && photoURL.isNotEmpty)
+                if (avatarURL != null && avatarURL.isNotEmpty)
                   Container(
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       image: DecorationImage(
-                        image: NetworkImage(photoURL),
+                        image: NetworkImage(avatarURL),
                         fit: BoxFit.cover,
                       ),
                       border: Border.all(
@@ -1342,6 +1342,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         );
       }
   
+      LoadingOverlay.hide(); // Hide loading overlay BEFORE navigation
+
       // Show success message and navigate back
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1350,12 +1352,14 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         context.go('/admin/providers'); // Update navigation to use GoRouter
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
-    } finally {
-      LoadingOverlay.hide(); // Hide loading overlay
+      LoadingOverlay.hide(); // Hide loading overlay on error as well
+      if (mounted) { // Ensure widget is still mounted before showing SnackBar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
     }
+    // finally block for LoadingOverlay.hide() is removed as it's handled in try/catch
   }
   
   // Function to reject a provider
@@ -1393,6 +1397,8 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         );
       }
   
+      LoadingOverlay.hide(); // Hide loading overlay BEFORE navigation
+
       // Show success message and navigate back
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1401,12 +1407,14 @@ class _ProviderApprovalDetailsPageState extends State<ProviderApprovalDetailsPag
         context.go('/admin/providers'); // Update navigation to use GoRouter
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
-    } finally {
-      LoadingOverlay.hide(); // Hide loading overlay
+      LoadingOverlay.hide(); // Hide loading overlay on error as well
+      if (mounted) { // Ensure widget is still mounted before showing SnackBar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
     }
+    // finally block for LoadingOverlay.hide() is removed as it's handled in try/catch
   }
   
   void _showFullScreenImage(BuildContext context, String imageUrl) {

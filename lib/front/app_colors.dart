@@ -21,6 +21,10 @@ class AppColors {
   static const Color darkTextHint = Colors.white38;
   static const Color darkSurface = Color(0xFF28332C); // Slightly darker than main background
   static const Color darkBorder = Color(0xFF424242); // Dark border color
+  static const Color darkAppBarBackground = Color(0xFF28332C);
+  static const Color lightAppBarBackground = Colors.white;
+  static const Color darkIconColor = Colors.white;
+  static const Color lightIconColor = primaryDarkGreen;
   
   // Gradient colors - Light mode
   static const List<Color> lightGradient = [

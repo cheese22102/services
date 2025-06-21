@@ -82,12 +82,12 @@ class _SidebarState extends State<Sidebar> {
       children: [
         ListTile(
           leading: Icon(
-            Icons.shopping_bag_outlined,
+            Icons.store_outlined, // Changed section icon
             color: primaryColor,
             size: 22,
           ),
           title: Text(
-            'Marketplace',
+            'Marketplace', // Text remains 'Marketplace'
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -118,32 +118,32 @@ class _SidebarState extends State<Sidebar> {
             child: Column(
               children: [
                 _buildMarketplaceItem(
-                  'Accueil',
-                  Icons.storefront_outlined,
+                  "Parcourir le Marché", // Changed text
+                  Icons.grid_view_rounded, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/marketplace');
                   },
                 ),
                 _buildMarketplaceItem(
-                  'Ajouter une publication',
-                  Icons.add_box_outlined,
+                  "Vendre un Article", // Changed text
+                  Icons.add_business_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/marketplace/add');
                   },
                 ),
                 _buildMarketplaceItem(
-                  'Mes favoris',
-                  Icons.favorite_border_rounded,
+                  "Articles Préférés", // Changed text
+                  Icons.bookmark_border_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/marketplace/favorites');
                   },
                 ),
                 _buildMarketplaceItem(
-                  'Mes publications',
-                  Icons.grid_view_outlined,
+                  "Mes Articles en Vente", // Changed text
+                  Icons.inventory_2_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/marketplace/my-products');
@@ -188,12 +188,12 @@ class _SidebarState extends State<Sidebar> {
       children: [
         ListTile(
           leading: Icon(
-            Icons.home_repair_service,
+            Icons.build_outlined, // Changed section icon
             color: primaryColor,
             size: 22,
           ),
           title: Text(
-            'Services',
+            'Services', // Text remains 'Services'
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -223,41 +223,40 @@ class _SidebarState extends State<Sidebar> {
             child: Column(
               children: [
                 _buildServicesItem(
-                  'Tous les services',
-                  Icons.category_outlined,
+                  "Explorer les Services", // Changed text
+                  Icons.explore_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/all-services');
                   },
                 ),
                 _buildServicesItem(
-                  'Mes réservations',
-                  Icons.calendar_today_outlined,
+                  "Mes Rendez-vous", // Changed text
+                  Icons.event_note_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/my-reservations');
                   },
                 ),
                 _buildServicesItem(
-                  'Prestataires favoris',
-                  Icons.favorite_border_outlined,
+                  "Prestataires Favoris", // Changed text
+                  Icons.favorite_border_outlined, // Kept icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/favorite-providers');
                   },
                 ),
                 _buildServicesItem(
-                  'Mes réclamations',
-                  Icons.report_problem_outlined,
+                  "Mes Tickets de Support", // Changed text
+                  Icons.support_agent_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/reclamations');
                   },
                 ),
-                // Add your new button here, for example:
                 _buildServicesItem(
-                  'Nouvelle réclamation',
-                  Icons.add_circle_outline,
+                  "Ouvrir un Ticket", // Changed text
+                  Icons.add_comment_outlined, // Changed icon
                   () {
                     Navigator.pop(context);
                     context.go('/clientHome/new-reclamation');
@@ -311,13 +310,13 @@ class _SidebarState extends State<Sidebar> {
                 children: [
                   const SizedBox(height: 8),
                   ListTile(
-                    leading: Icon(
-                      Icons.person_outline_rounded,
+                    leading: Icon( // Icon for Profile
+                      Icons.account_circle_outlined, // Changed icon
                       color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                       size: 22,
                     ),
                     title: Text(
-                      "Modifier le profil",
+                      "Mon Profil", // Changed text
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -326,14 +325,34 @@ class _SidebarState extends State<Sidebar> {
                     ),
                     onTap: _navigateToProfile,
                   ),
+                  // New ListTile for Change Password
                   ListTile(
                     leading: Icon(
+                      Icons.lock_outline, // Icon for Change Password
+                      color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                      size: 22,
+                    ),
+                    title: Text(
+                      "Changer le mot de passe",
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/clientHome/change-password');
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon( // Icon for Notifications - remains same
                       Icons.notifications_outlined,
                       color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                       size: 22,
                     ),
                     title: Text(
-                      "Notifications",
+                      "Notifications", // Text remains same
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -341,27 +360,20 @@ class _SidebarState extends State<Sidebar> {
                       ),
                     ),
                     trailing: StreamBuilder<int>(
-                      stream: NotificationsPage.getUnreadNotificationsCount(),
+                      stream: NotificationsPage.getUnreadNotificationsCount(), // Assuming this stream still provides the count
                       builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data! > 0) {
+                        final bool hasUnread = snapshot.hasData && snapshot.data! > 0;
+                        if (hasUnread) {
                           return Container(
-                            padding: const EdgeInsets.all(6),
+                            width: 12, // Size of the red dot
+                            height: 12,
                             decoration: BoxDecoration(
-                              color: primaryColor,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 20,
-                              minHeight: 20,
-                            ),
-                            child: Text(
-                              '${snapshot.data}',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDarkMode ? Colors.grey.shade900 : Colors.white, // Border color to match background
+                                width: 1.5,
                               ),
-                              textAlign: TextAlign.center,
                             ),
                           );
                         }
@@ -384,18 +396,29 @@ class _SidebarState extends State<Sidebar> {
                     indent: 16,
                     endIndent: 16,
                   ),
-                  // Removed logout button from here
+                  // Removed logout button from here (this comment might be outdated from previous edits)
                 ],
               ),
             ),
           ),
-          // Replaced theme switch with logout button
+          // Theme Toggle Switch - Made larger and centered
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0), // Increased vertical padding for the switch area
+            child: Align(
+              alignment: Alignment.center, // Center the switch
+              child: Transform.scale(
+                scale: 1.2, // Make it 20% larger
+                child: ThemeToggleSwitch(),
+              ),
+            ),
+          ),
+          // Logout Button - Styled Red
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0), // Adjusted padding
             child: ListTile(
-              leading: Icon(
+              leading: const Icon(
                 Icons.logout_rounded,
-                color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                color: Colors.red, // Icon color red
                 size: 22,
               ),
               title: Text(
@@ -403,11 +426,14 @@ class _SidebarState extends State<Sidebar> {
                 style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: isDarkMode ? Colors.white : Colors.black87,
+                  color: Colors.red, // Text color red
                 ),
               ),
               onTap: _logout,
               dense: true,
+              // Optional: Add a subtle background or shape for emphasis if desired
+              // tileColor: Colors.red.withOpacity(0.05),
+              // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
             ),
           ),
         ],
@@ -458,12 +484,21 @@ class _UserHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Add theme toggle at the top right
-          Align(
-            alignment: Alignment.topRight,
-            child: ThemeToggleSwitch(),
-          ),
-          const SizedBox(height: 8),
+          // Theme toggle removed from here
+          // const SizedBox(height: 8), // This SizedBox might be conditional on the theme toggle's presence or can be adjusted
+          // Make avatar bigger and centered. We might need a placeholder or adjust spacing if Align was the only thing at top.
+          // For now, let's assume the avatar is the topmost visual element after this change.
+          // If Align was providing some specific spacing, that might need to be re-added or handled differently.
+          // Let's add a SizedBox to maintain some top padding if ThemeToggleSwitch was the only thing there.
+          // However, looking at the original, ThemeToggleSwitch was inside Align(topRight), so it didn't push content down.
+          // The SizedBox(height: 8) was after it.
+          // So, removing Align and ThemeToggleSwitch, and the SizedBox(height:8) that followed it.
+          // The CircleAvatar will now be closer to the top of the header.
+          // If a top padding is desired for the header content, it should be part of the parent Container's padding or an initial SizedBox.
+          // The parent Container has `padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16)`.
+          // This vertical padding should provide enough space at the top.
+
+          const SizedBox(height: 16.0), // Added top spacing for the avatar
           // Make avatar bigger and centered
           CircleAvatar(
             radius: 50, // Increased from 40
@@ -506,3 +541,6 @@ class _UserHeader extends StatelessWidget {
     );
   }
 }
+
+// Ensure ThemeToggleSwitch is imported if not already:
+// import 'theme_toggle_switch.dart'; // Already at the top of the file

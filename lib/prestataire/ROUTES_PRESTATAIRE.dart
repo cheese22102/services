@@ -11,7 +11,10 @@ import '../chat/conversation_marketplace.dart';
 import '../chat/provider_list_conversations.dart';
 import 'provider_reclamations_page.dart';
 import 'provider_reclamation_details_page.dart';
+import 'provider_profile_page.dart'; // Import the new profile page
 import '../../client/services/reclamation_form_page.dart'; // New import
+import '../front/changer_mot_de_passe_page.dart'; // Import for ChangerMotDePassePage
+import 'provider_edit_professional_info_page.dart'; // Import the new edit page
 
 final prestataireRoutes = GoRoute(
   path: '/prestataireHome',
@@ -29,10 +32,27 @@ final prestataireRoutes = GoRoute(
       builder: (context, state) => const ProviderNotificationsPage(),
     ),
     GoRoute(
-      path: 'profile',
+      path: 'profile', // This will be the new view-only profile page
+      builder: (context, state) => const ProviderProfilePage(),
+    ),
+    GoRoute(
+      path: 'edit-profile', // Renamed for clarity: this is the edit page
       builder: (context, state) => const ProfileEditPage(),
     ),
-    
+    GoRoute(
+      path: 'change-password', // New route for changing password
+      builder: (context, state) => const ChangerMotDePassePage(),
+    ),
+    GoRoute(
+      path: 'edit-professional-info', // New route for editing professional info
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return ProviderEditProfessionalInfoPage(
+          initialProviderData: extra?['initialProviderData'],
+          initialUserData: extra?['initialUserData'],
+        );
+      },
+    ),
 
     GoRoute(
       path: 'reservations',
@@ -83,18 +103,9 @@ final prestataireRoutes = GoRoute(
       ],
     ),
 
-    // Add profile edit route
-    GoRoute(
-      path: 'editProfile',
-      builder: (context, state) {
-        final params = state.extra as Map<String, dynamic>;
-        return ProfileEditPage(
-          providerId: params['providerId'],
-          providerData: params['providerData'],
-          userData: params['userData'],
-        );
-      },
-    ),
+    // The 'editProfile' route is now 'edit-profile'
+    // The existing route for ProfileEditPage should be updated to match the new path
+    // No change needed here, as the previous block handles the renaming.
     GoRoute(
       path: 'reclamation',
       builder: (BuildContext context, GoRouterState state) {

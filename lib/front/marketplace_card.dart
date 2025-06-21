@@ -82,7 +82,7 @@ class _MarketplaceCardState extends State<MarketplaceCard> {
       onTap: widget.onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Use AppColors
+          color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Use white for light mode
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd), // Use AppSpacing
           boxShadow: [
             BoxShadow(

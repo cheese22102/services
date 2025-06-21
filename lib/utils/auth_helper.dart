@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../login_signup/connexion.dart';
+import 'package:go_router/go_router.dart'; // Import go_router
+import 'package:google_sign_in/google_sign_in.dart'; // Import google_sign_in
 
 class AuthHelper {
   static Future<bool> checkUserRole(BuildContext context, String requiredRole) async {
@@ -25,14 +26,13 @@ class AuthHelper {
   }
 
   static void _redirectToLogin(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const LoginPage()),
-      (route) => false,
-    );
+    // Use GoRouter for navigation
+    context.go('/');
   }
 
   static Future<void> signOut(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
+    await GoogleSignIn().signOut(); // Sign out from Google as well
     _redirectToLogin(context);
   }
 }

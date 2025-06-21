@@ -174,7 +174,7 @@ class _ProviderListPageState extends State<ProviderListPage> {
                         final firstName = userData?['firstname'] ?? 'Inconnu';
                         final lastName = userData?['lastname'] ?? 'Inconnu';
                         final fullName = '$firstName $lastName';
-                        final profilePictureUrl = userData?['profilePictureUrl'] as String?;
+                        final profilePictureUrl = userData?['avatarUrl'] as String?;
                         String city = requestData['exactLocation']?['address'] as String? ?? 'Non spécifié';
                         // Extract the city name (assuming it's the second part if multiple commas exist, otherwise the whole string)
                         final addressParts = city.split(',');

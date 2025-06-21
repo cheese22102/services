@@ -38,8 +38,6 @@ class CustomTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = isDarkMode ? AppColors.darkBorderColor : AppColors.lightBorderColor;
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -73,15 +71,24 @@ class CustomTextField extends StatelessWidget {
                 : AppColors.lightInputBackground,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor, width: 1.5),
+              borderSide: BorderSide(
+                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                width: 1.5,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor, width: 1.5),
+              borderSide: BorderSide(
+                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                width: 1.5,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor, width: 2.0),
+              borderSide: BorderSide(
+                color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen,
+                width: 2.0,
+              ),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,

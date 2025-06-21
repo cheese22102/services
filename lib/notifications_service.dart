@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:plateforme_services/chat/conversation_marketplace.dart';
-import 'package:plateforme_services/main.dart';
+import 'package:AiDomi/chat/conversation_marketplace.dart';
+import 'package:AiDomi/main.dart';
 import '/config/constants.dart';
 
 class NotificationsService {
@@ -317,8 +317,8 @@ class NotificationsService {
 
       // Save notification to Firestore
       await FirebaseFirestore.instance
-          .collection('provider_requests')
-          .doc(providerId)
+          .collection('users') // Changed from 'provider_requests' to 'users'
+          .doc(providerId) // providerId is the user ID of the provider
           .collection('notifications')
           .add({
             'title': title,

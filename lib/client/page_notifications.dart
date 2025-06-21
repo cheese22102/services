@@ -263,68 +263,93 @@ class _NotificationsPageState extends State<NotificationsPage> {
           .doc(notificationId)
           .update({'read': true});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Erreur: Impossible de marquer la notification comme lue',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
+      // Silently fail or log, as this is often called on tap before navigation
+      debugPrint("Error marking notification as read for ID $notificationId: $e");
     }
   }
 
   // Handle notification tap based on type
   void _handleNotificationTap(Map<String, dynamic> notification) async {
-    await _markAsRead(notification['id']);
+    // Ensure notification['id'] is the Firestore document ID of the notification
+    final String notificationDocId = notification['id'] as String; 
+    await _markAsRead(notificationDocId);
     
     if (!mounted) return;
     
-    final type = notification['type'];
+    final type = notification['type'] as String?;
     final data = notification['data'] as Map<String, dynamic>?;
     
-    if (type == 'message') {
-      final chatroomId = data?['chatroomId'];
-      final postId = data?['postId'];
-      final otherUserId = data?['senderId'];
-      final otherUserName = data?['senderName'] ?? '';
-      
-      if (chatroomId != null && postId != null && otherUserId != null) {
-        // Navigate to marketplace conversation with all required parameters
-        context.push('/clientHome/marketplace/chat/conversation/$otherUserId', 
-          extra: {
-            'postId': postId,
-            'otherUserName': otherUserName,
-            'chatId': chatroomId,
-          }
-        );
-      } else if (chatroomId != null) {
-        // Navigate using just the chatId
-        context.push('/clientHome/marketplace/chat/${chatroomId}');
-      } else if (otherUserId != null) {
-        // Navigate to service conversation
-        context.push('/clientHome/chat/conversation/$otherUserId',
-          extra: {
-            'otherUserName': otherUserName,
-            'serviceName': data?['serviceName'] ?? '',
-          }
-        );
+    if (data == null) {
+      debugPrint("Notification data is null for notification ID $notificationDocId. Cannot navigate.");
+      return;
+    }
+
+    // Extract common IDs from the 'data' payload
+    final String? chatId = data['chatId'] as String? ?? data['chatroomId'] as String?;
+    final String? postId = data['postId'] as String?;
+    final String? otherUserId = data['senderId'] as String? ?? data['otherUserId'] as String?;
+    final String? otherUserName = data['senderName'] as String? ?? data['otherUserName'] as String? ?? 'Utilisateur';
+    final String? reservationId = data['reservationId'] as String?;
+    final String? reclamationId = data['reclamationId'] as String?;
+    final String? serviceName = data['serviceName'] as String?; // For service-related chat context
+    final String? notificationTitle = notification['title'] as String?; // Get the title for specific checks
+
+    // Navigation logic based on notification type
+    if (type == 'message' || type == 'new_message') {
+      if (chatId != null && chatId.isNotEmpty) {
+        // Direct navigation if chatId is available
+        // Route: /clientHome/marketplace/chat/:chatId (or a general chat route if not marketplace specific)
+        // Assuming '/clientHome/marketplace/chat/:chatId' is for marketplace context.
+        // If it's a general service chat, the route might be different, e.g., '/clientHome/chat/:chatId'
+        // For now, using the marketplace one as per ROUTES_CLIENT.dart structure.
+        context.push('/clientHome/marketplace/chat/$chatId');
+      } else if (otherUserId != null && otherUserId.isNotEmpty) {
+        // Navigate to conversation view if otherUserId is available
+        // Route: /clientHome/marketplace/chat/conversation/:otherUserId
+        Map<String, dynamic> extraParams = {'otherUserName': otherUserName};
+        if (postId != null && postId.isNotEmpty) {
+          extraParams['postId'] = postId; // Context for marketplace post chat
+        }
+        // If it's a service chat, serviceName might be relevant
+        if (serviceName != null && serviceName.isNotEmpty) {
+           extraParams['serviceName'] = serviceName;
+        }
+        context.push('/clientHome/marketplace/chat/conversation/$otherUserId', extra: extraParams);
+      } else {
+        debugPrint("Chat notification (ID: $notificationDocId) missing 'chatId' or 'otherUserId'.");
       }
-    } else if (type == 'post') {
-      // Handle post notifications (e.g., someone commented on your post)
-      final postId = data?['postId'];
-      if (postId != null) {
+    } else if (type == 'post' || type == 'post_interaction' || type == 'new_comment_on_post' || type == 'post_liked' || type == 'post_approved' || type == 'post_rejected') {
+      if (postId != null && postId.isNotEmpty) {
+        // Route: /clientHome/marketplace/details/:postId
         context.push('/clientHome/marketplace/details/$postId');
+      } else {
+        debugPrint("Post-related notification (ID: $notificationDocId) missing 'postId'.");
       }
-    } else if (type == 'system') {
-      // Handle system notifications if needed
+    } else if (type == 'reservation_update' || type == 'new_reservation' || type == 'reservation_accepted' || type == 'reservation_rejected' || type == 'reservation_cancelled' || type == 'reservation_completed_by_provider' || type == 'reservation_reminder') {
+      if (reservationId != null && reservationId.isNotEmpty) {
+        // Route: /clientHome/reservation-details/:reservationId
+        context.push('/clientHome/reservation-details/$reservationId');
+      } else {
+        debugPrint("Reservation notification (ID: $notificationDocId) missing 'reservationId'.");
+      }
+    } else if (type == 'reclamation_update' || type == 'reclamation_resolved' || type == 'reclamation_rejected' || type == 'new_reclamation_response') {
+      if (reclamationId != null && reclamationId.isNotEmpty) {
+        // Route: /clientHome/reclamations/details/:reclamationId
+        context.push('/clientHome/reclamations/details/$reclamationId');
+      } else {
+        debugPrint("Reclamation notification (ID: $notificationDocId) missing 'reclamationId'.");
+      }
+    } else if ((type == 'post_status_update' || type == 'post_approved' || type == 'post_rejected') || 
+               (notificationTitle != null && (notificationTitle.toLowerCase().contains('publication approuvée') || notificationTitle.toLowerCase().contains('publication refusée')))) {
+      // Navigate to "Mes Annonces" for post status updates like approved/rejected
+      // Route: /clientHome/marketplace/my-products
+      context.push('/clientHome/marketplace/my-products');
+    } else if (type == 'system' || type == 'general_update' || type == 'promotion') {
+      // For system or general notifications, you might navigate to a specific info page or just home.
+      debugPrint("System/General notification (ID: $notificationDocId) tapped. Type: $type. No specific navigation implemented, or navigate to home/info page.");
+      // Example: context.go('/clientHome'); 
+    } else {
+      debugPrint("Unknown or unhandled notification type '$type' (Title: '$notificationTitle') for notification ID $notificationDocId.");
     }
   }
 
@@ -573,7 +598,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           child: Icon(
                             notification['type'] == 'message'
                                 ? Icons.message_outlined
-                                : Icons.notifications_outlined,
+                                : Icons.notifications_outlined, // Default icon
                             color: isRead
                                 ? (isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600)
                                 : primaryColor,

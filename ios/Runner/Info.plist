@@ -8,6 +8,11 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access for video recording</string>
     
+    <key>CFBundleDisplayName</key>
+    <string>AiDomi</string>
+    <key>CFBundleName</key>
+    <string>AiDomi</string>
+    
     <!-- Rest of your Info.plist content -->
 </dict>
 </plist>

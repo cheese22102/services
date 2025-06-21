@@ -31,8 +31,17 @@ class _MarketplacePageState extends State<MarketplacePage> {
   String? _filterLocation = 'Tous'; // New state variable for location filter
   bool _isFilterVisible = false;
   
-  // Scroll controller for hiding search bar
+  // Scroll controller for hiding search bar and pagination
   final ScrollController _scrollController = ScrollController();
+
+  // Pagination state variables
+  DocumentSnapshot? _lastDocumentMarketplace;
+  bool _hasMoreMarketplace = true;
+  bool _isFetchingMoreMarketplace = false;
+  final int _marketplacePageSize = 10; // Number of items per page
+  final List<DocumentSnapshot> _allMarketplaceDocs = []; // Stores all fetched documents
+  List<DocumentSnapshot> _displayedMarketplacePosts = []; // Posts to display after client-side filtering/search
+  bool _isInitialLoading = true; // True while loading the very first set of data
 
   // Categories list - initialized once
   List<Map<String, dynamic>> _categories = [
@@ -46,16 +55,23 @@ class _MarketplacePageState extends State<MarketplacePage> {
   void initState() {
     super.initState();
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
-      });
+      // Apply search client-side without full reload if query changes
+      if (_searchQuery != _searchController.text) {
+        setState(() {
+          _searchQuery = _searchController.text;
+        });
+        _applyClientSideFiltersAndSearch(); 
+      }
     });
     
-    // Add scroll listener to hide/show search bar
     _scrollController.addListener(_scrollListener);
     
-    // Load services from Firestore
-    _loadServices();
+    // Load services (categories) first, then load initial marketplace data
+    _loadServices().then((_) {
+      if (mounted) {
+        _loadInitialMarketplaceData();
+      }
+    });
   }
   
   // Load services from Firestore
@@ -102,61 +118,153 @@ class _MarketplacePageState extends State<MarketplacePage> {
     super.dispose();
   }
   
-  // Scroll listener to hide/show search bar
+  // Scroll listener for pagination
   void _scrollListener() {
-    // Disable the behavior that might be causing the refresh issue
-    // We'll keep this empty to prevent any state changes during scrolling
+    // Logic for hiding search bar (if any was intended) can be added here.
+    // Pagination logic:
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300 && // Trigger a bit before the end
+        _hasMoreMarketplace &&
+        !_isFetchingMoreMarketplace &&
+        !_isInitialLoading) { // Don't fetch more if initial load is happening or already fetching
+      _loadMoreMarketplaceData();
+    }
   }
   
   // Method to select a category
   void _selectCategory(int index) {
-    setState(() {
-      for (int i = 0; i < _categories.length; i++) {
+    bool changed = false;
+    for (int i = 0; i < _categories.length; i++) {
+      if (_categories[i]['isSelected'] != (i == index)) {
+        changed = true;
         _categories[i]['isSelected'] = (i == index);
       }
-    });
+    }
+    if (changed) {
+      setState(() {}); // Update UI for category selection
+      _loadInitialMarketplaceData(); // Reload data as category filter changed
+    }
   }
 
-  // Cache pour le stream
-  Stream<QuerySnapshot>? _cachedStream;
+  // --- New methods for pagination and data handling ---
 
-  // Get marketplace posts with filters
-  Stream<QuerySnapshot> _getMarketplacePosts() {
-    // Reset the cached stream when filters change
-    _cachedStream = null;
-    
+  Query _buildMarketplaceQuery() {
     Query query = FirebaseFirestore.instance.collection('marketplace');
     
-    // Only show validated posts
     query = query.where('isValidated', isEqualTo: true);
     
+    final selectedCategory = _categories.firstWhere(
+      (cat) => cat['isSelected'], 
+      orElse: () => _categories.firstWhere((c) => c['id'] == 'all', orElse: () => _categories.first)
+    );
+
     // Apply category filter if not "Tous"
-    final selectedCategory = _categories.firstWhere((cat) => cat['isSelected'], orElse: () => _categories[0]);
     if (selectedCategory['id'] != 'all') {
       query = query.where('category', isEqualTo: selectedCategory['id']);
     }
     
-    // Apply condition filter if not "All"
     if (_filterCondition != 'All') {
       query = query.where('condition', isEqualTo: _filterCondition);
     }
     
-    // Apply price range filter
     query = query.where('price', isGreaterThanOrEqualTo: _priceRange.start);
     query = query.where('price', isLessThanOrEqualTo: _priceRange.end);
     
-    // Apply location filter if not "Tous"
     if (_filterLocation != null && _filterLocation != 'Tous') {
       query = query.where('location', isEqualTo: _filterLocation);
     }
     
-    // Apply sort order (keep existing sort by price and date)
-    query = query.orderBy('price', descending: !_isAscending);
+    // Firestore requires the first orderBy field to match the range filter field if one exists.
+    // Price is used in range filter, so it must be the first orderBy.
+    query = query.orderBy('price', descending: !_isAscending); // _isAscending is final false, so descending: true
     query = query.orderBy('createdAt', descending: !_sortByDateAsc);
     
-    _cachedStream = query.snapshots();
-    return _cachedStream!;
+    return query;
   }
+
+  Future<void> _fetchMarketplacePage({DocumentSnapshot? startAfter}) async {
+    if (!mounted) return;
+
+    Query baseQuery = _buildMarketplaceQuery();
+    if (startAfter != null) {
+      baseQuery = baseQuery.startAfterDocument(startAfter);
+    }
+    
+    try {
+      final QuerySnapshot snapshot = await baseQuery.limit(_marketplacePageSize).get();
+      if (!mounted) return;
+
+      final newDocs = snapshot.docs;
+      _allMarketplaceDocs.addAll(newDocs); // Add to the main list
+      _lastDocumentMarketplace = newDocs.isNotEmpty ? newDocs.last : null;
+      _hasMoreMarketplace = newDocs.length == _marketplacePageSize;
+      
+      _applyClientSideFiltersAndSearch(); // This will update _displayedMarketplacePosts and call setState
+    } catch (e) {
+      print("Error fetching marketplace page: $e");
+      if (mounted) {
+        // Optionally show a snackbar or error message
+        // setState(() { _isFetchingMoreMarketplace = false; _isInitialLoading = false; });
+      }
+    }
+  }
+
+  Future<void> _loadInitialMarketplaceData() async {
+    if (!mounted) return;
+    setState(() {
+      _isInitialLoading = true;
+      _allMarketplaceDocs.clear();
+      _displayedMarketplacePosts.clear();
+      _lastDocumentMarketplace = null;
+      _hasMoreMarketplace = true;
+      _isFetchingMoreMarketplace = false; // Ensure this is reset
+    });
+
+    await _fetchMarketplacePage();
+
+    if (mounted) {
+      setState(() {
+        _isInitialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMoreMarketplaceData() async {
+    if (!mounted || _isFetchingMoreMarketplace || !_hasMoreMarketplace) return;
+
+    setState(() {
+      _isFetchingMoreMarketplace = true;
+    });
+
+    await _fetchMarketplacePage(startAfter: _lastDocumentMarketplace);
+
+    if (mounted) {
+      setState(() {
+        _isFetchingMoreMarketplace = false;
+      });
+    }
+  }
+
+  void _applyClientSideFiltersAndSearch() {
+    if (!mounted) return;
+
+    List<DocumentSnapshot> currentPosts = List.from(_allMarketplaceDocs);
+
+    // Apply search query
+    if (_searchQuery.isNotEmpty) {
+      final searchQueryLower = _searchQuery.toLowerCase();
+      currentPosts = currentPosts.where((doc) {
+        final postData = doc.data() as Map<String, dynamic>;
+        final title = (postData['title'] as String? ?? '').toLowerCase();
+        final description = (postData['description'] as String? ?? '').toLowerCase();
+        return title.contains(searchQueryLower) || description.contains(searchQueryLower);
+      }).toList();
+    }
+    
+    setState(() {
+      _displayedMarketplacePosts = currentPosts;
+    });
+  }
+  // --- End of new methods ---
   
   void _toggleFilterVisibility() {
     setState(() {
@@ -177,6 +285,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
       _filterLocation = location; // Update location filter
       _isFilterVisible = false;
     });
+    _loadInitialMarketplaceData(); // Reload data as filters changed
   }
 
   void _resetFilters() {
@@ -186,13 +295,16 @@ class _MarketplacePageState extends State<MarketplacePage> {
       _priceRange = const RangeValues(0, 10000);
       _filterLocation = 'Tous'; // Reset location filter
       _searchController.clear();
-      _searchQuery = '';
+      // _searchQuery will be cleared by searchController listener if needed,
+      // or clear it explicitly and call _applyClientSideFiltersAndSearch
+      _searchQuery = ''; 
       
       // Reset categories
       for (int i = 0; i < _categories.length; i++) {
         _categories[i]['isSelected'] = (i == 0); // Select 'All' category
       }
     });
+    _loadInitialMarketplaceData(); // Reload data as filters reset
   }
 
   @override
@@ -489,6 +601,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         setState(() {
                           _sortByDateAsc = !_sortByDateAsc;
                         });
+                        _loadInitialMarketplaceData(); // Reload data as sort order changed
                       },
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -519,177 +632,101 @@ class _MarketplacePageState extends State<MarketplacePage> {
               ),
             ),
             
-            // Marketplace items (as a SliverGrid)
-            StreamBuilder<QuerySnapshot>(
-              stream: _getMarketplacePosts(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
-                    child: Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)), // Use AppColors
-                  );
-                }
-                
-                if (snapshot.hasError) {
-                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
-                    child: Center(
-                      child: Text(
-                        'Erreur de chargement: ${snapshot.error}',
-                        style: AppTypography.bodyMedium(context).copyWith(color: AppColors.errorLightRed), // Use AppColors
+            // Marketplace items (as a SliverGrid or SliverList)
+            if (_isInitialLoading)
+              SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen)),
+              )
+            else if (_displayedMarketplacePosts.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        size: AppSpacing.iconXl,
+                        color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
                       ),
-                    ),
-                  );
-                }
-                
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return SliverFillRemaining( // Use SliverFillRemaining for loading/error/empty states
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: AppSpacing.iconXl, // Use AppSpacing
-                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
-                          ),
-                          SizedBox(height: AppSpacing.md), // Use AppSpacing
-                          Text(
-                            'Aucune annonce trouvée',
-                            style: AppTypography.h4(context).copyWith( // Use AppTypography
-                              fontWeight: FontWeight.w500,
-                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.xs), // Use AppSpacing
-                          Text(
-                            'Essayez de modifier vos filtres',
-                            style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
-                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
-                            ),
-                          ),
-                        ],
+                      SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Aucune annonce trouvée',
+                        style: AppTypography.h4(context).copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                
-                // Get the selected category
-                final selectedCategory = _categories.firstWhere(
-                  (category) => category['isSelected'] == true,
-                  orElse: () => _categories.first,
-                );
-                
-                // Filter posts for the "Autre" category client-side
-                var posts = snapshot.data!.docs;
-                if (selectedCategory['name'] == 'Autre') {
-                  // Get the list of standard categories (excluding "Tous" and "Autre")
-                  final standardCategories = _categories
-                      .where((cat) => cat['name'] != 'Tous' && cat['name'] != 'Autre')
-                      .map((cat) => cat['name'] as String)
-                      .toList();
-                  
-                  // Filter posts that don't belong to any standard category
-                  posts = posts.where((doc) {
-                    final category = doc['category'] as String?;
-                    return category != null && !standardCategories.contains(category);
-                  }).toList();
-                }
-                
-                // Filter by search query if provided
-                if (_searchQuery.isNotEmpty) {
-                  final query = _searchQuery.toLowerCase();
-                  posts = posts.where((doc) {
-                    final title = (doc['title'] as String).toLowerCase();
-                    final description = (doc['description'] as String).toLowerCase();
-                    return title.contains(query) || description.contains(query);
-                  }).toList();
-                }
-                
-                if (posts.isEmpty) {
-                  return SliverFillRemaining( // Use SliverFillRemaining for empty state
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: AppSpacing.iconXl, // Use AppSpacing
-                            color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
-                          ),
-                          SizedBox(height: AppSpacing.md), // Use AppSpacing
-                          Text(
-                            'Aucune annonce trouvée',
-                            style: AppTypography.h4(context).copyWith( // Use AppTypography
-                              fontWeight: FontWeight.w500,
-                              color: isDarkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary, // Use AppColors
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.xs), // Use AppTypography
-                          Text(
-                            'Essayez de modifier vos filtres',
-                            style: AppTypography.bodyMedium(context).copyWith( // Use AppTypography
-                              color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint, // Use AppColors
-                            ),
-                          ),
-                        ],
+                      SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Essayez de modifier vos filtres ou votre recherche',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyMedium(context).copyWith(
+                          color: isDarkMode ? AppColors.darkTextHint : AppColors.lightTextHint,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                
-                // Replace the GridView.builder with SliverGrid
-                return SliverPadding( // Wrap with SliverPadding
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md), // Apply padding here
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final doc = posts[index];
-                        final data = doc.data() as Map<String, dynamic>;
-                        
-                        // Ensure all required data is available and has valid types
-                        final String title = data['title'] as String? ?? 'Sans titre';
-                        final double price = (data['price'] is num) 
-                              ? (data['price'] as num).toDouble() 
-                              : 0.0;
-                        final String location = data['location'] as String? ?? 'Emplacement inconnu';
-                        final String condition = data['condition'] as String? ?? 'État inconnu';
-                        
-                        // Safely extract the image URL
-                        String imageUrl = 'https://via.placeholder.com/300';
-                        if (data['images'] is List && (data['images'] as List).isNotEmpty) {
-                          final firstImage = (data['images'] as List).first;
-                          if (firstImage is String) {
-                            imageUrl = firstImage;
-                          }
-                        }
-                        
-                        return MarketplaceCard(
-                          id: doc.id,
-                          title: title,
-                          price: price,
-                          location: location,
-                          imageUrl: imageUrl,
-                          condition: condition,
-                          onTap: () {
-                            // Navigate to detail page
-                            context.push('/clientHome/marketplace/details/${doc.id}');
-                          },
-                        );
-                      },
-                      childCount: posts.length,
-                    ),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.7, // Adjusted aspect ratio for thinner cards
-                      crossAxisSpacing: AppSpacing.lg, // Increased spacing for smaller cards horizontally
-                      mainAxisSpacing: AppSpacing.lg, // Increased spacing
-                    ),
+                    ],
                   ),
-                );
-              },
-            ),
-          ],
+                ),
+              )
+            else
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                sliver: SliverGrid(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == _displayedMarketplacePosts.length) {
+                        // This is the loading indicator at the bottom
+                        return _isFetchingMoreMarketplace && _hasMoreMarketplace
+                            ? Center(child: Padding(
+                                padding: EdgeInsets.all(AppSpacing.md),
+                                child: CircularProgressIndicator(color: isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen),
+                              ))
+                            : const SizedBox.shrink(); // Or some placeholder if needed
+                      }
+
+                      final doc = _displayedMarketplacePosts[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      
+                      final String title = data['title'] as String? ?? 'Sans titre';
+                      final double price = (data['price'] is num) 
+                            ? (data['price'] as num).toDouble() 
+                            : 0.0;
+                      final String location = data['location'] as String? ?? 'Emplacement inconnu';
+                      final String condition = data['condition'] as String? ?? 'État inconnu';
+                      
+                      String imageUrl = 'https://via.placeholder.com/300';
+                      if (data['images'] is List && (data['images'] as List).isNotEmpty) {
+                        final firstImage = (data['images'] as List).first;
+                        if (firstImage is String) {
+                          imageUrl = firstImage;
+                        }
+                      }
+                      
+                      return MarketplaceCard(
+                        id: doc.id,
+                        title: title,
+                        price: price,
+                        location: location,
+                        imageUrl: imageUrl,
+                        condition: condition,
+                        onTap: () {
+                          context.push('/clientHome/marketplace/details/${doc.id}');
+                        },
+                      );
+                    },
+                    // Add 1 to childCount if there's more data OR currently fetching, to show the loader
+                    childCount: _displayedMarketplacePosts.length + (_hasMoreMarketplace ? 1 : 0),
+                  ),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.7,
+                    crossAxisSpacing: AppSpacing.lg,
+                    mainAxisSpacing: AppSpacing.lg,
+                  ),
+              ),
         ),
-        // Update the bottom navigation bar without centerButton parameter
+        ],
+        ),
         bottomNavigationBar: CustomBottomNav(
           currentIndex: _selectedIndex,
         ),

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart'; // Import Google Fonts
 import '../../utils/auth_helper.dart';
-import '../front/sidebar.dart';
 import '../front/app_colors.dart'; // Import AppColors for consistent theming
+import '../front/theme_toggle_switch.dart'; // Import ThemeToggleSwitch
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -21,7 +21,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Future<void> _checkAccess() async {
     if (!mounted) return;
-    await AuthHelper.checkUserRole(context, 'admin');
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await AuthHelper.checkUserRole(context, 'admin');
+    });
   }
 
   // Define a list of dashboard items
@@ -37,12 +39,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
       'route': '/admin/providers',
     },
     {
-      'label': 'Valider les Posts',
+      'label': 'Valider les Publications',
       'icon': Icons.check_circle,
       'route': '/admin/posts',
     },
     {
-      'label': 'Gérer les Réclamations',
+      'label': 'Traiter les Réclamations',
       'icon': Icons.report_problem,
       'route': '/admin/reclamations',
     },
@@ -59,7 +61,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final primaryColor = isDarkMode ? AppColors.primaryGreen : AppColors.primaryDarkGreen;
 
     return Scaffold(
-      drawer: const Sidebar(),
       appBar: AppBar(
         title: Text(
           'Accueil',
@@ -73,6 +74,41 @@ class _AdminHomePageState extends State<AdminHomePage> {
         iconTheme: IconThemeData(
           color: isDarkMode ? Colors.white : Colors.black87,
         ),
+        actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: ThemeToggleSwitch(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.red),
+            onPressed: () async {
+              final bool confirmLogout = await showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Déconnexion'),
+                    content: const Text('Êtes-vous sûr de vouloir vous déconnecter ?'),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Annuler'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Déconnecter'),
+                      ),
+                    ],
+                  );
+                },
+              ) ?? false; // Default to false if dialog is dismissed
+
+              if (confirmLogout) {
+                await AuthHelper.signOut(context);
+              }
+            },
+            tooltip: 'Se déconnecter',
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

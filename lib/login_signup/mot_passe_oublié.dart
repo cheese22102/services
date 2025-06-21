@@ -111,7 +111,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> with TickerProv
     final size = MediaQuery.of(context).size;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground,
+      backgroundColor: isDarkMode ? AppColors.darkBackground : AppColors.lightInputBackground, // Keep scaffold background as is
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

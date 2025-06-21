@@ -163,7 +163,7 @@ class _ClientReclamationDetailsPageState extends State<ClientReclamationDetailsP
     
     final providerName = '${_reclamationProviderData!['firstname'] ?? ''} ${_reclamationProviderData!['lastname'] ?? ''}'.trim();
     final providerPhone = _reclamationProviderData!['phone'] ?? 'Non disponible';
-    final providerPhotoURL = _reclamationProviderData!['photoURL'] ?? '';
+    final providerPhotoURL = _reclamationProviderData!['avatarURL'] ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -70,9 +70,9 @@ class _Signup2PageState extends State<Signup2Page> {
       }
       
       // Upload profile image if selected using CloudinaryService
-      String? photoURL;
+      String? avatarUrl;
       if (_profileImage != null) {
-        photoURL = await CloudinaryService.uploadImage(_profileImage!);
+        avatarUrl = await CloudinaryService.uploadImage(_profileImage!);
       }
       
       // Prepare user data
@@ -87,8 +87,8 @@ class _Signup2PageState extends State<Signup2Page> {
       };
       
       // Add photo URL if available
-      if (photoURL != null) {
-        userData['photoURL'] = photoURL;
+      if (avatarUrl != null) {
+        userData['avatarUrl'] = avatarUrl;
       }
       
       // Update user profile in Firestore

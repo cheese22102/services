@@ -9,7 +9,7 @@ import '../front/app_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../front/marketplace_search.dart';
 import 'dart:async';
-import 'package:intl/intl.dart'; // Added for DateFormat
+import 'package:intl/intl.dart';
 import '../notifications_service.dart';
 
 class ClientHomePage extends StatefulWidget {
@@ -572,8 +572,16 @@ class _ClientHomePageState extends State<ClientHomePage> {
   
   Stream<QuerySnapshot> _getMarketplaceStream(String searchQuery) {
     Query query = FirebaseFirestore.instance.collection('marketplace');
+    
+    // Always filter for validated posts
+    query = query.where('isValidated', isEqualTo: true);
+
     if (searchQuery.isNotEmpty) {
       final lowerCaseQuery = searchQuery.toLowerCase();
+      // Firestore is case-sensitive. For a case-insensitive "contains" like search,
+      // you'd typically store a lowercased version of the title and search against that.
+      // The current approach with range queries on the original title field might not be ideal for "contains".
+      // However, sticking to the existing search logic for now, just adding the validation filter.
       query = query.where('title', isGreaterThanOrEqualTo: lowerCaseQuery)
                    .where('title', isLessThanOrEqualTo: '$lowerCaseQuery\uf8ff');
     } else {
@@ -690,12 +698,14 @@ class _ClientHomePageState extends State<ClientHomePage> {
                     padding: const EdgeInsets.only(right: 16.0), // Increased spacing
                     child: GestureDetector(
                       onTap: () {
-                        context.go('/clientHome/marketplace/post/$postId');
+                        // Corrected route for marketplace post details
+                        context.go('/clientHome/marketplace/details/$postId');
                       },
                       child: Container(
                         width: 150, // Increased card width
                         decoration: BoxDecoration(
-                          color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Updated card color
+                          // Set card background to white in light mode
+                          color: isDarkMode ? AppColors.darkCardBackground : Colors.white, 
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
@@ -814,6 +824,7 @@ class _ClientHomePageState extends State<ClientHomePage> {
         final providerId = reservationData['providerId'] as String?; // Fetch providerId
         String? serviceImageUrl;
         String providerName = 'Prestataire Inconnu'; // Default
+        String? providerPhotoURL; // Added for provider's photo
 
         if (serviceId != null && serviceId.isNotEmpty) { // Added isNotEmpty check
           final serviceDoc = await FirebaseFirestore.instance.collection('services').doc(serviceId).get();
@@ -828,14 +839,16 @@ class _ClientHomePageState extends State<ClientHomePage> {
             final userData = providerDoc.data() as Map<String, dynamic>;
             providerName = '${userData['firstname'] ?? ''} ${userData['lastname'] ?? ''}'.trim();
             providerName = providerName.isEmpty ? 'Prestataire Inconnu' : providerName;
+            providerPhotoURL = userData['avatarUrl'] as String?; // Fetch provider's photo URL
           }
         }
 
         reservationsWithServiceData.add({
           ...reservationData,
           'id': doc.id,
-          'serviceImageUrl': serviceImageUrl,
-          'fetchedProviderName': providerName, // Add fetched provider name
+          'serviceImageUrl': serviceImageUrl, // This is the service image
+          'fetchedProviderName': providerName,
+          'fetchedProviderPhotoURL': providerPhotoURL, // Add provider's photo URL
         });
       }
       return reservationsWithServiceData;
@@ -849,13 +862,15 @@ class _ClientHomePageState extends State<ClientHomePage> {
       Color primaryColor) {
     final serviceName = reservation['serviceName'] as String? ?? 'Service Inconnu';
     final providerName = reservation['fetchedProviderName'] as String? ?? 'Prestataire Inconnu'; // Use fetched name
-    final scheduledDate = reservation['scheduledDate'] as Timestamp?; // Use Timestamp
+    final reservationDateTime = reservation['reservationDateTime'] as Timestamp?; // Use reservationDateTime
     final status = reservation['status'] as String? ?? 'pending'; // Default to 'pending'
+    final providerPhotoURL = reservation['fetchedProviderPhotoURL'] as String?; // Get provider's photo URL
+    final providerCompletionStatus = reservation['providerCompletionStatus']; // Get providerCompletionStatus
 
     String formattedDate = 'Date Inconnue';
-    if (scheduledDate != null) {
+    if (reservationDateTime != null) { // Use reservationDateTime
       try {
-        formattedDate = DateFormat('dd/MM/yyyy à HH:mm').format(scheduledDate.toDate());
+        formattedDate = DateFormat('dd/MM/yyyy à HH:mm').format(reservationDateTime.toDate()); // Use reservationDateTime
       } catch (e) {
         print('Error formatting date: $e');
       }
@@ -863,37 +878,53 @@ class _ClientHomePageState extends State<ClientHomePage> {
 
     Color statusColor;
     String statusText;
-    switch (status) {
-      case 'approved':
-        statusColor = Colors.green;
-        statusText = 'Acceptée';
-        break;
-      case 'cancelled':
-        statusColor = Colors.red;
-        statusText = 'Annulée';
-        break;
-      case 'rejected':
-        statusColor = Colors.red;
-        statusText = 'Refusée';
-        break;
-      case 'completed':
-        statusColor = Colors.blue;
-        statusText = 'Terminée';
-        break;
-      case 'pending':
-      default:
-        statusColor = Colors.orange;
-        statusText = 'En attente';
-        break;
+
+    bool isProviderMarkedCompleted = false;
+    if (providerCompletionStatus is String) {
+      isProviderMarkedCompleted = providerCompletionStatus == 'completed';
+    } else if (providerCompletionStatus is bool) {
+      isProviderMarkedCompleted = providerCompletionStatus;
+    }
+
+    if (status == 'waiting_confirmation') {
+      statusColor = Colors.purple;
+      statusText = 'à confirmer';
+    } else if (status == 'approved' && isProviderMarkedCompleted) {
+      statusColor = Colors.purple;
+      statusText = 'En attente de votre confirmation';
+    } else {
+      switch (status) {
+        case 'approved':
+          statusColor = Colors.green;
+          statusText = 'Acceptée';
+          break;
+        case 'cancelled':
+          statusColor = Colors.red;
+          statusText = 'Annulée';
+          break;
+        case 'rejected':
+          statusColor = Colors.red;
+          statusText = 'Refusée';
+          break;
+        case 'completed':
+          statusColor = Colors.blue;
+          statusText = 'Terminée';
+          break;
+        case 'pending':
+        default:
+          statusColor = Colors.orange;
+          statusText = 'En attente';
+          break;
+      }
     }
     
-    final serviceImageUrl = reservation['serviceImageUrl'] as String?;
+    // final serviceImageUrl = reservation['serviceImageUrl'] as String?; // Service image, replaced by provider photo
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+        color: isDarkMode ? AppColors.darkCardBackground : Colors.white, // Updated dark mode color
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -905,40 +936,26 @@ class _ClientHomePageState extends State<ClientHomePage> {
       ),
       child: Row(
         children: [
-          SizedBox(
+          Container(
             width: 48,
             height: 48,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: serviceImageUrl != null && serviceImageUrl.isNotEmpty
-                  ? Image.network(
-                      serviceImageUrl,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200, // Placeholder background
+              image: providerPhotoURL != null && providerPhotoURL.isNotEmpty
+                  ? DecorationImage(
+                      image: NetworkImage(providerPhotoURL),
                       fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            strokeWidth: 2.0,
-                            color: primaryColor,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                        child: Icon(Icons.broken_image, color: primaryColor, size: 24),
-                      ),
                     )
-                  : Container(
-                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                      child: Icon(Icons.home_repair_service_rounded, color: primaryColor, size: 24),
-                    ),
+                  : null,
             ),
+            child: (providerPhotoURL == null || providerPhotoURL.isEmpty)
+                ? Icon(
+                    Icons.person, // Default icon
+                    color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                    size: 24, 
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1059,16 +1076,76 @@ class _ClientHomePageState extends State<ClientHomePage> {
             }
             final reservations = snapshot.data ?? []; // Directly use the list
             if (reservations.isEmpty) {
-              return const SizedBox.shrink(); // Hide the section if no reservations
+              // return const SizedBox.shrink(); // Hide the section if no reservations
+              return _buildNoReservationsCard(context, isDarkMode, primaryColor);
             }
             return Column(
               children: reservations.map((reservationData) {
-                return _buildReservationCard(context, reservationData, isDarkMode, primaryColor);
+                final reservationId = reservationData['id'] as String? ?? '';
+                return GestureDetector(
+                  onTap: () {
+                    if (reservationId.isNotEmpty) {
+                      context.go('/clientHome/reservation-details/$reservationId');
+                    }
+                  },
+                  child: _buildReservationCard(context, reservationData, isDarkMode, primaryColor),
+                );
               }).toList(),
             );
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildNoReservationsCard(BuildContext context, bool isDarkMode, Color primaryColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      decoration: BoxDecoration(
+        color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.event_note_outlined, // Using a relevant icon
+            size: 32,
+            color: isDarkMode ? Colors.white54 : Colors.black38,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Aucune réservation récente',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Vos réservations actives ou passées s\'afficheront ici.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: isDarkMode ? Colors.white54 : Colors.black45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1240,14 +1317,22 @@ class _ClientHomePageState extends State<ClientHomePage> {
                       padding: const EdgeInsets.only(right: 12.0),
                       child: GestureDetector(
                         onTap: () {
-                          context.go('/clientHome/marketplace/post/$postId');
+                          // Corrected route for marketplace post details in search results
+                          context.go('/clientHome/marketplace/details/$postId');
                         },
                         child: Container(
                           width: 140,
                           decoration: BoxDecoration(
-                            color: isDarkMode ? AppColors.darkCardBackground : AppColors.lightCardBackground, // Updated card color
+                            // Set card background to white in light mode for search results
+                            color: isDarkMode ? AppColors.darkCardBackground : Colors.white,
                             borderRadius: BorderRadius.circular(12),
-
+                            boxShadow: [ // Added shadow for consistency
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
